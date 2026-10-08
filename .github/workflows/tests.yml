@@ -65,6 +65,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Make sure psql is installed
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
       - name: Database rules (who can do what, what deleting removes)
         run: bash scripts/test-db.sh
       - name: Rehearse new database changes on a copy with sample data

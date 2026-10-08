@@ -55,6 +55,9 @@ jobs:
       # Stops before the live database if the change breaks the chat's database
       # rules, or would remove or change existing team data on a copy filled with
       # sample data (see scripts/db-rehearsal.sh and docs/chat.md).
+      - name: Make sure psql is installed
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+
       - name: Check database rules on a scratch copy
         env:
           PGHOST: localhost
