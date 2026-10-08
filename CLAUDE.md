@@ -31,8 +31,11 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
 
 ## The workflow: preview, then publish
 
-1. **Build it.** Start from the latest `main` on a new branch. Make the change. `npm run build` must pass.
-   Check it in demo mode (`npm run dev` with no `.env.local`) when you can.
+1. **Build it.** Start from the latest `main` on a new branch. Make the change. `npm run build` and
+   `npm test` must pass. Check it in demo mode (`npm run dev` with no `.env.local`) when you can. If you
+   touched the chat or the database, also run `npm run test:e2e` and `npm run test:db` (see
+   [Tests](#tests)). If you change how the chat works on purpose, update `docs/chat.md` and its tests in
+   the same change.
 2. **Preview.** Push the branch and open a pull request yourself, with a plain-English title and summary.
    Use your GitHub tools or `gh api` (REST). `gh pr` doesn't work in cloud sessions.
    - Cloudflare builds the preview in about a minute. Poll the `Workers Builds: jive-turkeys-app` check
@@ -57,7 +60,9 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
    `src/api/demo.js`, bump `DB_KEY` there, because the preview keeps the sample data his browser saved
    on his first visit.
 4. **Publish** when he says so ("publish", "looks good", "go live"): bring the branch up to date with
-   `main`, then squash-merge the pull request yourself
+   `main`, and wait for the three **Tests** checks on its latest commit to pass (`Unit tests and build`,
+   `Browser tests (demo mode)`, `Database rules and rehearsal`; a few minutes). If one fails, fix it
+   before publishing, and tell him it needs a few more minutes. Then squash-merge the pull request yourself
    (`gh api -X PUT repos/m0ranwad/jive-turkeys-app/pulls/<number>/merge -f merge_method=squash`).
    Cloudflare updates the live site in about two minutes. Confirm it with the `Workers Builds:
    jive-turkeys-app` check on the merge commit (and the database update, if any; see below), then tell
@@ -141,6 +146,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   style from `src/lib/constants.js`, and mobile-first layouts (most players use phones).
 - Previews of non-main branches run in **demo mode with sample data** (`vite.config.js`). Make new
   features show up there.
+- Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, and `src/hooks/useChatUnread.js`
+  (the Chat tab badge). `docs/chat.md` is the expected behavior.
+- Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
+  and `scripts/db-rehearsal.sh`.
 
 ## Data and database changes
 
@@ -162,10 +171,33 @@ live database when they reach `main`. So:
   captains write team data; players write only their own rows); and
   `grant select, insert, update, delete on <table> to authenticated, service_role;`. Captain checks use
   `public.is_captain()`; captains are `users.role = 'admin'`.
+- **Chat history and team data must survive every change.** Every new migration is rehearsed on a copy of
+  the database filled with sample data (`scripts/db-rehearsal.sh`): if any existing row disappears or
+  changes, the pull request's `Database rules and rehearsal` check fails, and the Database update workflow
+  stops before touching the live database. A failing rehearsal means the change would lose data: don't
+  publish it. Fix the migration, or explain in plain words what would be lost and get a co-owner's yes
+  (then `-- owner-approved`, as above).
+- If a migration uses a piece of Supabase the test database doesn't have (the `storage` schema, an
+  extension), add a minimal stand-in to `supabase/tests/stubs.sql`. If it adds a table, add sample rows
+  for it to `supabase/tests/seed.sql` so the rehearsal protects that table too.
 - When publishing a change that includes a database update, check that the "Database update" workflow
   run on `main` succeeded (`gh api repos/m0ranwad/jive-turkeys-app/actions/runs?branch=main`) before
   saying it's live. If it failed, undo the publish, tell him in plain words what happened, and give him
   a short message he can send the other co-owner, who looks after the database setup.
+
+## Tests
+
+| Command | What | Notes |
+|---|---|---|
+| `npm test` | Unit tests (chat logic, both data backends) | Seconds |
+| `npm run test:e2e` | Browser tests, phone and desktop, demo mode | A few minutes. Starts its own dev server |
+| `npm run test:db` | Database rules on a scratch database built from all migrations | Needs Postgres 15+. In cloud sessions, once: `pg_ctlcluster 16 main start && sudo -u postgres createuser -s root`; then `PGHOST=/var/run/postgresql npm run test:db` |
+| `npm run test:db-rehearsal` | Rehearses migrations not yet on `origin/main` | Same setup as `test:db` |
+
+GitHub runs all of them on every pull request and on `main` (`.github/workflows/tests.yml`).
+`@playwright/test` is pinned to the version matching the Chromium in cloud sessions (`/opt/pw-browsers`);
+don't upgrade it on its own. Never skip, delete or loosen a test to get a check green: fix the code, or, if
+the behavior changed on purpose, update the test and `docs/chat.md` together.
 
 ## Don't
 

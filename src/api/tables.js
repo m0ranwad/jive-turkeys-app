@@ -9,6 +9,9 @@ export const TABLES = {
   SessionDues: 'session_dues',
   DuesPayment: 'dues_payments',
   Message: 'messages',
+  ChatThread: 'chat_threads',
+  MessageReaction: 'message_reactions',
+  ChatRead: 'chat_reads',
   Announcement: 'announcements',
 };
 

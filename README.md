@@ -84,6 +84,14 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - Deferred: the **Invite teammate** button ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)).
   Its function isn't deployed, so players sign up themselves for now.
 
+## Tests
+
+Chat behavior, the database rules, and the safety of every database update are checked automatically on each
+pull request (the **Tests** workflow). [docs/chat.md](docs/chat.md) lists what the chat should do and which test
+covers each rule. Every new migration is rehearsed on a copy of the database with sample data, and if it would
+remove or change existing rows, the check fails and the Database update workflow refuses to touch the live
+database. Commands are in [CLAUDE.md](CLAUDE.md#tests).
+
 ## Run it locally
 
 ```bash

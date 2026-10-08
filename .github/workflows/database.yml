@@ -22,6 +22,14 @@ concurrency:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    # A scratch database for rehearsing the change before the live one is touched.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +51,28 @@ jobs:
             fi
           done
           exit $blocked
+
+      # Stops before the live database if the change breaks the chat's database
+      # rules, or would remove or change existing team data on a copy filled with
+      # sample data (see scripts/db-rehearsal.sh and docs/chat.md).
+      - name: Make sure psql is installed
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+
+      - name: Check database rules on a scratch copy
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: bash scripts/test-db.sh
+
+      - name: Rehearse on a scratch copy with sample data
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: bash scripts/db-rehearsal.sh "$BEFORE"
 
       - uses: supabase/setup-cli@v1
         with:

@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v1';
+const DB_KEY = 'jt_demo_db_v2';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -115,12 +115,68 @@ function seed() {
   }));
 
   const minutesAgo = (m) => dayjs().subtract(m, 'minute').toISOString();
-  const messages = [
-    [profiles[1], 'Who is bringing the pinnies this week?', 180],
-    [profiles[4], 'I got them 👍', 170],
-    [profiles[6], 'Running 10 min late, start without me in goal', 60],
-    [profiles[0], 'Reminder: dues for session 2 are due before the first game!', 30],
-  ].map(([p, body, ago]) => ({ id: uid(), user_id: p.user_id, author_name: p.display_name, body, created_date: minutesAgo(ago), updated_date: minutesAgo(ago) }));
+  const me = profiles[0];
+
+  // Chat: the main Team Chat (no thread) plus a few side threads, with replies,
+  // reactions and read markers so unread badges show up in the preview.
+  const threads = [];
+  const messages = [];
+  const reactions = [];
+  const reads = [];
+  const thread = (starter, title, ago, extra = {}) => {
+    const row = { id: uid(), title, created_by: starter.user_id, author_name: starter.display_name, archived: false, created_date: minutesAgo(ago), updated_date: minutesAgo(ago), ...extra };
+    threads.push(row);
+    return row.id;
+  };
+  const say = (threadId, p, body, ago, replyTo = null) => {
+    const row = { id: uid(), thread_id: threadId, reply_to_id: replyTo, user_id: p.user_id, author_name: p.display_name, body, created_date: minutesAgo(ago), updated_date: minutesAgo(ago) };
+    messages.push(row);
+    return row.id;
+  };
+  const react = (messageId, emoji, people) =>
+    people.forEach((p) => reactions.push({ id: uid(), message_id: messageId, user_id: p.user_id, emoji, created_date: now(), updated_date: now() }));
+  const readUpTo = (threadId, ago) =>
+    reads.push({ id: uid(), user_id: me.user_id, thread_id: threadId, last_read_at: minutesAgo(ago), created_date: now(), updated_date: now() });
+
+  const win = say(null, profiles[1], 'Great win last night! That second-half comeback 🔥', 1560);
+  react(win, '🔥', [profiles[2], profiles[3], me]);
+  react(win, '💪', [profiles[4]]);
+  say(null, profiles[2], 'Defense was locked in', 1556);
+  const bottle = say(null, profiles[2], 'Also, who grabbed my water bottle? Blue Hydro Flask', 1555);
+  say(null, profiles[3], 'I have it! Bringing it Thursday', 1500, bottle);
+  const pinnies = say(null, profiles[1], 'Who is bringing the pinnies this week?', 180);
+  react(say(null, profiles[4], 'I got them 👍', 170, pinnies), '🙏', [profiles[1]]);
+  react(say(null, profiles[6], 'Running 10 min late, start without me in goal', 60), '😂', [profiles[4], profiles[5]]);
+  react(say(null, me, 'Reminder: dues for session 2 are due before the first game!', 30), '👍', [profiles[1], profiles[2], profiles[4], profiles[3]]);
+  readUpTo(null, 30);
+  say(null, profiles[5], 'Paid 💸', 12);
+  say(null, profiles[11], 'Parking tip for the new folks: the back lot is closer to the indoor fields https://www.google.com/maps/search/?api=1&query=North+Coast+Premier+Soccer+Complex', 10);
+  say(null, profiles[1], '🔥🔥🔥', 8);
+
+  const pickup = thread(profiles[2], '⚽ Sunday pickup?', 300);
+  say(pickup, profiles[2], 'Anyone up for pickup Sunday morning? Field 3 is open at 10', 300);
+  say(pickup, profiles[1], "I'm in", 290);
+  readUpTo(pickup, 285);
+  const cousin = say(pickup, profiles[8], 'In, bringing my cousin if that works', 120);
+  say(pickup, profiles[2], 'Totally, the more the merrier', 100, cousin);
+  say(pickup, profiles[7], "Can't this week, next one for sure", 20);
+
+  const fantasy = thread(profiles[4], '🏈 Fantasy football league', 90);
+  say(fantasy, profiles[4], 'Starting a team fantasy league, $20 buy-in. Who wants in?', 90);
+  say(fantasy, profiles[10], 'Me!!', 85);
+  say(fantasy, profiles[9], 'Count me in 🙋‍♀️', 40);
+
+  const food = thread(profiles[3], '🍕 Post-game food spot', 2900);
+  say(food, profiles[3], "Where are we going after Thursday's game?", 2900);
+  say(food, me, 'Wings place on Lake Rd?', 2880);
+  react(say(food, profiles[11], 'Yes please 🍗', 2870), '🙌', [profiles[3], me]);
+  readUpTo(food, 2870);
+
+  const jerseys = thread(me, '🎽 Jersey order', 7200, { archived: true });
+  say(jerseys, me, 'Last call for jersey sizes. The order goes in Friday.', 7200);
+  say(jerseys, profiles[5], 'Medium for me!', 7100);
+  say(jerseys, me, 'Order placed, thanks all. Closing this one.', 7000);
+  readUpTo(jerseys, 7000);
 
   return {
     users,
@@ -151,6 +207,9 @@ function seed() {
     session_dues: [],
     dues_payments: [],
     messages,
+    chat_threads: threads,
+    message_reactions: reactions,
+    chat_reads: reads,
     announcements: [
       { id: uid(), title: 'Welcome to the new team hub', body: 'This is demo mode with sample data. Once Supabase is connected you will see the real team here.', author_name: 'Casey Captain', created_date: minutesAgo(600), updated_date: minutesAgo(600) },
     ],
@@ -160,7 +219,11 @@ function seed() {
 function load() {
   try {
     const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const db = JSON.parse(raw);
+      for (const table of Object.values(TABLES)) db[table] = db[table] || [];
+      return db;
+    }
   } catch {
     // Fall back to fresh sample data.
   }
@@ -205,7 +268,11 @@ export function createDemoBackend() {
     if (!currentUser()) throw new Error('Not signed in');
   };
 
-  const matches = (row, where) => Object.entries(where).every(([k, v]) => row[k] === v);
+  // Same rules as the Supabase filter: null matches empty columns, an array matches any of its values.
+  const matches = (row, where) =>
+    Object.entries(where).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : (row[k] ?? null) === v));
+  const notify = (table, event, row) =>
+    (listeners[table] || []).forEach((l) => l[event] && setTimeout(() => l[event](structuredClone(row)), 0));
   const sortRows = (rows, sort) => {
     const { column, ascending } = parseSort(sort);
     return [...rows].sort((a, b) => {
@@ -224,16 +291,17 @@ export function createDemoBackend() {
         const rows = sortRows(db[table], sort);
         return delay(limit ? rows.slice(0, limit) : rows);
       },
-      async filter(where, sort) {
+      async filter(where, sort, limit) {
         requireUser();
-        return delay(sortRows(db[table].filter((r) => matches(r, where)), sort));
+        const rows = sortRows(db[table].filter((r) => matches(r, where)), sort);
+        return delay(limit ? rows.slice(0, limit) : rows);
       },
       async create(row) {
         requireUser();
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
         db[table].push(record);
         write();
-        (listeners[table] || []).forEach((cb) => setTimeout(() => cb(structuredClone(record)), 0));
+        notify(table, 'onInsert', record);
         return delay(record);
       },
       async bulkCreate(rows) {
@@ -247,6 +315,7 @@ export function createDemoBackend() {
         if (!record) throw new Error('Not found');
         Object.assign(record, patch, { updated_date: now() });
         write();
+        notify(table, 'onUpdate', record);
         return delay(record);
       },
       bulkUpdate(rows) {
@@ -258,14 +327,30 @@ export function createDemoBackend() {
         if (table === 'games') {
           for (const child of ['rsvps', 'game_stats', 'potm_votes']) db[child] = db[child].filter((r) => r.game_id !== id);
         }
+        // Mirrors the foreign keys: a thread takes its messages and read markers
+        // with it, a message its reactions; replies to it lose the link.
+        const goneMessages = new Set(table === 'messages' ? [id] : []);
+        if (table === 'chat_threads') {
+          db.messages.filter((m) => m.thread_id === id).forEach((m) => goneMessages.add(m.id));
+          db.messages = db.messages.filter((m) => m.thread_id !== id);
+          db.chat_reads = db.chat_reads.filter((r) => r.thread_id !== id);
+        }
+        if (goneMessages.size) {
+          db.message_reactions = db.message_reactions.filter((r) => !goneMessages.has(r.message_id));
+          db.messages.forEach((m) => {
+            if (goneMessages.has(m.reply_to_id)) m.reply_to_id = null;
+          });
+        }
         write();
+        notify(table, 'onDelete', { id });
         return delay(null);
       },
-      subscribe(onInsert) {
+      subscribe(onInsert, { onUpdate, onDelete } = {}) {
+        const listener = { onInsert, onUpdate, onDelete };
         listeners[table] = listeners[table] || [];
-        listeners[table].push(onInsert);
+        listeners[table].push(listener);
         return () => {
-          listeners[table] = listeners[table].filter((cb) => cb !== onInsert);
+          listeners[table] = listeners[table].filter((l) => l !== listener);
         };
       },
     };
@@ -330,11 +415,52 @@ export function createDemoBackend() {
     },
   };
 
+  const chat = {
+    async history(threadId, { before, limit = 60 } = {}) {
+      requireUser();
+      const rows = sortRows(
+        db.messages.filter((m) => (m.thread_id ?? null) === threadId && (!before || m.created_date < before)),
+        '-created_date',
+      );
+      return delay(rows.slice(0, limit).reverse());
+    },
+    async overview() {
+      requireUser();
+      const me = currentUser();
+      const rooms = new Map();
+      for (const m of sortRows(db.messages, 'created_date')) {
+        const threadId = m.thread_id ?? null;
+        if (!rooms.has(threadId)) {
+          const read = db.chat_reads.find((r) => r.user_id === me.id && (r.thread_id ?? null) === threadId);
+          rooms.set(threadId, { thread_id: threadId, last_read_at: read?.last_read_at ?? null, unread: 0 });
+        }
+        const room = rooms.get(threadId);
+        Object.assign(room, {
+          last_message_at: m.created_date,
+          last_user_id: m.user_id,
+          last_author_name: m.author_name,
+          last_body: m.body.slice(0, 140),
+        });
+        if (m.user_id !== me.id && (!room.last_read_at || m.created_date > room.last_read_at)) room.unread += 1;
+      }
+      return delay([...rooms.values()]);
+    },
+    async markRead(threadId, readAt) {
+      requireUser();
+      const me = currentUser();
+      const read = db.chat_reads.find((r) => r.user_id === me.id && (r.thread_id ?? null) === threadId);
+      if (!read) db.chat_reads.push({ id: uid(), user_id: me.id, thread_id: threadId, last_read_at: readAt, created_date: now(), updated_date: now() });
+      else if (readAt > read.last_read_at) Object.assign(read, { last_read_at: readAt, updated_date: now() });
+      save(db);
+    },
+  };
+
   return {
     mode: 'demo',
     auth,
     entities,
     users,
+    chat,
     resetDemo() {
       db = seed();
       save(db);
