@@ -37,7 +37,7 @@ done
 
 new_files=$(comm -13 <(printf '%s\n' "$base_files") <(printf '%s\n' "$head_files") | sed '/^$/d')
 if [ -z "$new_files" ]; then
-  echo "No new database changes to rehearse."
+  echo "::notice title=Database rehearsal::No new database changes to rehearse."
   exit 0
 fi
 
@@ -66,9 +66,12 @@ set +e
 PGOPTIONS='-c client_min_messages=notice' psql_q -d "$db" -f supabase/tests/compare.sql 2>&1 | sed -n 's/^psql:[^:]*:[0-9]*: \(NOTICE\|WARNING\|ERROR\):  /  /p'
 code=${PIPESTATUS[0]}
 set -e
+rows=$(psql_q -d "$db" -At -c "select count(*) || ' rows in ' || count(distinct tbl) || ' tables' from rehearsal.snapshot")
+applied=$(printf '%s\n' $new_files | xargs -n1 basename | paste -sd, - | sed 's/,/, /g')
 
 if [ "$code" -eq 0 ]; then
   echo "Rehearsal passed: every existing row survived the new database changes."
+  echo "::notice title=Database rehearsal::Applied $applied to a copy with sample data; all $rows were kept."
 elif [ -n "$approved" ]; then
   echo "::warning::The new database changes remove or change existing data, as approved in: $approved"
 else
