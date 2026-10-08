@@ -26,8 +26,9 @@ Sign in as `captain@demo.test` / `demo1234`, or create any account.
    publishable key (`sb_publishable_…`) from *Project Settings → API Keys*.
 4. **Allowed URLs:** in *Authentication → URL Configuration*, set the Site URL to
    `https://jiveturkeys.app`. Add the redirect URLs `https://jiveturkeys.app/**`, the project's own
-   Cloudflare address (e.g. `https://jive-turkeys.pages.dev/**`) and `http://localhost:5173/**`.
-   Never add a wildcard like `https://*.pages.dev/**`: it would let anyone's pages.dev site receive
+   Cloudflare address (e.g. `https://jive-turkeys-app.<your-subdomain>.workers.dev/**`) and
+   `http://localhost:5173/**`. Never add a wildcard like `https://*.workers.dev/**`: it would let anyone's
+   workers.dev site receive
    your players' login links.
 5. **Email sending (required for real players):** Supabase's built-in mailer only delivers to your
    own Supabase team members and is heavily rate-limited. In *Authentication → Emails → SMTP Settings*,
@@ -67,17 +68,17 @@ Running the import again is safe: tables that already have data are skipped.
 
 ## Deploy the site
 
-Any static host works. We recommend **Cloudflare Pages**: its free plan has unlimited bandwidth.
-Netlify's free plan is credit-capped and pauses the site when credits run out.
+The site is hosted on **Cloudflare Workers** (free plan, unlimited static traffic). Settings live in
+[wrangler.jsonc](wrangler.jsonc), including the routing that makes links like `/games/123` work.
 
-- Build command: `npm run build`
-- Output directory: `dist`
-- Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Set them for
-  **Production only**. Preview deployments then run in demo mode with sample data, so testing a
-  proposed change can't touch real team data.
-
-Page routing is already configured: `public/_redirects` covers Cloudflare and Netlify, and `vercel.json`
-covers Vercel. Add `jiveturkeys.app` as the project's custom domain.
+- In Cloudflare: *Workers & Pages → Create → Import a repository*, and pick this repo. The project name
+  must match `name` in `wrangler.jsonc` (`jive-turkeys-app`).
+- Build command: `npm run build`. Deploy command: `npx wrangler deploy` (the defaults).
+- **Build variables:** `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, under the Worker's
+  *Settings → Build → Variables and secrets*. These must be *build* variables, not the runtime ones.
+- Pushes to `main` go live. Preview builds of any other branch automatically run in demo mode with sample
+  data (see [vite.config.js](vite.config.js)), so testing a proposed change can't touch real team data.
+- Add `jiveturkeys.app` under the Worker's *Settings → Domains & Routes*.
 
 ## Making changes with Claude
 

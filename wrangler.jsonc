@@ -1,0 +1,12 @@
+// Cloudflare Workers deployment: serves the built site from ./dist.
+// "name" must match the Worker's name in the Cloudflare dashboard.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jive-turkeys-app",
+  "compatibility_date": "2026-10-08",
+  "assets": {
+    "directory": "./dist",
+    // Links like /games/123 load the app, which then shows the right page.
+    "not_found_handling": "single-page-application"
+  }
+}
