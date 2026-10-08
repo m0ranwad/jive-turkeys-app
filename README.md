@@ -10,25 +10,27 @@ and hosting outright.
 
 ## How changes are made
 
-Two people change the site. The original creator isn't a developer and works the way he did in Base44.
-He describes a change to Claude, looks at a preview, and says "publish". Claude handles git, GitHub and
-deployment itself, following [CLAUDE.md](CLAUDE.md). He never deals with branches, pull requests or merges.
+Two co-owners change the site. The original creator isn't a developer and works the way he did in
+Base44. He describes a change to Claude, looks at a preview, and says "publish". Claude handles git,
+GitHub and deployment itself, following [CLAUDE.md](CLAUDE.md). He never deals with branches, pull
+requests or merges.
 
 1. **Ask:** in claude.ai/code (or the Code tab in the Claude app), with this repo selected, describe the
    change in plain English.
 2. **Preview:** Claude builds it on a branch, opens a pull request behind the scenes, and replies with
-   the Cloudflare preview link (about five minutes after the push). Previews run in **demo mode with
-   sample players and games** (see [vite.config.js](vite.config.js)), so trying something out can't
-   touch real team data. Sign in to a preview as `captain@demo.test` / `demo1234`.
+   the Cloudflare preview link (about a minute after the push). In the Claude desktop app's Local mode,
+   the site also runs live beside the chat (see [CLAUDE.md](CLAUDE.md)). Previews run in **demo mode
+   with sample players and games** (see [vite.config.js](vite.config.js)), so trying something out
+   can't touch real team data. Sign in to a preview as `captain@demo.test` / `demo1234`.
 3. **Publish:** on "publish", Claude merges to `main`. Cloudflare puts it live within about two minutes.
 4. **Undo:** on "undo that", Claude reverts the change on `main`.
 
 **Database changes** publish automatically. When a change adds a file under `supabase/migrations/`,
 the [Database update](.github/workflows/database.yml) GitHub Action applies it to the live database
-when it reaches `main`. Anything that drops, truncates, deletes or renames is refused until the owner
-reviews the file and adds `-- owner-approved` to it. Undoing a change that added a migration keeps the
-migration file (the unused column stays), because deleting an applied migration breaks every later
-database update.
+when it reaches `main`. Anything that drops, truncates, deletes or renames is refused until a co-owner
+approves it, after which Claude adds `-- owner-approved` to the file. Undoing a change that added a
+migration keeps the migration file (the unused column stays), because deleting an applied migration
+breaks every later database update.
 
 There are no required approvals: changes go live without review, as they did in Base44. The safety nets:
 - Claude checks the build before showing anything.
@@ -37,7 +39,7 @@ There are no required approvals: changes go live without review, as they did in 
 - Destructive database changes are blocked.
 - Row-level security still governs who can see and edit what.
 
-The owner can work the same way, or locally with Claude Code.
+The other co-owner can work the same way, or locally with Claude Code.
 
 ## Where everything lives
 
@@ -75,6 +77,8 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
         delete branches)
   - [ ] He connects at claude.ai/code (Claude Pro or higher) and runs the setup check from the walkthrough
   - [ ] After he signs up on the site, make him a captain from the Team page
+  - [ ] Optional: add him to the Cloudflare account and the Supabase organization so he co-owns those
+        too (Claude doesn't need this)
 - [ ] Switch over: share the link with the team and have the Base44 app deleted (its API exposes player
       emails and phones)
 - Deferred: the **Invite teammate** button ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)).

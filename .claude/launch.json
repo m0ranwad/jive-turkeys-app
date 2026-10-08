@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      // Live preview in the Claude desktop app. Blank Supabase settings force demo mode (pretend
+      // players), even on a computer that has .env.local.
+      "name": "site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--strictPort"],
+      "port": 5173,
+      "autoPort": false,
+      "env": {
+        "VITE_SUPABASE_URL": "",
+        "VITE_SUPABASE_PUBLISHABLE_KEY": "",
+        "VITE_SUPABASE_ANON_KEY": ""
+      }
+    }
+  ]
+}
