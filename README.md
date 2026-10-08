@@ -73,7 +73,7 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
   - [x] Walkthrough for him written (a shareable page from the owner's Claude account)
   - [ ] Invite him as a collaborator (Settings → Collaborators)
   - [ ] Install the Claude GitHub app on this repo only (github.com/apps/claude)
-  - [ ] Turn on Settings → General → **Automatically delete head branches** (cloud sessions can't
+  - [x] Turn on Settings → General → **Automatically delete head branches** (cloud sessions can't
         delete branches)
   - [ ] He connects at claude.ai/code (Claude Pro or higher) and runs the setup check from the walkthrough
   - [ ] After he signs up on the site, make him a captain from the Team page
