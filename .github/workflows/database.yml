@@ -1,0 +1,61 @@
+name: Database update
+
+# When a published change (a push to main) adds files under
+# supabase/migrations/, apply them to the live Supabase database, the same
+# way Base44 updated its database automatically. Changes that could delete
+# data are refused unless the file says it was approved by the owner.
+#
+# Needs the repository secret SUPABASE_DB_URL: the Session pooler connection
+# string from Supabase (Connect -> Connection string -> Session pooler), with
+# the database password filled in.
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**']
+  workflow_dispatch:
+
+concurrency:
+  group: database
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse changes that could delete data
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          files=$(git diff --name-only --diff-filter=AM "$BEFORE" "$GITHUB_SHA" -- supabase/migrations/ 2>/dev/null || ls supabase/migrations/*.sql)
+          blocked=0
+          for f in $files; do
+            [ -f "$f" ] || continue
+            grep -qi -- '-- owner-approved' "$f" && continue
+            if grep -v '^[[:space:]]*--' "$f" | grep -niE '\b(drop[[:space:]]+(table|column|schema|view|type)|truncate|delete[[:space:]]+from|rename[[:space:]]+(to|column))\b'; then
+              echo "::error file=$f::This database change could delete or rename data. The owner must review it and add '-- owner-approved' to the file."
+              blocked=1
+            fi
+          done
+          exit $blocked
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply new database changes
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Add the SUPABASE_DB_URL repository secret (see the comment at the top of this file)."
+            exit 1
+          fi
+          # The first migration was run by hand in the SQL editor; record it as applied.
+          supabase migration repair 20261008000000 --status applied --db-url "$SUPABASE_DB_URL"
+          supabase db push --db-url "$SUPABASE_DB_URL"

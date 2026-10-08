@@ -81,16 +81,20 @@ The site is hosted on **Cloudflare Workers** (free plan, unlimited static traffi
 
 ## Making changes with Claude
 
-1. Repo owner: invite collaborators under the repo's *Settings → Collaborators*, and install the
-   Claude GitHub app (github.com/apps/claude) on this repo.
-2. Collaborator: open claude.ai/code (or the Code tab in the Claude app), connect GitHub, pick this repo
-   and describe the change. This needs a Pro plan or higher.
-3. Claude makes the change. Click **Create PR**, then open the preview link Cloudflare adds to the pull
-   request.
-4. **Merge** the pull request and the live site updates within a couple of minutes. **Revert** undoes it.
+This works like an AI site builder: describe a change, look at the preview, say "publish". Claude runs
+the git side itself, following [CLAUDE.md](CLAUDE.md).
 
-If a change adds new database tables or columns, its SQL file under `supabase/migrations/` must be run in
-Supabase's SQL editor.
+1. Open claude.ai/code (or the Code tab in the Claude app), pick this repo, and describe the change.
+   This needs a Claude Pro plan or higher, and GitHub collaborator access with the Claude GitHub app
+   (github.com/apps/claude) installed on this repo.
+2. Claude builds it and replies with a preview link. Previews run on sample players and games.
+3. Say "publish" and Claude puts it live within a couple of minutes. Say "undo that" to roll it back.
+
+Database changes apply automatically when published, through
+[.github/workflows/database.yml](.github/workflows/database.yml). That needs the `SUPABASE_DB_URL`
+repository secret: the Session pooler connection string from Supabase, with the password filled in.
+Changes that drop, truncate, delete or rename are refused until the owner reviews the file and adds
+`-- owner-approved` to it. Every change is recorded in GitHub's history.
 
 Free Supabase projects pause after a week with no activity. Data is kept; restore the project from the
 dashboard if that happens.

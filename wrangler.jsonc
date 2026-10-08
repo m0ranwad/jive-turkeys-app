@@ -1,5 +1,6 @@
 // Cloudflare Workers deployment: serves the built site from ./dist.
 // "name" must match the Worker's name in the Cloudflare dashboard.
+// Every deploy applies these settings, overriding the dashboard toggles.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "jive-turkeys-app",
@@ -8,5 +9,10 @@
     "directory": "./dist",
     // Links like /games/123 load the app, which then shows the right page.
     "not_found_handling": "single-page-application"
-  }
+  },
+  // The site lives only at jiveturkeys.app; the extra workers.dev address stays off.
+  "routes": [{ "pattern": "jiveturkeys.app", "custom_domain": true }],
+  "workers_dev": false,
+  // Preview links for proposed changes (they run on sample data, see vite.config.js).
+  "preview_urls": true
 }
