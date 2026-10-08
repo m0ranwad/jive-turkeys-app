@@ -1,0 +1,12 @@
+{
+  "name": "Jive Turkeys Team Hub",
+  "short_name": "Jive Turkeys",
+  "description": "Your team's all-in-one home base for managing soccer games, tracking RSVP availability, calculating dues, and viewing career stats.",
+  "icons": [
+    { "src": "/logo.jpg", "sizes": "1024x1024", "type": "image/jpeg" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#09090b",
+  "background_color": "#FAFAF7"
+}

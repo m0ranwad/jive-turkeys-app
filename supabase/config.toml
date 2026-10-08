@@ -1,0 +1,6 @@
+# Used by the Supabase CLI (`npx supabase link`, `db push`, `functions deploy`).
+project_id = "jive-turkeys"
+
+[functions.invite-user]
+# The function checks the caller's login itself.
+verify_jwt = false
