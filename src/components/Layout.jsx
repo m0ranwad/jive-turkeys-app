@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import {
   BookOpen,
   CalendarDays,
@@ -17,22 +17,40 @@ import {
 } from 'lucide-react';
 import { isDemo } from '@/api';
 import { Walkthrough } from '@/components/Walkthrough';
+import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
 import { STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
+const CHAT_PATH = '/banter';
+
 const TABS = [
   { to: '/', label: 'Schedule', icon: CalendarDays },
   { to: '/stats', label: 'Stats', icon: ChartColumn },
   { to: '/team', label: 'Team', icon: Users },
-  { to: '/banter', label: 'Chat', icon: MessageSquare, bold: true },
+  { to: CHAT_PATH, label: 'Chat', icon: MessageSquare, bold: true },
   { to: '/rules', label: 'Rules', icon: BookOpen },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 
 const seenKey = (userId) => `jt_seen_walkthrough_${userId}`;
+
+function Badge({ n, className }) {
+  if (!n) return null;
+  return (
+    <span
+      aria-label={`${n} unread`}
+      className={cn(
+        'grid h-[18px] min-w-[18px] place-items-center rounded-full bg-lime-400 px-1 text-[10px] font-black leading-none tracking-normal text-black ring-2 ring-white',
+        className,
+      )}
+    >
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
 
 function hasSeenWalkthrough(userId) {
   try {
@@ -46,6 +64,10 @@ export function Layout() {
   const { user, profile, isCaptain, loading, reload } = useTeam();
   const [menuOpen, setMenuOpen] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+  const onChat = useLocation().pathname === CHAT_PATH;
+  const chatUnread = useChatUnread(!!user);
+  // No badge while reading the chat itself.
+  const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread : 0);
 
   useEffect(() => {
     if (!user) return;
@@ -65,7 +87,7 @@ export function Layout() {
   };
 
   const menuItems = [
-    { to: '/banter', label: 'Team Chat', icon: MessageSquare, show: true },
+    { to: CHAT_PATH, label: 'Team Chat', icon: MessageSquare, show: true },
     { to: '/announcements', label: 'Announcements', icon: Megaphone, show: true },
     { to: '/dues', label: 'Dues', icon: DollarSign, show: isCaptain },
     { to: '/settings', label: 'Team Settings', icon: SlidersHorizontal, show: isCaptain },
@@ -103,7 +125,7 @@ export function Layout() {
                 end={tab.to === '/'}
                 className={({ isActive }) =>
                   cn(
-                    'rounded-full px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] transition',
+                    'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] transition',
                     isActive
                       ? 'bg-lime-400 text-black'
                       : tab.bold
@@ -113,6 +135,7 @@ export function Layout() {
                 }
               >
                 {tab.label}
+                <Badge n={unreadFor(tab.to)} className="ring-zinc-950" />
               </NavLink>
             ))}
           </nav>
@@ -126,11 +149,13 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pb-28 pt-5 md:pb-14">
+      {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
+      <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
         <Outlet />
       </main>
 
       <nav
+        data-bottom-nav
         className="fixed inset-x-0 bottom-0 z-40 border-t border-black/5 bg-white/95 backdrop-blur md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
@@ -149,10 +174,13 @@ export function Layout() {
             >
               {({ isActive }) => (
                 <Fragment>
-                  <tab.icon
-                    className={cn('h-5 w-5', (isActive || tab.bold) && 'text-lime-500')}
-                    strokeWidth={isActive || tab.bold ? 2.6 : 2}
-                  />
+                  <span className="relative">
+                    <tab.icon
+                      className={cn('h-5 w-5', (isActive || tab.bold) && 'text-lime-500')}
+                      strokeWidth={isActive || tab.bold ? 2.6 : 2}
+                    />
+                    <Badge n={unreadFor(tab.to)} className="absolute -right-2.5 -top-1.5 bg-zinc-950 text-lime-400" />
+                  </span>
                   {tab.label}
                 </Fragment>
               )}
@@ -203,6 +231,7 @@ export function Layout() {
                   >
                     <item.icon className="h-4 w-4 text-lime-400" />
                     {item.label}
+                    <Badge n={unreadFor(item.to)} className="ml-auto ring-zinc-950" />
                   </Link>
                 ))}
               <button

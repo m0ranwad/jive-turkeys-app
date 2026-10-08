@@ -3,6 +3,19 @@ import { TABLES, parseSort } from './tables';
 
 const PAGE_SIZE = 1000;
 
+// Each live subscription gets its own channel: supabase-js hands back the
+// existing channel for a repeated name, and that one is already subscribed.
+let channelCount = 0;
+
+/** filter() values: null matches empty columns, an array matches any of its values. */
+function applyWhere(query, where) {
+  return Object.entries(where).reduce((q, [column, value]) => {
+    if (value === null) return q.is(column, null);
+    if (Array.isArray(value)) return q.in(column, value);
+    return q.eq(column, value);
+  }, query);
+}
+
 function fail(error) {
   if (error.code === 'PGRST116') throw new Error("You don't have permission to do that.");
   throw new Error(error.message || 'Something went wrong');
@@ -41,7 +54,7 @@ export function createSupabaseBackend(url, key) {
     };
     return {
       list: (sort, limit) => fetchAll(() => ordered(supabase.from(table).select('*'), sort), limit),
-      filter: (where, sort) => fetchAll(() => ordered(supabase.from(table).select('*').match(where), sort)),
+      filter: (where, sort, limit) => fetchAll(() => ordered(applyWhere(supabase.from(table).select('*'), where), sort), limit),
       async create(row) {
         const { data, error } = await supabase.from(table).insert(row).select().single();
         if (error) fail(error);
@@ -65,12 +78,20 @@ export function createSupabaseBackend(url, key) {
         const { error } = await supabase.from(table).delete().eq('id', id);
         if (error) fail(error);
       },
-      /** Calls onInsert(row) for every new row; returns an unsubscribe function. */
-      subscribe(onInsert) {
-        const channel = supabase
-          .channel(`${table}-inserts`)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table }, (payload) => onInsert(payload.new))
-          .subscribe();
+      /**
+       * Calls onInsert(row) for every new row, and onUpdate(row) / onDelete({ id }) when given.
+       * Returns an unsubscribe function.
+       */
+      subscribe(onInsert, { onUpdate, onDelete } = {}) {
+        let channel = supabase.channel(`${table}-changes-${++channelCount}`);
+        const listen = (event, handler) => {
+          channel = channel.on('postgres_changes', { event, schema: 'public', table }, handler);
+        };
+        if (onInsert) listen('INSERT', (payload) => onInsert(payload.new));
+        if (onUpdate) listen('UPDATE', (payload) => onUpdate(payload.new));
+        // Deletes only carry the primary key.
+        if (onDelete) listen('DELETE', (payload) => onDelete(payload.old));
+        channel.subscribe();
         return () => supabase.removeChannel(channel);
       },
     };
@@ -173,5 +194,33 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
-  return { mode: 'supabase', auth, entities, users };
+  const chat = {
+    /** Up to `limit` messages in a room (null = Team Chat) before `before`, oldest first. */
+    async history(threadId, { before, limit = 60 } = {}) {
+      let query = supabase.from('messages').select('*');
+      query = threadId ? query.eq('thread_id', threadId) : query.is('thread_id', null);
+      if (before) query = query.lt('created_date', before);
+      const { data, error } = await query
+        .order('created_date', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
+      if (error) fail(error);
+      return data.reverse();
+    },
+
+    /** One row per room with its latest message, the signed-in player's read marker and unread count. */
+    async overview() {
+      const { data, error } = await supabase.rpc('chat_overview');
+      if (error) fail(error);
+      return data.map((row) => ({ ...row, unread: Number(row.unread) }));
+    },
+
+    /** Marks a room read up to `readAt` (a message's created_date). Never moves the marker back. */
+    async markRead(threadId, readAt) {
+      const { error } = await supabase.rpc('chat_mark_read', { p_thread_id: threadId, p_read_at: readAt });
+      if (error) fail(error);
+    },
+  };
+
+  return { mode: 'supabase', auth, entities, users, chat };
 }
