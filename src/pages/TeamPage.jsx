@@ -80,7 +80,7 @@ export function TeamPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Team" subtitle={`${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)`}>
+      <PageHeader title="Team" subtitle={`${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break) · preview dry run`}>
         <button
           onClick={() => setInviteOpen(true)}
           className="inline-flex items-center gap-1.5 rounded-full bg-zinc-950 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800"
