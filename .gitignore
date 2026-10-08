@@ -7,3 +7,5 @@ supabase/.temp
 supabase/.branches
 *.log
 .wrangler
+test-results/
+playwright-report/

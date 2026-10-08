@@ -10,12 +10,21 @@ import { ThreadIcon, ThreadList, UnreadCount } from '@/components/chat/ThreadLis
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
-import { CHAT_READ_EVENT, isAfter, roomOf, splitLeadingEmoji } from '@/lib/chat';
+import {
+  CHAT_READ_EVENT,
+  addReaction,
+  bumpOverview,
+  insertMessage,
+  isAfter,
+  organizeRooms,
+  roomOf,
+  splitLeadingEmoji,
+  upsertThread,
+} from '@/lib/chat';
 import { shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const PAGE = 60;
-const NEW_THREAD_DAYS = 3;
 const TIP_KEY = 'jt_chat_tip_seen';
 
 function tipSeen() {
@@ -56,42 +65,6 @@ function ChatTip() {
 
 let pendingCount = 0;
 const pendingId = () => `pending-${++pendingCount}`;
-
-/** Adds a message in time order, replacing the "sending" copy of it if there is one. */
-function insertMessage(list, message) {
-  const real = list.filter((m) => !m.pending);
-  const pending = list.filter((m) => m.pending);
-  const echo = pending.findIndex((m) => m.user_id === message.user_id && m.body === message.body);
-  if (echo >= 0) pending.splice(echo, 1);
-  if (real.some((m) => m.id === message.id)) return [...real, ...pending];
-  let i = real.length;
-  while (i > 0 && isAfter(real[i - 1].created_date, message.created_date)) i -= 1;
-  return [...real.slice(0, i), message, ...real.slice(i), ...pending];
-}
-
-/** Adds a reaction, replacing any copy of the same player + message + emoji. */
-function addReaction(list, reaction) {
-  const same = (r) => r.message_id === reaction.message_id && r.user_id === reaction.user_id && r.emoji === reaction.emoji;
-  return [...list.filter((r) => !same(r) && r.id !== reaction.id), reaction];
-}
-
-const upsertThread = (list, thread) =>
-  list && (list.some((t) => t.id === thread.id) ? list.map((t) => (t.id === thread.id ? thread : t)) : [thread, ...list]);
-
-/** Updates a room's latest-message summary when a message arrives. */
-function bumpOverview(list, message, countsAsUnread) {
-  const room = roomOf(message);
-  const latest = {
-    last_message_at: message.created_date,
-    last_user_id: message.user_id,
-    last_author_name: message.author_name,
-    last_body: message.body.slice(0, 140),
-  };
-  const existing = list.find((o) => o.thread_id === room);
-  if (!existing) return [...list, { thread_id: room, last_read_at: null, unread: countsAsUnread ? 1 : 0, ...latest }];
-  if (isAfter(existing.last_message_at, message.created_date)) return list;
-  return list.map((o) => (o === existing ? { ...o, ...latest, unread: o.unread + (countsAsUnread ? 1 : 0) } : o));
-}
 
 /** Sizes the chat to fill the screen between the header and the bottom tab bar. */
 function useFillViewport(ref, ready) {
@@ -266,12 +239,14 @@ export function ChatPage() {
       .catch(() => {});
   }, [loaded, extras]);
 
-  // Mark the open room read while it's on screen.
+  // Mark the open room read while it's on screen: right away when it opens (so
+  // a quick look counts), then shortly after new messages settle.
+  const markedRoom = useRef(undefined);
   useEffect(() => {
     if (!loaded || listOpen || !visible) return undefined;
     const last = [...loaded.messages].reverse().find((m) => !m.pending);
     if (!last) return undefined;
-    const timer = setTimeout(() => {
+    const mark = () => {
       const summary = overviewRef.current.find((o) => o.thread_id === loaded.room);
       if (summary && !summary.unread && !isAfter(last.created_date, summary.last_read_at)) return;
       setOverview((list) =>
@@ -285,7 +260,13 @@ export function ChatPage() {
         .markRead(loaded.room, last.created_date)
         .then(() => window.dispatchEvent(new Event(CHAT_READ_EVENT)))
         .catch(() => {});
-    }, 600);
+    };
+    if (markedRoom.current !== loaded.room) {
+      markedRoom.current = loaded.room;
+      mark();
+      return undefined;
+    }
+    const timer = setTimeout(mark, 600);
     return () => clearTimeout(timer);
   }, [loaded, listOpen, visible]);
 
@@ -308,32 +289,7 @@ export function ChatPage() {
   const messagesById = useMemo(() => new Map((loaded?.messages || []).map((m) => [m.id, m])), [loaded]);
   const lookup = useCallback((id) => messagesById.get(id) || extras[id] || null, [messagesById, extras]);
 
-  const rooms = useMemo(() => {
-    const summaries = new Map(overview.map((o) => [o.thread_id, o]));
-    const recent = Date.now() - NEW_THREAD_DAYS * 24 * 60 * 60 * 1000;
-    const list = (threads || []).map((thread) => {
-      const summary = summaries.get(thread.id);
-      return {
-        thread,
-        summary,
-        unread: summary?.unread || 0,
-        // Never opened, and there's something in it from someone else.
-        isNew: !!summary && !summary.last_read_at && summary.unread > 0,
-        recent: !!summary && new Date(summary.last_message_at).getTime() > recent,
-        at: summary?.last_message_at || thread.created_date,
-      };
-    });
-    list.sort((a, b) => new Date(b.at) - new Date(a.at));
-    const team = summaries.get(null);
-    return {
-      team: { summary: team, unread: team?.unread || 0 },
-      open: list.filter((r) => !r.thread.archived),
-      closed: list.filter((r) => r.thread.archived),
-    };
-  }, [threads, overview]);
-
-  const threadUnread = rooms.open.reduce((n, r) => (r.summary?.last_read_at ? n + r.unread : n), 0);
-  const threadFresh = rooms.open.some((r) => r.isNew && r.recent);
+  const rooms = useMemo(() => organizeRooms(threads || [], overview), [threads, overview]);
 
   const thread = room ? threads?.find((t) => t.id === room) : null;
   const threadMissing = !!room && !!threads && !thread;
@@ -583,10 +539,10 @@ export function ChatPage() {
             >
               <MessagesSquare className="h-4 w-4" />
               Threads
-              {threadUnread > 0 ? (
-                <UnreadCount n={threadUnread} className="-mr-1" />
+              {rooms.unreadInThreads > 0 ? (
+                <UnreadCount n={rooms.unreadInThreads} className="-mr-1" />
               ) : (
-                threadFresh && <span className="h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
+                rooms.freshThreads && <span className="h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
               )}
             </button>
           )}

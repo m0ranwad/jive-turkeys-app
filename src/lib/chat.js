@@ -149,3 +149,79 @@ export const CHAT_READ_EVENT = 'jt:chat-read';
 /** Unread count for the Chat tab: Team Chat plus threads the player has opened. */
 export const unreadTotal = (overview) =>
   overview.reduce((n, room) => (room.thread_id === null || room.last_read_at ? n + room.unread : n), 0);
+
+// ---------------------------------------------------------------------------
+// Keeping the chat screen's lists up to date as messages, reactions and
+// threads arrive (from this player or live from others).
+// ---------------------------------------------------------------------------
+
+/** Adds a message in time order, replacing the "sending" copy of it if there is one. */
+export function insertMessage(list, message) {
+  const real = list.filter((m) => !m.pending);
+  const pending = list.filter((m) => m.pending);
+  const echo = pending.findIndex((m) => m.user_id === message.user_id && m.body === message.body);
+  if (echo >= 0) pending.splice(echo, 1);
+  if (real.some((m) => m.id === message.id)) return [...real, ...pending];
+  let i = real.length;
+  while (i > 0 && isAfter(real[i - 1].created_date, message.created_date)) i -= 1;
+  return [...real.slice(0, i), message, ...real.slice(i), ...pending];
+}
+
+/** Adds a reaction, replacing any copy of the same player + message + emoji. */
+export function addReaction(list, reaction) {
+  const same = (r) => r.message_id === reaction.message_id && r.user_id === reaction.user_id && r.emoji === reaction.emoji;
+  return [...list.filter((r) => !same(r) && r.id !== reaction.id), reaction];
+}
+
+export const upsertThread = (list, thread) =>
+  list && (list.some((t) => t.id === thread.id) ? list.map((t) => (t.id === thread.id ? thread : t)) : [thread, ...list]);
+
+/** Updates a room's latest-message summary when a message arrives. */
+export function bumpOverview(list, message, countsAsUnread) {
+  const room = roomOf(message);
+  const latest = {
+    last_message_at: message.created_date,
+    last_user_id: message.user_id,
+    last_author_name: message.author_name,
+    last_body: message.body.slice(0, 140),
+  };
+  const existing = list.find((o) => o.thread_id === room);
+  if (!existing) return [...list, { thread_id: room, last_read_at: null, unread: countsAsUnread ? 1 : 0, ...latest }];
+  if (isAfter(existing.last_message_at, message.created_date)) return list;
+  return list.map((o) => (o === existing ? { ...o, ...latest, unread: o.unread + (countsAsUnread ? 1 : 0) } : o));
+}
+
+const NEW_THREAD_DAYS = 3;
+
+/**
+ * Team Chat plus open threads (latest activity first) and closed threads, with
+ * each room's summary from chat overview. `unreadInThreads` counts threads the
+ * player has opened; `freshThreads` is true when a thread they've never opened
+ * got messages in the last few days.
+ */
+export function organizeRooms(threads, overview, now = Date.now()) {
+  const summaries = new Map(overview.map((o) => [o.thread_id, o]));
+  const recent = now - NEW_THREAD_DAYS * 24 * 60 * 60 * 1000;
+  const list = threads.map((thread) => {
+    const summary = summaries.get(thread.id);
+    return {
+      thread,
+      summary,
+      unread: summary?.unread || 0,
+      // Never opened, and there's something in it from someone else.
+      isNew: !!summary && !summary.last_read_at && summary.unread > 0,
+      recent: !!summary && MS(summary.last_message_at) > recent,
+      at: summary?.last_message_at || thread.created_date,
+    };
+  });
+  list.sort((a, b) => MS(b.at) - MS(a.at));
+  const team = summaries.get(null);
+  const open = list.filter((r) => !r.thread.archived);
+  return {
+    team: { summary: team, unread: team?.unread || 0 },
+    open,
+    closed: list.filter((r) => r.thread.archived),
+    unreadInThreads: open.reduce((n, r) => (r.summary?.last_read_at ? n + r.unread : n), 0),
+    freshThreads: open.some((r) => r.isNew && r.recent),
+  };
+}

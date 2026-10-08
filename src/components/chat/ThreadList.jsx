@@ -13,7 +13,7 @@ export function ThreadIcon({ title, className }) {
   );
 }
 
-function RoomItem({ icon, title, summary, active, unread, isNew, me, nameOf, onClick }) {
+function RoomItem({ room, icon, title, summary, active, unread, isNew, me, nameOf, onClick }) {
   const preview = summary
     ? `${summary.last_user_id === me ? 'You' : shortName(nameOf(summary.last_user_id, summary.last_author_name))}: ${summary.last_body}`
     : 'No messages yet';
@@ -21,6 +21,7 @@ function RoomItem({ icon, title, summary, active, unread, isNew, me, nameOf, onC
   return (
     <button
       onClick={onClick}
+      data-room={room}
       aria-current={active ? 'page' : undefined}
       className={cn(
         'flex w-full items-center gap-3 rounded-2xl px-2.5 py-2.5 text-left transition',
@@ -61,6 +62,7 @@ function RoomItem({ icon, title, summary, active, unread, isNew, me, nameOf, onC
 export function UnreadCount({ n, className }) {
   return (
     <span
+      aria-label={`${n} unread`}
       className={cn(
         'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-lime-400 px-1.5 text-[10px] font-black leading-none text-black',
         className,
@@ -80,6 +82,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
         <RoomItem
+          room="team"
           icon={
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-zinc-950 text-lime-400">
               <MessageSquare className="h-5 w-5" strokeWidth={2.4} />
@@ -112,6 +115,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
         {open.map((room) => (
           <RoomItem
             key={room.thread.id}
+            room={room.thread.id}
             icon={<ThreadIcon title={room.thread.title} />}
             title={splitLeadingEmoji(room.thread.title).text}
             summary={room.summary}
@@ -138,6 +142,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
               closed.map((room) => (
                 <RoomItem
                   key={room.thread.id}
+                  room={room.thread.id}
                   icon={<ThreadIcon title={room.thread.title} className="opacity-60" />}
                   title={splitLeadingEmoji(room.thread.title).text}
                   summary={room.summary}

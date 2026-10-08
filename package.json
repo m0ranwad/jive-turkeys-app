@@ -7,6 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:db": "bash scripts/test-db.sh",
+    "test:db-rehearsal": "bash scripts/db-rehearsal.sh origin/main",
     "import:base44": "node --env-file-if-exists=.env.local scripts/import-from-base44.mjs"
   },
   "dependencies": {
@@ -27,12 +31,14 @@
     "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.6.1",
     "postcss": "^8.5.29",
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
     "vite": "^6.4.4",
+    "vitest": "^3.2.7",
     "wrangler": "^4.148.0"
   }
 }

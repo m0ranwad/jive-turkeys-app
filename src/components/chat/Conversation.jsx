@@ -31,8 +31,10 @@ export function Conversation({
 }) {
   const scroller = useRef(null);
   const stick = useRef(true);
-  const prependAnchor = useRef(null);
   const lastSeen = useRef(undefined);
+  // The top message and how far it sat from the top of the view, so older
+  // messages added above it don't move what you're looking at.
+  const topAnchor = useRef(null);
   const [newBelow, setNewBelow] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [highlightId, setHighlightId] = useState(null);
@@ -44,19 +46,27 @@ export function Conversation({
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   };
 
+  const rowOf = (id) => scroller.current?.querySelector(`[data-message-id="${id}"]`);
+  const rememberTop = () => {
+    const el = scroller.current;
+    const first = messages.find((m) => !m.pending);
+    const row = first && rowOf(first.id);
+    topAnchor.current = row ? { id: first.id, offset: row.offsetTop - el.scrollTop } : null;
+  };
+
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const last = messages[messages.length - 1];
+    const anchorRow = topAnchor.current && topAnchor.current.id !== messages[0]?.id && rowOf(topAnchor.current.id);
     if (lastSeen.current === undefined) {
       // First paint: start at the "new messages" line, else at the bottom.
       const divider = el.querySelector('[data-unread-divider]');
       el.scrollTop = divider ? Math.max(0, divider.offsetTop - 12) : el.scrollHeight;
       stick.current = !divider || el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
-    } else if (prependAnchor.current != null) {
+    } else if (anchorRow) {
       // Older messages were added above: keep the same messages in view.
-      el.scrollTop = el.scrollHeight - prependAnchor.current;
-      prependAnchor.current = null;
+      el.scrollTop = anchorRow.offsetTop - topAnchor.current.offset;
     } else if (last && last.id !== lastSeen.current) {
       if (stick.current || last.user_id === me) toBottom(true);
       else if (!last.pending) setNewBelow((n) => n + 1);
@@ -64,6 +74,7 @@ export function Conversation({
       el.scrollTop = el.scrollHeight;
     }
     lastSeen.current = last?.id ?? null;
+    rememberTop();
   }, [messages, reactionsByMessage, me]);
 
   // Keep the tapped message's options in view.
@@ -84,12 +95,7 @@ export function Conversation({
     const el = scroller.current;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
     if (stick.current && newBelow) setNewBelow(0);
-  };
-
-  const loadEarlier = () => {
-    const el = scroller.current;
-    prependAnchor.current = el.scrollHeight - el.scrollTop;
-    onLoadEarlier();
+    rememberTop();
   };
 
   const jumpTo = (id) => {
@@ -120,7 +126,7 @@ export function Conversation({
         {hasMore && (
           <div className="flex justify-center py-2">
             <button
-              onClick={loadEarlier}
+              onClick={onLoadEarlier}
               disabled={loadingEarlier}
               className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:bg-zinc-200"
             >
