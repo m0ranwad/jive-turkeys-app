@@ -67,6 +67,20 @@ shouldn't need to. Run the whole process yourself and talk to him the way Base44
 If he asks to "just publish it" without a preview, you may skip step 3, but still pass step 1 and
 still go through a pull request so there's a record.
 
+## Setup check
+
+His first message will likely ask whether you're able to make changes to the site. When he asks that,
+check without changing anything:
+
+1. `gh api repos/m0ranwad/jive-turkeys-app --jq .permissions` shows `"push": true`.
+2. `git push --dry-run origin HEAD:refs/heads/setup-check` succeeds. It sends nothing.
+3. `npm install` and `npm run build` succeed. If either changes a tracked file, restore it.
+
+Reply in plain words. Give one line per check. Then use three or four sentences on how you'll work
+together: he describes a change, you send a preview link, "publish" puts it live, and "undo that" puts
+it back. If everything passed, end with exactly "You're all set." If anything failed, say what the
+site's owner needs to fix, written as a message he can send them.
+
 ## Code map
 
 - `src/pages/`: one file per screen. `src/components/`: shared pieces. `src/components/ui/`: primitives.
