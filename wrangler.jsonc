@@ -14,5 +14,8 @@
   "routes": [{ "pattern": "jiveturkeys.app", "custom_domain": true }],
   "workers_dev": false,
   // Preview links for proposed changes (they run on sample data, see vite.config.js).
-  "preview_urls": true
+  "preview_urls": true,
+  // Required by Cloudflare's Worker Previews (`wrangler preview`), which builds every
+  // non-main branch. Empty because previews need no settings of their own.
+  "previews": {}
 }
