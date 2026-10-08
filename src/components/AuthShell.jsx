@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { isDemo, DEMO_LOGIN } from '@/api';
 
 export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
@@ -13,6 +14,15 @@ export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
         </div>
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">{children}</div>
         {footer && <p className="mt-6 text-center text-sm text-muted-foreground">{footer}</p>}
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          <Link to="/privacy" className="hover:underline">
+            Privacy
+          </Link>
+          {' · '}
+          <Link to="/terms" className="hover:underline">
+            Terms
+          </Link>
+        </p>
         {isDemo && (
           <p className="mt-6 rounded-2xl bg-amber-100 px-4 py-3 text-center text-xs font-semibold text-amber-900">
             Demo mode — sign in as captain with {DEMO_LOGIN.email} / {DEMO_LOGIN.password}, or create any account.

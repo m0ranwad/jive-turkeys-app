@@ -6,6 +6,7 @@ import { AnnouncementsPage } from '@/pages/AnnouncementsPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { DuesPage } from '@/pages/DuesPage';
 import { GameDetailPage } from '@/pages/GameDetailPage';
+import { PrivacyPage, TermsPage } from '@/pages/LegalPages';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RulesPage } from '@/pages/RulesPage';
@@ -46,6 +47,8 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
             <Route element={<RequireAuth />}>
               <Route element={<Layout />}>
                 <Route path="/" element={<SchedulePage />} />
