@@ -28,8 +28,7 @@ Sign in as `captain@demo.test` / `demo1234`, or create any account.
    `https://jiveturkeys.app`. Add the redirect URLs `https://jiveturkeys.app/**`, the project's own
    Cloudflare address (e.g. `https://jive-turkeys-app.<your-subdomain>.workers.dev/**`) and
    `http://localhost:5173/**`. Never add a wildcard like `https://*.workers.dev/**`: it would let anyone's
-   workers.dev site receive
-   your players' login links.
+   workers.dev site receive your players' login links.
 5. **Email sending (required for real players):** Supabase's built-in mailer only delivers to your
    own Supabase team members and is heavily rate-limited. In *Authentication → Emails → SMTP Settings*,
    plug in an email provider. Resend, Postmark and Brevo all have free tiers.
