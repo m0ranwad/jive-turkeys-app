@@ -3,6 +3,17 @@
 Team website for an indoor coed soccer team: schedule, RSVPs, stats, dues, chat and field rules.
 Live at https://jiveturkeys.app. React + Vite + Tailwind frontend, Supabase backend (Postgres with
 row-level security, auth, realtime), hosted on Cloudflare Workers. GitHub repo: m0ranwad/jive-turkeys-app.
+README.md has the service inventory and the current setup status.
+
+## Current state
+
+- Sign-in is email + password with a 6-digit email code. Google sign-in may or may not be finished (see
+  README setup status). `/privacy` and `/terms` (`src/pages/LegalPages.jsx`) exist because Google requires
+  them. Keep them public and linked from the sign-in screens.
+- The **Invite teammate** button on the Team page doesn't work yet: its Supabase function isn't deployed
+  ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)). Don't promise invites. New players
+  sign up at https://jiveturkeys.app themselves.
+- No player data came over from Base44. The field rules are seeded by the setup migration.
 
 ## Who you're working with
 
@@ -74,6 +85,8 @@ live database when they reach `main`. So:
 - Commit secrets. `.env.local` stays local. Only the Supabase URL and publishable key belong in the
   frontend, never a secret key.
 - Weaken row-level security, or change `wrangler.jsonc`, `.github/workflows/`, the preview demo-mode
-  logic in `vite.config.js`, or sign-in setup, unless the owner asks.
+  logic in `vite.config.js`, sign-in setup, or the `/privacy` and `/terms` pages, unless the owner asks.
+- Edit `supabase/migrations/20261008000000_init.sql`. It's already applied to the live database, so
+  changes to it never take effect.
 - Update `vendor/xlsx-*.tgz` from the network. It's vendored because cloud sessions can't reach
   cdn.sheetjs.com.
