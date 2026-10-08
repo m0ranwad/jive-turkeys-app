@@ -17,15 +17,18 @@ deployment itself, following [CLAUDE.md](CLAUDE.md). He never deals with branche
 1. **Ask:** in claude.ai/code (or the Code tab in the Claude app), with this repo selected, describe the
    change in plain English.
 2. **Preview:** Claude builds it on a branch, opens a pull request behind the scenes, and replies with
-   the Cloudflare preview link. Previews run in **demo mode with sample players and games** (see
-   [vite.config.js](vite.config.js)), so trying something out can't touch real team data.
+   the Cloudflare preview link (about five minutes after the push). Previews run in **demo mode with
+   sample players and games** (see [vite.config.js](vite.config.js)), so trying something out can't
+   touch real team data. Sign in to a preview as `captain@demo.test` / `demo1234`.
 3. **Publish:** on "publish", Claude merges to `main`. Cloudflare puts it live within about two minutes.
 4. **Undo:** on "undo that", Claude reverts the change on `main`.
 
 **Database changes** publish automatically. When a change adds a file under `supabase/migrations/`,
 the [Database update](.github/workflows/database.yml) GitHub Action applies it to the live database
 when it reaches `main`. Anything that drops, truncates, deletes or renames is refused until the owner
-reviews the file and adds `-- owner-approved` to it.
+reviews the file and adds `-- owner-approved` to it. Undoing a change that added a migration keeps the
+migration file (the unused column stays), because deleting an applied migration breaks every later
+database update.
 
 There are no required approvals: changes go live without review, as they did in Base44. The safety nets:
 - Claude checks the build before showing anything.
@@ -59,12 +62,19 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - [x] GitHub repo, and the Cloudflare Worker deploying `main` to `jiveturkeys.app`
 - [x] Automatic database updates: `SUPABASE_DB_URL` secret added, test run passed
 - [x] Privacy and terms pages live (required by Google)
-- [ ] Google sign-in: fill in Branding (home, privacy and terms links; no logo), **Publish app**, then paste
-      the client ID and secret into Supabase → Authentication → Sign In / Providers → Google
-- [ ] Claim captain: the owner signs up first at https://jiveturkeys.app, then tests sign-up code,
-      password reset, chat on two phones and the Rules page
-- [ ] Give the creator access: GitHub collaborator invite, install the Claude GitHub app on this repo,
-      and he connects at claude.ai/code (Claude Pro or higher)
+- [x] Google sign-in: Branding filled in, app published, client ID and secret in Supabase
+- [x] Claim captain: the owner signed up first at https://jiveturkeys.app
+- [ ] Give the creator access (in progress):
+  - [x] Preview flow tested end to end. Cloudflare's Worker Previews needed a `previews` block in
+        `wrangler.jsonc`. Previews answer "Not found" for any path but `/` (Cloudflare beta limitation),
+        so Claude shares only the preview's home link.
+  - [x] Walkthrough for him written (a shareable page from the owner's Claude account)
+  - [ ] Invite him as a collaborator (Settings → Collaborators)
+  - [ ] Install the Claude GitHub app on this repo only (github.com/apps/claude)
+  - [ ] Turn on Settings → General → **Automatically delete head branches** (cloud sessions can't
+        delete branches)
+  - [ ] He connects at claude.ai/code (Claude Pro or higher) and runs the setup check from the walkthrough
+  - [ ] After he signs up on the site, make him a captain from the Team page
 - [ ] Switch over: share the link with the team and have the Base44 app deleted (its API exposes player
       emails and phones)
 - Deferred: the **Invite teammate** button ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)).
