@@ -99,6 +99,25 @@ test('reply quotes the original, and tapping the quote jumps to it', async ({ pa
   await expect(message(page, 'Who is bringing the pinnies this week?').first()).toBeInViewport();
 });
 
+test('jumping to a quoted message is not undone when a message finishes sending', async ({ page }) => {
+  // Regression: a send finishing mid-jump used to snap the view back to the bottom.
+  await tapMessage(page, 'Who is bringing the pinnies this week?');
+  await page.getByRole('button', { name: 'Reply' }).click();
+  await composer(page).fill('I can grab extras');
+  // Hold time so the save can finish exactly when we choose.
+  await page.clock.pauseAt(new Date('2026-10-08T13:00:00'));
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.clock.runFor(10); // the message shows up live; its save hasn't finished
+  await expect(page.getByText('Sending…')).toHaveCount(0);
+
+  const quote = messageRow(page, 'I can grab extras').getByRole('button', { name: /Jordan R\. Who is bringing the pinnies/ });
+  await page.getByRole('log').evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await quote.click();
+  await page.clock.runFor(1000); // now the save finishes
+  await page.clock.resume();
+  await expect(message(page, 'Who is bringing the pinnies this week?').first()).toBeInViewport();
+});
+
 test('cancel a reply', async ({ page }) => {
   await tapMessage(page, 'Paid 💸');
   await page.getByRole('button', { name: 'Reply' }).click();

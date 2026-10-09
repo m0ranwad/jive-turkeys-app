@@ -30,7 +30,9 @@ export function Conversation({
   emptyText,
 }) {
   const scroller = useRef(null);
-  const stick = useRef(true);
+  // How tall the messages were at the last update, to tell whether you were at the newest
+  // ones before something changed (the last scroll event can lag behind, mid-jump).
+  const contentHeight = useRef(null);
   const lastSeen = useRef(undefined);
   // The top message and how far it sat from the top of the view, so older
   // messages added above it don't move what you're looking at.
@@ -59,20 +61,23 @@ export function Conversation({
     if (!el) return;
     const last = messages[messages.length - 1];
     const anchorRow = topAnchor.current && topAnchor.current.id !== messages[0]?.id && rowOf(topAnchor.current.id);
+    const before = contentHeight.current ?? el.scrollHeight;
+    const wasAtBottom = before - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
     if (lastSeen.current === undefined) {
       // First paint: start at the "new messages" line, else at the bottom.
       const divider = el.querySelector('[data-unread-divider]');
       el.scrollTop = divider ? Math.max(0, divider.offsetTop - 12) : el.scrollHeight;
-      stick.current = !divider || el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
     } else if (anchorRow) {
       // Older messages were added above: keep the same messages in view.
       el.scrollTop = anchorRow.offsetTop - topAnchor.current.offset;
     } else if (last && last.id !== lastSeen.current) {
-      if (stick.current || last.user_id === me) toBottom(true);
+      if (wasAtBottom || last.user_id === me) toBottom(true);
       else if (!last.pending) setNewBelow((n) => n + 1);
-    } else if (stick.current) {
+    } else if (wasAtBottom && el.scrollHeight !== before) {
+      // Something below grew (say, a reaction on the last message): stay at the bottom.
       el.scrollTop = el.scrollHeight;
     }
+    contentHeight.current = el.scrollHeight;
     lastSeen.current = last?.id ?? null;
     rememberTop();
   }, [messages, reactionsByMessage, me]);
@@ -109,8 +114,7 @@ export function Conversation({
 
   const onScroll = () => {
     const el = scroller.current;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
-    if (stick.current && newBelow) setNewBelow(0);
+    if (newBelow && el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) setNewBelow(0);
     rememberTop();
   };
 
