@@ -3,7 +3,7 @@ import { EMOJI_GROUPS } from '@/lib/chat';
 import { cn } from '@/lib/utils';
 
 /** A small built-in emoji grid (phones also have their own emoji keyboard). */
-export function EmojiPicker({ onPick, className }) {
+export function EmojiPicker({ onPick, keepFocus, className }) {
   const [group, setGroup] = useState(0);
   return (
     <div className={cn('rounded-2xl border border-black/5 bg-white p-2 shadow-lg', className)}>
@@ -13,6 +13,7 @@ export function EmojiPicker({ onPick, className }) {
             key={g.label}
             type="button"
             onClick={() => setGroup(i)}
+            onMouseDown={keepFocus ? (e) => e.preventDefault() : undefined}
             aria-label={g.label}
             aria-pressed={group === i}
             className={cn(
@@ -33,6 +34,7 @@ export function EmojiPicker({ onPick, className }) {
             key={emoji}
             type="button"
             onClick={() => onPick(emoji)}
+            onMouseDown={keepFocus ? (e) => e.preventDefault() : undefined}
             className="grid aspect-square place-items-center rounded-xl text-[22px] transition hover:bg-zinc-100 active:scale-90"
           >
             {emoji}

@@ -66,24 +66,71 @@ function ChatTip() {
 let pendingCount = 0;
 const pendingId = () => `pending-${++pendingCount}`;
 
-/** Sizes the chat to fill the screen between the header and the bottom tab bar. */
-function useFillViewport(ref, ready) {
-  const [height, setHeight] = useState(null);
+// How much the visible area must shrink while typing to count as an on-screen keyboard.
+const KEYBOARD_PX = 120;
+
+/**
+ * Sizes the chat to fill the screen between the header and the bottom tab bar.
+ *
+ * While typing on a phone, the on-screen keyboard covers the bottom of the page
+ * without making it shorter (iPhones do this; the browser then slides the page
+ * around), which hid the message box. So while the keyboard is up, the chat
+ * pins itself to exactly the part of the screen above the keyboard.
+ */
+function useChatViewport(ref, ready) {
+  const [box, setBox] = useState(null);
   useLayoutEffect(() => {
     if (!ready) return undefined;
+    const vv = window.visualViewport;
+    let flowTop = null;
+    let fullHeight = vv ? vv.height : window.innerHeight;
     const fit = () => {
       const el = ref.current;
       if (!el) return;
-      const top = el.getBoundingClientRect().top + window.scrollY;
+      const active = document.activeElement;
+      const typing = !!active && el.contains(active) && active.matches('textarea, input');
+      if (vv && !typing && vv.scale < 1.05) fullHeight = Math.max(fullHeight, vv.height);
+      if (vv && typing && vv.scale < 1.05 && fullHeight - vv.height > KEYBOARD_PX) {
+        setBox({ keyboard: true, top: Math.round(vv.offsetTop), height: Math.round(vv.height) });
+        return;
+      }
+      // Where the chat starts on the page, measured while it's in its normal place.
+      if (getComputedStyle(el).position !== 'fixed') flowTop = el.getBoundingClientRect().top + window.scrollY;
+      if (flowTop == null) return;
       const tabBar = document.querySelector('[data-bottom-nav]');
       const tabBarHeight = tabBar ? tabBar.getBoundingClientRect().height : 0;
-      setHeight(Math.max(380, Math.round(window.innerHeight - top - tabBarHeight - 12)));
+      setBox({ keyboard: false, height: Math.max(260, Math.round(window.innerHeight - flowTop - tabBarHeight - 12)) });
     };
+    // Focus changes settle a moment later (and the keyboard animates in), so check again after them.
+    const soon = () => setTimeout(fit, 0);
     fit();
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    vv?.addEventListener('resize', fit);
+    vv?.addEventListener('scroll', fit);
+    document.addEventListener('focusin', soon);
+    document.addEventListener('focusout', soon);
+    return () => {
+      window.removeEventListener('resize', fit);
+      vv?.removeEventListener('resize', fit);
+      vv?.removeEventListener('scroll', fit);
+      document.removeEventListener('focusin', soon);
+      document.removeEventListener('focusout', soon);
+    };
   }, [ref, ready]);
-  return height;
+
+  if (!box) return { height: 'calc(100vh - 12rem)' };
+  if (!box.keyboard) return { height: box.height };
+  // Above the site header and tab bar (z-40), below dialogs (z-50).
+  return {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    top: box.top,
+    height: box.height,
+    zIndex: 45,
+    padding: 6,
+    background: '#FAFAF7',
+  };
 }
 
 export function ChatPage() {
@@ -107,7 +154,7 @@ export function ChatPage() {
 
   const shell = useRef(null);
   const composer = useRef(null);
-  const height = useFillViewport(shell, !loading);
+  const shellStyle = useChatViewport(shell, !loading);
 
   // Live handlers read these instead of re-subscribing on every change.
   const live = useRef({});
@@ -465,7 +512,7 @@ export function ChatPage() {
   const title = thread ? splitLeadingEmoji(thread.title).text : 'Team Chat';
 
   return (
-    <div ref={shell} className="flex gap-3" style={{ height: height ?? 'calc(100vh - 12rem)' }}>
+    <div ref={shell} data-chat-shell className="flex gap-3" style={shellStyle}>
       <aside
         className={cn(
           'w-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:flex md:w-64 md:shrink-0',
