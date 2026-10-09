@@ -14,6 +14,10 @@ README.md has the service inventory and the current setup status.
   ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)). Don't promise invites. New players
   sign up at https://jiveturkeys.app themselves.
 - No player data came over from Base44. The field rules are seeded by the setup migration.
+- Players can add the site to their phone's Home Screen and it opens like an app (`public/manifest.json`,
+  the icons in `public/`, `public/sw.js`, and the guide in `src/components/InstallApp.jsx`). The service
+  worker caches nothing on purpose, so every visit gets the latest site. Don't add caching to it without
+  a plan for updates. Phone notifications (issue #3) will be handled there too.
 
 ## Who you're working with
 
