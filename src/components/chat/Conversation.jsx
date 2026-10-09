@@ -77,12 +77,17 @@ export function Conversation({
     rememberTop();
   }, [messages, reactionsByMessage, me]);
 
-  // When the list gets shorter (the phone keyboard opening), keep the newest messages in view.
+  // When the list gets shorter (the phone keyboard opening), keep the newest messages in view
+  // if you were at them. Judged from where the list is right now, since the last scroll event
+  // can lag behind a jump made just before the resize.
   useEffect(() => {
     const el = scroller.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    let height = el.clientHeight;
     const observer = new ResizeObserver(() => {
-      if (stick.current) el.scrollTop = el.scrollHeight;
+      const wasAtBottom = el.scrollHeight - el.scrollTop - height < NEAR_BOTTOM_PX;
+      height = el.clientHeight;
+      if (wasAtBottom) el.scrollTop = el.scrollHeight;
     });
     observer.observe(el);
     return () => observer.disconnect();
