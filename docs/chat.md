@@ -68,7 +68,7 @@ Side conversations, so Team Chat stays about the team. Every thread is visible t
 | Expected behavior | Checked by |
 |---|---|
 | The room list shows Team Chat first, then open threads with the most recent activity first. Each row shows the last message ("Riley N.: Can't this week"), when it was sent, and an unread count. | `[browser]` `[unit]` |
-| Phones: the **Threads** button in the Team Chat header opens the list (with an unread count, or a dot for new threads), and ‹ goes back. Computers: the list is always beside the chat. | `[browser]` |
+| Phones: a row under the chat header shows Team Chat and every open thread (latest activity first) with unread counts, a dot for new ones, and **+ New** ("Start a thread" when there are none). The room you're in is highlighted, and the row hides while you type. The **Threads** button in Team Chat opens the full list, closed threads included, and ‹ goes back to it. Computers: the list is always beside the chat. | `[browser]` |
 | **New thread** asks for a topic (1 to 80 characters) and an optional first message. A leading emoji becomes the thread's icon. You land in the new thread. | `[browser]` `[unit]` `[db]` |
 | Anyone can post in an open thread. | `[db]` `[browser]` |
 | The person who started a thread, and captains, get **⋯** with Rename, Close thread / Reopen thread and Delete thread. Others don't, and the database refuses them too. | `[browser]` `[db]` |

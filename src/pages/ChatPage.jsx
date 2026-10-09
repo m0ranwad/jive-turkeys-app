@@ -6,7 +6,7 @@ import { PageSpinner } from '@/components/PageSpinner';
 import { ConfirmDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { Conversation } from '@/components/chat/Conversation';
-import { ThreadIcon, ThreadList, UnreadCount } from '@/components/chat/ThreadList';
+import { ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
@@ -118,18 +118,21 @@ function useChatViewport(ref, ready) {
     };
   }, [ref, ready]);
 
-  if (!box) return { height: 'calc(100vh - 12rem)' };
-  if (!box.keyboard) return { height: box.height };
+  if (!box) return { keyboard: false, style: { height: 'calc(100vh - 12rem)' } };
+  if (!box.keyboard) return { keyboard: false, style: { height: box.height } };
   // Above the site header and tab bar (z-40), below dialogs (z-50).
   return {
-    position: 'fixed',
-    left: 0,
-    right: 0,
-    top: box.top,
-    height: box.height,
-    zIndex: 45,
-    padding: 6,
-    background: '#FAFAF7',
+    keyboard: true,
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      top: box.top,
+      height: box.height,
+      zIndex: 45,
+      padding: 6,
+      background: '#FAFAF7',
+    },
   };
 }
 
@@ -154,7 +157,7 @@ export function ChatPage() {
 
   const shell = useRef(null);
   const composer = useRef(null);
-  const shellStyle = useChatViewport(shell, !loading);
+  const { style: shellStyle, keyboard } = useChatViewport(shell, !loading);
 
   // Live handlers read these instead of re-subscribing on every change.
   const live = useRef({});
@@ -636,6 +639,11 @@ export function ChatPage() {
             </div>
           )}
         </header>
+
+        {/* Phones: every room one tap away (hidden while typing, to keep room above the keyboard). */}
+        {threads && !keyboard && (
+          <ThreadStrip rooms={rooms} activeRoom={room} onOpen={openRoom} onNewThread={() => setDialog({ kind: 'new' })} />
+        )}
 
         <ChatTip />
 
