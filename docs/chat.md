@@ -43,6 +43,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | Shows the latest 60 messages. **Load earlier messages** adds the 60 before, without jumping away from where you were. | `[browser]` `[unit]` |
 | New messages that arrive while you're scrolled up show a "↓ N new messages" button instead of yanking you down. | manual (see below) |
 | On phones the chat fills the screen, with the message box just above the tab bar. Only the messages scroll, not the page. | `[browser]` |
+| While typing on a phone, the chat fits the space above the keyboard: room name at the top, newest messages, and the message box with your words right above the keyboard. The site header and tab bar step aside until the keyboard closes. This holds when the iPhone keyboard covers the page without resizing it, and when Safari slides the page. Tapping Send or an emoji keeps the keyboard open. | `[browser]` (simulated keyboard), manual on a real iPhone |
 | A one-time tip explains tapping a message. It stays dismissed. | `[browser]` |
 | Unsent text is kept per room while you switch rooms (until the page is reloaded). | `[browser]` |
 
@@ -109,7 +110,7 @@ devices signed in as different players:
    "↓ 1 new message" button appears, and tapping it scrolls down.
 3. React on one, and the reaction appears on the other. Delete a message on one, and it disappears on the other.
 4. Start a thread on one; it appears in the other's list. Close it, and the other's message box goes away.
-5. On an iPhone, tap the message box: the keyboard opens and the box stays visible above it.
+5. On an iPhone, tap the message box: the keyboard opens, and the room name, newest messages and the box (with what you type) all stay visible above it. Send a message: the keyboard stays open. Tap outside the box: everything goes back to normal.
 
 ## Running the tests
 

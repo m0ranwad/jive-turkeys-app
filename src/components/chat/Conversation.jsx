@@ -77,6 +77,17 @@ export function Conversation({
     rememberTop();
   }, [messages, reactionsByMessage, me]);
 
+  // When the list gets shorter (the phone keyboard opening), keep the newest messages in view.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Keep the tapped message's options in view.
   useEffect(() => {
     if (!selectedId) return;
