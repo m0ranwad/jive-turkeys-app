@@ -12,6 +12,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
+    // Full Chromium in headless mode, not the stripped-down headless shell, which
+    // always blocks notifications.
+    channel: 'chromium',
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

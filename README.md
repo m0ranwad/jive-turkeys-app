@@ -51,6 +51,7 @@ The other co-owner can work the same way, or locally with Claude Code.
 | Email | Resend, sending as `team@jiveturkeys.app` | Plugged into Supabase as custom SMTP |
 | Google sign-in | Google Auth Platform project "Jive Turkeys" | Free. Needs the [/privacy](src/pages/LegalPages.jsx) and /terms pages |
 | Database updates | GitHub Actions secret `SUPABASE_DB_URL` | Supabase **Session pooler** string; GitHub's runners are IPv4-only |
+| Phone notifications | Supabase Edge Function `notify-chat`, deployed by [functions.yml](.github/workflows/functions.yml) | GitHub secret `SUPABASE_ACCESS_TOKEN`: a Supabase token for this project only, with Project Settings read, Edge Functions read-write and Edge Function Secrets read-write. The sending keys (`VAPID_*`) are created once by the workflow and kept as function secrets; never replace them |
 | Domain | `jiveturkeys.app` on Cloudflare | The only running cost |
 
 Local-only reference copies of keys live in `.env.local`, which git ignores. Never commit keys.
@@ -66,6 +67,8 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - [x] Privacy and terms pages live (required by Google)
 - [x] Google sign-in: Branding filled in, app published, client ID and secret in Supabase
 - [x] Claim captain: the owner signed up first at https://jiveturkeys.app
+- [x] Phone notifications for chat: `SUPABASE_ACCESS_TOKEN` secret added. The function and its keys are set
+      up automatically the first time the notifications change reaches `main`
 - [ ] Give the creator access (in progress):
   - [x] Preview flow tested end to end. Cloudflare's Worker Previews needed a `previews` block in
         `wrangler.jsonc`. Previews answer "Not found" for any path but `/` (Cloudflare beta limitation),
@@ -174,11 +177,11 @@ src/lib/               Team logic (headcount, records, leaderboards), formatting
 src/pages/             One file per screen, incl. LegalPages.jsx (/privacy, /terms)
 src/components/        Shared pieces and shadcn-style UI primitives
 supabase/migrations/   Database schema + security rules; new changes go in new files
-supabase/functions/    invite-user function (not deployed yet, issue #1)
+supabase/functions/    notify-chat (chat notifications) and invite-user (not deployed yet, issue #1)
 supabase/templates/    Sign-up code email
-.github/workflows/     Database update: applies new migrations when they reach main
+.github/workflows/     Tests; Database update (applies new migrations on main); Functions (deploys notify-chat)
 vendor/                SheetJS tarball (cloud sessions can't reach cdn.sheetjs.com)
 wrangler.jsonc         Cloudflare Worker settings (domain, preview URLs, page routing)
 CLAUDE.md              How Claude works in this repo (preview/publish workflow, rules)
-scripts/               Optional Base44 data import
+scripts/               Test and rehearsal scripts, notification key generator, optional Base44 import
 ```

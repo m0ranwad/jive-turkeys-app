@@ -20,6 +20,11 @@ if (typeof window !== 'undefined') {
 export function registerServiceWorker() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  // A tapped notification asks an open page to show its chat room.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const url = event.data?.type === 'jt:open' ? event.data.url : null;
+    if (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')) window.location.assign(url);
+  });
 }
 
 /** True when opened from the Home Screen icon rather than in the browser. */

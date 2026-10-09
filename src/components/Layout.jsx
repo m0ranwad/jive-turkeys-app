@@ -22,6 +22,7 @@ import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
+import { resyncPush } from '@/lib/push';
 import { STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -78,6 +79,18 @@ export function Layout() {
     if (!user) return;
     if (!profile || !hasSeenWalkthrough(user.id)) setWalkthroughOpen(true);
   }, [user, profile]);
+
+  // This device's notifications follow whoever is signed in on it.
+  useEffect(() => {
+    if (user) resyncPush().catch(() => {});
+  }, [user?.id]);
+
+  // Other screens (the chat's notification settings) can open the Home Screen guide.
+  useEffect(() => {
+    const open = () => setInstallOpen(true);
+    window.addEventListener('jt:show-install', open);
+    return () => window.removeEventListener('jt:show-install', open);
+  }, []);
 
   const closeWalkthrough = (markSeen) => {
     if (user && markSeen !== false) {

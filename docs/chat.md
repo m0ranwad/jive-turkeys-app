@@ -98,6 +98,35 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 | You post, react and start threads only as yourself. | `[db]` |
 | Messages, threads and reactions update live for everyone on the page (Supabase Realtime). | `[db]` (publication), `[unit]` (subscriptions) |
 
+## 7. Phone notifications
+
+Players turn them on with the bell in the chat header (or the "Get a notification when someone posts" card,
+shown once). They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so
+the bell walks iPhone players through that first. No email.
+
+How a message becomes a notification: posting a message fires a database trigger (`messages_push`) that calls
+the `notify-chat` function with only the message id. The function asks the database who to notify
+(`chat_push_targets`), encrypts the notification for each device and sends it. The database decides
+everything, so the function can't be made to send anything else.
+
+| Expected behavior | Checked by |
+|---|---|
+| Team Chat messages notify everyone who turned notifications on, except the author. | `[db]` |
+| Thread messages notify only the thread's starter and players who have opened the thread. | `[db]` |
+| Nobody gets buzzed for the room they're looking at right now (the chat page checks in every 15 seconds while it's on screen; on any of their devices). | `[db]` `[browser]` |
+| Each message is sent out once, and messages older than 10 minutes never are. | `[db]` |
+| The notification shows the room (Team Chat or the thread's title) and "Name: message", one line, cut at 160 characters. Tapping it opens that room. | `[unit]` `[browser]` |
+| If notifications can't be sent (the sender is down, not set up yet), messages still post normally. | `[db]` |
+| A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
+| Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
+| The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
+| Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
+| Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |
+
+The sending keys (VAPID) are created once by `.github/workflows/functions.yml` and kept as Supabase function
+secrets. They're never in the code. Never replace them: every phone that turned notifications on would
+stop getting them until the player turns them on again.
+
 ## What automation can't check (try these by hand before relying on a big chat change)
 
 The browser tests run in demo mode, so they can't cover real-time delivery between two people, the real
@@ -111,6 +140,10 @@ devices signed in as different players:
 3. React on one, and the reaction appears on the other. Delete a message on one, and it disappears on the other.
 4. Start a thread on one; it appears in the other's list. Close it, and the other's message box goes away.
 5. On an iPhone, tap the message box: the keyboard opens, and the room name, newest messages and the box (with what you type) all stay visible above it. Send a message: the keyboard stays open. Tap outside the box: everything goes back to normal.
+6. Notifications (after a change to them): on a phone, turn them on with the bell (on an iPhone, from the Home
+   Screen app) and tap **Send a test**: it arrives within a few seconds. Close the app and post in Team Chat
+   from the other device: the phone gets "Name: message", and tapping it opens Team Chat. With Team Chat open
+   on the phone, post again: no notification.
 
 ## Running the tests
 

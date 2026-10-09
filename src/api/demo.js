@@ -453,6 +453,22 @@ export function createDemoBackend() {
       else if (readAt > read.last_read_at) Object.assign(read, { last_read_at: readAt, updated_date: now() });
       save(db);
     },
+    async viewing() {
+      requireUser();
+    },
+  };
+
+  // Previews can't receive real notifications (there's no sender); lib/push.js
+  // shows a local sample instead, so the flow can still be tried.
+  const push = {
+    async publicKey() {
+      return null;
+    },
+    async save() {},
+    async remove() {},
+    async test() {
+      return { sent: 0, failed: 0 };
+    },
   };
 
   return {
@@ -461,6 +477,7 @@ export function createDemoBackend() {
     entities,
     users,
     chat,
+    push,
     resetDemo() {
       db = seed();
       save(db);

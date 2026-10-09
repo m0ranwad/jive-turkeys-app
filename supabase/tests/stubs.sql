@@ -48,3 +48,25 @@ begin
   end if;
 end;
 $$;
+
+-- pg_net (Supabase's background HTTP requests) isn't on plain Postgres: record
+-- the requests instead, so tests can check what would have been sent.
+create schema if not exists net;
+create table if not exists net.test_requests (
+  id bigserial primary key,
+  url text,
+  body jsonb,
+  created_date timestamptz not null default now()
+);
+create or replace function net.http_post(
+  url text,
+  body jsonb default '{}'::jsonb,
+  params jsonb default '{}'::jsonb,
+  headers jsonb default '{}'::jsonb,
+  timeout_milliseconds integer default 5000
+)
+returns bigint
+language sql
+as $$
+  insert into net.test_requests (url, body) values (url, body) returning id;
+$$;

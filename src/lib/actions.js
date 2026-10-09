@@ -1,7 +1,10 @@
 import { api } from '@/api';
 import { DEFAULT_SETTINGS } from './constants';
+import { turnOffPush } from './push';
 
 export async function signOut() {
+  // A signed-out device shouldn't keep getting this player's chat notifications.
+  await turnOffPush().catch(() => {});
   await api.auth.signOut();
   window.location.href = '/login';
 }

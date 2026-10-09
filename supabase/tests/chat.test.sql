@@ -258,7 +258,7 @@ select test.ok(
     ) links
   ) = 'chat_reads.thread_id->chat_threads:c, chat_reads.user_id->users:c, chat_threads.created_by->users:n, '
       'message_reactions.message_id->messages:c, message_reactions.user_id->users:c, messages.reply_to_id->messages:n, '
-      'messages.thread_id->chat_threads:c, messages.user_id->users:n',
+      'messages.thread_id->chat_threads:c, messages.user_id->users:n, push_log.message_id->messages:c',
   'chat links keep their delete rules (messages and threads outlive accounts; only deleting a thread removes its messages)'
 );
 
@@ -290,3 +290,114 @@ select test.ok(
   ),
   'deleting messages still needs to be the author or a captain'
 );
+
+-- ---------------------------------------------------------------------------
+-- Phone notifications
+-- ---------------------------------------------------------------------------
+
+grant usage on schema test to service_role;
+grant execute on all functions in schema test to service_role;
+grant select on test.people to service_role;
+
+-- Who gets a message, as the notification sender (service role) sees it.
+create function test.push_targets(message text) returns text language sql as $$
+  select coalesce(string_agg(t.endpoint, ',' order by t.endpoint), '')
+  from public.chat_push_targets((select id from public.messages where body = message order by created_date desc limit 1)) t;
+$$;
+grant execute on function test.push_targets(text) to service_role;
+
+select test.sign_in('ann');
+select public.push_subscribe('https://push.test/ann', 'ann-key', 'ann-auth', 'iPhone');
+select test.ok((select count(*) from public.push_subscriptions) = 1, 'a player saves their phone for notifications');
+select public.push_subscribe('https://push.test/ann', 'ann-key-2', 'ann-auth-2', 'iPhone');
+select test.ok((select p256dh from public.push_subscriptions) = 'ann-key-2', 'saving the same phone again updates it instead of adding another');
+select test.refused($$insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values (test.id('cy'), 'https://push.test/x', 'k', 'a')$$,
+  'a player cannot sign someone else up for notifications');
+
+select test.sign_in('cy');
+select test.ok((select count(*) from public.push_subscriptions) = 0, 'players cannot see anyone else''s devices');
+select test.touches($$delete from public.push_subscriptions where endpoint = 'https://push.test/ann'$$, 0, 'players cannot remove anyone else''s device');
+select public.push_subscribe('https://push.test/cy', 'cy-key', 'cy-auth', 'Android');
+select test.refused($$select * from public.chat_push_targets(gen_random_uuid())$$, 'players cannot ask who gets notified');
+select test.refused($$select * from public.push_log$$, 'players cannot read the notification log');
+
+select test.sign_in('cap');
+select public.push_subscribe('https://push.test/cap', 'cap-key', 'cap-auth', 'Desktop');
+-- A shared phone, signed in as cap now, notifies cap instead of its old owner.
+select public.push_subscribe('https://push.test/shared', 'k', 'a', 'iPad');
+select test.sign_in('ann');
+select public.push_subscribe('https://push.test/shared', 'k', 'a', 'iPad');
+select test.ok((select count(*) from public.push_subscriptions where endpoint = 'https://push.test/shared') = 1,
+  'a device moves to whoever turned notifications on last');
+select test.touches($$delete from public.push_subscriptions where endpoint = 'https://push.test/shared'$$, 1, 'a player turns notifications off on their device');
+
+reset role;
+set role anon;
+select test.refused($$select public.push_subscribe('https://push.test/anon', 'k', 'a', 'x')$$, 'signed-out visitors cannot sign up for notifications');
+select test.refused($$select public.chat_viewing(null)$$, 'signed-out visitors cannot check in to a room');
+reset role;
+
+-- Posting a message asks the sender to send it out.
+truncate net.test_requests;
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'Push me');
+reset role;
+select test.ok(
+  (select count(*) from net.test_requests r join public.messages m on m.id = (r.body ->> 'message_id')::uuid
+    where m.body = 'Push me' and r.url like 'https://%.supabase.co/functions/v1/notify-chat') = 1,
+  'posting a message calls the notification sender with its id'
+);
+
+set role service_role;
+select test.ok(test.push_targets('Push me') = 'https://push.test/cap,https://push.test/cy',
+  'Team Chat messages go to everyone with notifications on, except the author');
+select test.ok(test.push_targets('Push me') = '', 'each message is sent out only once');
+reset role;
+
+insert into public.messages (user_id, author_name, body, created_date) values (test.id('ann'), 'Ann', 'Old news', now() - interval '11 minutes');
+set role service_role;
+select test.ok(test.push_targets('Old news') = '', 'messages older than 10 minutes are not sent');
+reset role;
+
+-- Someone looking at the room doesn't get buzzed for it.
+select test.sign_in('cy');
+select public.chat_viewing(null);
+select test.ok((select viewing_at > now() - interval '5 seconds' from public.chat_reads where thread_id is null), 'the chat page checks in while it is on screen');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'While cy watches');
+set role service_role;
+select test.ok(test.push_targets('While cy watches') = 'https://push.test/cap', 'whoever is looking at the room right now is skipped');
+reset role;
+update public.chat_reads set viewing_at = now() - interval '1 minute' where user_id = test.id('cy');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'After cy left');
+set role service_role;
+select test.ok(test.push_targets('After cy left') = 'https://push.test/cap,https://push.test/cy', 'once they leave, they get notified again');
+reset role;
+
+-- Threads: the starter and anyone who opened it.
+select test.sign_in('ann');
+insert into public.chat_threads (title, created_by, author_name) values ('Carpool', test.id('ann'), 'Ann');
+select test.sign_in('cap');
+select public.chat_mark_read((select id from public.chat_threads where title = 'Carpool'), now());
+insert into public.messages (user_id, author_name, body, thread_id) select test.id('cap'), 'Cap', 'Room for 2', id from public.chat_threads where title = 'Carpool';
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id) select test.id('ann'), 'Ann', 'Leaving at 6', id from public.chat_threads where title = 'Carpool';
+set role service_role;
+select test.ok(test.push_targets('Room for 2') = 'https://push.test/ann', 'thread messages go to the thread''s starter');
+select test.ok(test.push_targets('Leaving at 6') = 'https://push.test/cap', 'thread messages go to people who opened it, not everyone');
+select test.ok((select thread_title from public.chat_push_targets(gen_random_uuid())) is null, 'an unknown message sends nothing');
+reset role;
+
+-- A broken sender never stops a message from being posted.
+alter function net.http_post(text, jsonb, jsonb, jsonb, integer) rename to http_post_working;
+select test.sign_in('ann');
+select test.touches($$insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'Still posts')$$, 1,
+  'messages still post when the notification sender is unavailable');
+reset role;
+alter function net.http_post_working(text, jsonb, jsonb, jsonb, integer) rename to http_post;
+
+-- Deleting a message clears its notification record.
+delete from public.messages where body = 'Push me';
+select test.ok(not exists (select 1 from public.push_log l left join public.messages m on m.id = l.message_id where m.id is null),
+  'deleting a message clears its notification record');
