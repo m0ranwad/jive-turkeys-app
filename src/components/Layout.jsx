@@ -35,7 +35,6 @@ const TABS = [
   { to: '/team', label: 'Team', icon: Users },
   { to: CHAT_PATH, label: 'Chat', icon: MessageSquare, bold: true },
   { to: '/rules', label: 'Rules', icon: BookOpen },
-  { to: '/profile', label: 'Profile', icon: User },
 ];
 
 const seenKey = (userId) => `jt_seen_walkthrough_${userId}`;
@@ -74,6 +73,7 @@ export function Layout() {
   const chatUnread = useChatUnread(!!user);
   // No badge while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread : 0);
+  const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';
 
   useEffect(() => {
     if (!user) return;
@@ -157,13 +157,30 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
-          <button
-            onClick={() => setMenuOpen(true)}
-            aria-label="Menu"
-            className="ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/5 transition hover:bg-white/10 md:ml-2"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-2">
+            <NavLink
+              to="/profile"
+              aria-label="My profile"
+              title="My profile"
+              className={({ isActive }) =>
+                cn(
+                  'grid h-10 w-10 place-items-center rounded-full font-display text-[13px] font-black tracking-tight transition',
+                  isActive
+                    ? 'bg-lime-400 text-black'
+                    : 'bg-lime-400/15 text-lime-400 ring-1 ring-lime-400/40 hover:bg-lime-400/25',
+                )
+              }
+            >
+              {myInitials || <User className="h-5 w-5" />}
+            </NavLink>
+            <button
+              onClick={() => setMenuOpen(true)}
+              aria-label="Menu"
+              className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 transition hover:bg-white/10"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -225,7 +242,7 @@ export function Layout() {
             {user && (
               <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3.5">
                 <span className="grid h-11 w-11 place-items-center rounded-full bg-lime-400 font-display text-sm font-black text-black">
-                  {initials(profile?.display_name || user.full_name || user.email)}
+                  {myInitials}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
