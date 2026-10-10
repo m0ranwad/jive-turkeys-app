@@ -2,6 +2,8 @@
 // for every game), how it splits across the active roster, couples who pay
 // together, and the links players pay with.
 
+import { SESSIONS } from './constants';
+
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
 const num = (value) => Number(value) || 0;
@@ -117,21 +119,69 @@ export function teamDues(total, profiles, payments) {
   return { ...split, active: ordered, shareOf, partnerOf, stillToPay };
 }
 
-/** The ways to pay the captains have set up, with the amount filled in where the app allows it. */
+/**
+ * Tidies what a captain types or pastes for each way to pay: a name, an
+ * @handle or $cashtag, or a profile link. Venmo and Cash App keep the name;
+ * PayPal keeps a PayPal.Me name, or any other PayPal link as it is (like the
+ * one a PayPal QR code opens).
+ */
+export function cleanPayHandle(kind, value) {
+  const text = (value || '').trim();
+  if (!text) return '';
+  const fromLink = (pattern) => text.match(pattern)?.[1];
+  if (kind === 'venmo') return (fromLink(/venmo\.com\/(?:u\/)?([^/?#\s]+)/i) || text).replace(/^@/, '');
+  if (kind === 'cashapp') return (fromLink(/cash\.app\/\$?([^/?#\s]+)/i) || text).replace(/^\$/, '');
+  if (kind === 'paypal') {
+    const name = fromLink(/paypal\.me\/([^/?#\s]+)/i) || fromLink(/paypal\.com\/paypalme\/([^/?#\s]+)/i);
+    if (name) return name;
+    if (/^https?:\/\//i.test(text) || /paypal\.com\//i.test(text)) return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+    return text.replace(/^@/, '');
+  }
+  return text;
+}
+
+/**
+ * The ways to pay the captains have set up. Venmo, PayPal.Me and Cash App
+ * links open with the amount filled in (`prefilled`); a plain PayPal link
+ * opens the payee's PayPal and the player types the amount.
+ */
 export function payOptions(settings, amount, note) {
   const options = [];
   const amountText = dollars(amount).slice(1);
-  const venmo = (settings?.pay_venmo || '').trim().replace(/^@/, '');
+  const venmo = cleanPayHandle('venmo', settings?.pay_venmo);
   if (venmo) {
     const query = `txn=pay&audience=private&amount=${amountText}&note=${encodeURIComponent(note)}`;
-    options.push({ key: 'venmo', label: 'Venmo', handle: `@${venmo}`, href: `https://venmo.com/${encodeURIComponent(venmo)}?${query}` });
+    options.push({
+      key: 'venmo',
+      label: 'Venmo',
+      handle: `@${venmo}`,
+      href: `https://venmo.com/${encodeURIComponent(venmo)}?${query}`,
+      prefilled: true,
+    });
   }
-  const cashtag = (settings?.pay_cashapp || '').trim().replace(/^\$/, '');
+  const paypal = cleanPayHandle('paypal', settings?.pay_paypal);
+  if (paypal) {
+    const link = /^https?:\/\//i.test(paypal);
+    options.push({
+      key: 'paypal',
+      label: 'PayPal',
+      handle: link ? 'PayPal' : `paypal.me/${paypal}`,
+      href: link ? paypal : `https://paypal.me/${encodeURIComponent(paypal)}/${amountText}`,
+      prefilled: !link,
+    });
+  }
+  const cashtag = cleanPayHandle('cashapp', settings?.pay_cashapp);
   if (cashtag) {
-    options.push({ key: 'cashapp', label: 'Cash App', handle: `$${cashtag}`, href: `https://cash.app/$${encodeURIComponent(cashtag)}/${amountText}` });
+    options.push({
+      key: 'cashapp',
+      label: 'Cash App',
+      handle: `$${cashtag}`,
+      href: `https://cash.app/$${encodeURIComponent(cashtag)}/${amountText}`,
+      prefilled: true,
+    });
   }
   const zelle = (settings?.pay_zelle || '').trim();
-  if (zelle) options.push({ key: 'zelle', label: 'Zelle', handle: zelle, href: null });
+  if (zelle) options.push({ key: 'zelle', label: 'Zelle', handle: zelle, href: null, prefilled: false });
   return options;
 }
 
@@ -152,4 +202,11 @@ export function currentSession(games, today) {
   const latest = [...games].sort((a, b) => b.date.localeCompare(a.date))[0];
   const game = upcoming || latest;
   return game ? { year: game.season_year, session: game.session } : { year: Number(today.slice(0, 4)), session: 1 };
+}
+
+/** The session before (-1) or after (+1) this one. */
+export function stepSession({ year, session }, delta) {
+  const perYear = SESSIONS.length;
+  const index = Number(year) * perYear + (Number(session) - 1) + delta;
+  return { year: Math.floor(index / perYear), session: (index % perYear) + 1 };
 }

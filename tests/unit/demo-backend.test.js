@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v5';
+const DB_KEY = 'jt_demo_db_v6';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -223,6 +223,32 @@ describe('dues', () => {
     await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id], paid: false, paidDate: '2026-10-09' });
     const [again] = await api.entities.DuesPayment.filter({ session: 2, user_id: alex.user_id });
     expect([again.paid, again.paid_date, again.paid_by]).toEqual([false, null, null]);
+
+    // The history keeps both changes, newest first, like the database's dues_history.
+    const history = await api.entities.DuesHistory.filter({ session: 2, user_id: alex.user_id }, '-created_date');
+    expect(history.map((h) => [h.paid, h.paid_date, h.changed_by])).toEqual([
+      [false, null, jordan.id],
+      [true, '2026-10-09', jordan.id],
+    ]);
+  });
+
+  it('leaves a player who is already paid alone: same date, nothing added to the history', async () => {
+    const { api } = await signedIn();
+    const [jordan] = await api.entities.PlayerProfile.filter({ display_name: 'Jordan Rivera' });
+    const [before] = await api.entities.DuesPayment.filter({ session: 2, user_id: jordan.user_id });
+    const historyBefore = await api.entities.DuesHistory.list();
+    await api.dues.markPaid({ year: before.season_year, session: 2, userIds: [jordan.user_id], paid: true, paidDate: '2030-01-01' });
+    const [after] = await api.entities.DuesPayment.filter({ session: 2, user_id: jordan.user_id });
+    expect(after.paid_date).toBe(before.paid_date);
+    expect(await api.entities.DuesHistory.list()).toHaveLength(historyBefore.length);
+  });
+
+  it('has sample history for every payment, including a mistake that was put back', async () => {
+    const { api } = await signedIn();
+    const payments = await api.entities.DuesPayment.filter({ paid: true });
+    const history = await api.entities.DuesHistory.list();
+    expect(history.filter((h) => h.paid).length).toBeGreaterThanOrEqual(payments.length);
+    expect(history.filter((h) => !h.paid)).toHaveLength(1);
   });
 
   it('links a couple both ways, moves a relinked player, and unlinks both', async () => {

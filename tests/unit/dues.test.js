@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DUES_DEFAULTS,
+  cleanPayHandle,
   currentSession,
   dollars,
   feeParts,
@@ -12,6 +13,7 @@ import {
   payOptions,
   reminderText,
   splitDues,
+  stepSession,
   teamDues,
 } from '@/lib/dues';
 
@@ -122,17 +124,30 @@ describe('pay buttons', () => {
 
   const note = 'Jive Turkeys dues · Session 2 2026';
 
-  it('fill in the amount for Venmo and Cash App, and show Zelle details to copy', () => {
-    const options = payOptions({ pay_venmo: '@Brian-K', pay_cashapp: '$BrianK', pay_zelle: 'brian@example.com' }, 73, note);
+  it('fill in the amount for Venmo, PayPal.Me and Cash App, and show Zelle details to copy', () => {
+    const options = payOptions(
+      { pay_venmo: '@B-Kircher', pay_paypal: 'BKircher', pay_cashapp: '$BrianK', pay_zelle: 'brian@example.com' },
+      73,
+      note,
+    );
     expect(options).toEqual([
       {
         key: 'venmo',
         label: 'Venmo',
-        handle: '@Brian-K',
-        href: 'https://venmo.com/Brian-K?txn=pay&audience=private&amount=73&note=Jive%20Turkeys%20dues%20%C2%B7%20Session%202%202026',
+        handle: '@B-Kircher',
+        href: 'https://venmo.com/B-Kircher?txn=pay&audience=private&amount=73&note=Jive%20Turkeys%20dues%20%C2%B7%20Session%202%202026',
+        prefilled: true,
       },
-      { key: 'cashapp', label: 'Cash App', handle: '$BrianK', href: 'https://cash.app/$BrianK/73' },
-      { key: 'zelle', label: 'Zelle', handle: 'brian@example.com', href: null },
+      { key: 'paypal', label: 'PayPal', handle: 'paypal.me/BKircher', href: 'https://paypal.me/BKircher/73', prefilled: true },
+      { key: 'cashapp', label: 'Cash App', handle: '$BrianK', href: 'https://cash.app/$BrianK/73', prefilled: true },
+      { key: 'zelle', label: 'Zelle', handle: 'brian@example.com', href: null, prefilled: false },
+    ]);
+  });
+
+  it('open any other PayPal link (like a PayPal QR code) as it is; the player types the amount', () => {
+    const qr = 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ';
+    expect(payOptions({ pay_paypal: qr }, 73, note)).toEqual([
+      { key: 'paypal', label: 'PayPal', handle: 'PayPal', href: qr, prefilled: false },
     ]);
   });
 
@@ -143,6 +158,32 @@ describe('pay buttons', () => {
   it('leave out the ways to pay nobody has set up', () => {
     expect(payOptions({ pay_venmo: '  ', pay_cashapp: null }, 73, note)).toEqual([]);
     expect(payOptions(undefined, 73, note)).toEqual([]);
+  });
+});
+
+describe('pasted payment links', () => {
+  it('keep just the Venmo name from a profile link or @handle', () => {
+    for (const typed of ['https://venmo.com/u/B-Kircher', 'venmo.com/B-Kircher', '@B-Kircher', ' B-Kircher ', 'https://account.venmo.com/u/B-Kircher?x=1']) {
+      expect(cleanPayHandle('venmo', typed)).toBe('B-Kircher');
+    }
+  });
+
+  it('keep a PayPal.Me name, or any other PayPal link whole', () => {
+    expect(cleanPayHandle('paypal', 'https://paypal.me/BKircher')).toBe('BKircher');
+    expect(cleanPayHandle('paypal', 'https://www.paypal.com/paypalme/BKircher/10')).toBe('BKircher');
+    expect(cleanPayHandle('paypal', '@BKircher')).toBe('BKircher');
+    expect(cleanPayHandle('paypal', 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ')).toBe(
+      'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ',
+    );
+    expect(cleanPayHandle('paypal', 'www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ')).toBe(
+      'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ',
+    );
+  });
+
+  it('keep just the Cash App $cashtag name', () => {
+    expect(cleanPayHandle('cashapp', 'https://cash.app/$BrianK')).toBe('BrianK');
+    expect(cleanPayHandle('cashapp', '$BrianK')).toBe('BrianK');
+    expect(cleanPayHandle('venmo', '')).toBe('');
   });
 });
 
@@ -167,6 +208,15 @@ describe('the reminder', () => {
         'See your amount and pay: https://jiveturkeys.app/dues',
       ].join('\n'),
     );
+  });
+});
+
+describe('stepping between sessions', () => {
+  it('goes 1, 2, 3 and on into the next year, and back', () => {
+    expect(stepSession({ year: 2026, session: 2 }, 1)).toEqual({ year: 2026, session: 3 });
+    expect(stepSession({ year: 2026, session: 3 }, 1)).toEqual({ year: 2027, session: 1 });
+    expect(stepSession({ year: 2026, session: 1 }, -1)).toEqual({ year: 2025, session: 3 });
+    expect(stepSession({ year: '2026', session: '2' }, -1)).toEqual({ year: 2026, session: 1 });
   });
 });
 

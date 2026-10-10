@@ -35,6 +35,7 @@ const TABS = [
   { to: '/team', label: 'Team', icon: Users },
   { to: CHAT_PATH, label: 'Chat', icon: MessageSquare, bold: true },
   { to: '/rules', label: 'Rules', icon: BookOpen },
+  { to: '/dues', label: 'Dues', icon: DollarSign },
 ];
 
 const seenKey = (userId) => `jt_seen_walkthrough_${userId}`;
