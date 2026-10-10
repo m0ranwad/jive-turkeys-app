@@ -88,6 +88,44 @@ test('pasting someone already on the app under a different name asks before coun
   await expect(card(page, 'Jamie F.')).toContainText('Not joined yet');
 });
 
+test('a captain sees when someone on the roster probably joined under a fuller name', async ({ page }) => {
+  await signIn(page);
+  await openTeam(page);
+  // Say the roster said "Chris D" and Chris joined as Chris Dunn without picking it.
+  await page.getByRole('button', { name: 'Add players to the roster' }).click();
+  const add = page.getByRole('dialog', { name: 'Add players to the roster' });
+  await add.getByLabel('Names').fill('Chris D');
+  await add.getByTestId('lookalikes').getByLabel("They're different people. Add them too.").check();
+  await add.getByRole('button', { name: 'Add to the roster' }).click();
+  await expect(card(page, 'Chris D')).toContainText('Joined as Chris Dunn? Tap Edit to move this spot to their account.');
+
+  await page.getByRole('button', { name: 'Edit Chris D' }).click();
+  const edit = page.getByRole('dialog', { name: 'Chris D' });
+  await expect(edit.getByLabel('Joined without picking their name?')).toHaveValue(/.+/);
+  await expect(edit.getByLabel('Joined without picking their name?').locator('option:checked')).toHaveText('Chris Dunn');
+  await edit.getByRole('button', { name: 'Move', exact: true }).click();
+  await edit.getByRole('button', { name: 'Move them' }).click();
+  await expect(page.getByText("Chris D moved to Chris Dunn's account")).toBeVisible();
+  await expect(page.getByText('Joined as Chris Dunn?')).toHaveCount(0);
+
+  // Only captains see the hint (only they can move a spot).
+  await page.getByRole('button', { name: 'Add players to the roster' }).click();
+  await page.getByRole('dialog', { name: 'Add players to the roster' }).getByLabel('Names').fill('Jamie F');
+  await page.getByTestId('lookalikes').getByLabel("They're different people. Add them too.").check();
+  await page.getByRole('button', { name: 'Add to the roster' }).click();
+  await expect(card(page, 'Jamie F')).toContainText('Joined as Jamie Fox?');
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.locator('#email').fill('jordan@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await openTeam(page);
+  await expect(card(page, 'Jamie F')).toContainText('Not joined yet');
+  await expect(page.getByText('Joined as Jamie Fox?')).toHaveCount(0);
+});
+
 test("a captain's status change takes a player who has not joined out of the split", async ({ page }) => {
   await signIn(page);
   await openTeam(page);

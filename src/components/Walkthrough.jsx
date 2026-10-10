@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { api } from '@/api';
 import { ProfileForm } from '@/components/ProfileForm';
 import { signOut } from '@/lib/actions';
+import { sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -25,6 +26,10 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   // (undefined: not chosen yet, null: "I'm not on the list").
   const [names, setNames] = useState(null);
   const [pick, setPick] = useState(undefined);
+  // "I'm not on the list", but the name they typed looks like one that is
+  // ("Sam Ortiz" for "Sam O"): their details, and the names it looks like.
+  const [asking, setAsking] = useState(null);
+  const [askError, setAskError] = useState('');
 
   useEffect(() => {
     if (!open || !needsProfile) return;
@@ -39,15 +44,15 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const onProfileStep = needsProfile && step === STEPS.length;
   const isLast = step === total - 1;
 
-  const createProfile = async (values) => {
+  const createProfile = async (values, chosen) => {
     setBusy(true);
     try {
       const me = await api.auth.me();
       await api.entities.PlayerProfile.create({ ...values, user_id: me.id, email: me.email, status: 'active' });
-      if (pick) {
+      if (chosen) {
         try {
           // Their roster status, dues payments and history become theirs.
-          await api.users.claimGuest(pick.id);
+          await api.users.claimGuest(chosen.id);
         } catch {
           // Someone picked it first: they're still on the team, and a captain can link them.
         }
@@ -57,6 +62,30 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
       window.location.reload();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const backToNames = () => {
+    setPick(undefined);
+    setAsking(null);
+  };
+
+  const submitProfile = async (values) => {
+    const matches = pick ? [] : (names || []).filter((g) => sameName(values.display_name, g.display_name));
+    if (matches.length) {
+      setAskError('');
+      setAsking({ values, matches });
+      return;
+    }
+    await createProfile(values, pick);
+  };
+
+  const answer = async (chosen) => {
+    setAskError('');
+    try {
+      await createProfile(asking.values, chosen);
+    } catch (err) {
+      setAskError(err.message || "Couldn't save your profile.");
     }
   };
 
@@ -132,7 +161,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                     <p className="mt-1.5 text-sm text-zinc-500">
                       You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details: your roster
                       spot and dues come with you.{' '}
-                      <button type="button" onClick={() => setPick(undefined)} className="font-semibold text-zinc-700 underline underline-offset-2">
+                      <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
                         Not you?
                       </button>
                     </p>
@@ -143,23 +172,53 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       {names.length > 0 && (
                         <>
                           {' '}
-                          <button type="button" onClick={() => setPick(undefined)} className="font-semibold text-zinc-700 underline underline-offset-2">
+                          <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
                             Back to the names
                           </button>
                         </>
                       )}
                     </p>
                   )}
-                  <div className="mt-5">
-                    <ProfileForm
-                      key={pick?.id || 'new'}
-                      initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
-                      onSubmit={createProfile}
-                      submitLabel="Start using the app"
-                      busy={busy}
-                      hidePosition
-                    />
-                  </div>
+                  {asking ? (
+                    <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="is-that-you">
+                      <p className="text-sm font-bold text-amber-950">Is that you on the roster?</p>
+                      <p className="text-sm text-amber-900">
+                        Your captain put {asking.matches.map((g) => g.display_name).join(' and ')} on the roster. If that's
+                        you, your spot and dues come with you, and you keep the name {asking.values.display_name}.
+                      </p>
+                      {asking.matches.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => answer(g)}
+                          className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800 disabled:opacity-50"
+                        >
+                          Yes, I'm {g.display_name}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => answer(null)}
+                        className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
+                      >
+                        No, that's someone else
+                      </button>
+                      {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
+                    </div>
+                  ) : (
+                    <div className="mt-5">
+                      <ProfileForm
+                        key={pick?.id || 'new'}
+                        initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
+                        onSubmit={submitProfile}
+                        submitLabel="Start using the app"
+                        busy={busy}
+                        hidePosition
+                      />
+                    </div>
+                  )}
                   <p className="mt-4 text-center text-xs text-zinc-400">
                     Wrong account?{' '}
                     <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">

@@ -156,3 +156,59 @@ test('once every name is picked, new players go straight to their profile', asyn
   await expect(page.getByText('Find your name.')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Back to the names' })).toHaveCount(0);
 });
+
+test('a new player who types their name instead of picking it is asked if that is them', async ({ page }) => {
+  await register(page, 'dana@demo.test');
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Dana');
+  await page.getByRole('button', { name: 'Female' }).click();
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  const ask = page.getByTestId('is-that-you');
+  await expect(ask).toContainText('Your captain put Dana Wells on the roster');
+  await expect(ask).toContainText('you keep the name Dana');
+  const reloaded = page.waitForEvent('load');
+  await ask.getByRole('button', { name: "Yes, I'm Dana Wells" }).click();
+  await reloaded;
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+
+  // Her spot came with her: no grey card for Dana Wells, and her payments are hers.
+  await page.locator('a[href="/team"]:visible').first().click();
+  await expect(page.getByTestId('not-joined')).toContainText("1 hasn't joined yet");
+  await expect(page.getByText('Dana Wells', { exact: true })).toHaveCount(0);
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(page.getByTestId('dues-paid')).toContainText('Dana');
+});
+
+test('someone else with the same first name can say so', async ({ page }) => {
+  await register(page, 'mikey@demo.test');
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Mike Rossi');
+  await page.getByRole('button', { name: 'Male', exact: true }).click();
+  // "Mike Rossi" isn't "Mike Russo": no question.
+  await finishProfile(page);
+  await expect(page.getByTestId('is-that-you')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await register(page, 'mike2@demo.test');
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Mike');
+  await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  await expect(page.getByTestId('is-that-you')).toContainText('Your captain put Mike Russo on the roster');
+  await finishAnswer(page, "No, that's someone else");
+  // Mike Russo is still waiting for his own sign-up.
+  await page.locator('a[href="/team"]:visible').first().click();
+  await expect(page.getByTestId('not-joined')).toContainText("2 haven't joined yet");
+  await expect(page.getByText('Mike Russo', { exact: true }).last()).toBeVisible();
+});
+
+async function finishAnswer(page, name) {
+  // Answering creates the profile and reloads the page; wait for that before moving on.
+  const reloaded = page.waitForEvent('load');
+  await page.getByTestId('is-that-you').getByRole('button', { name }).click();
+  await reloaded;
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+}

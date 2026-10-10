@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { POSITIONS } from '@/lib/constants';
-import { sortPastedNames } from '@/lib/team-logic';
+import { sameName, sortPastedNames } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
@@ -89,7 +89,8 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
       setForm({ display_name: guest?.display_name || '', gender: guest?.gender ?? null, position: guest?.position ?? null });
       setNames('');
       setAddLookalikes(false);
-      setLinkTo('');
+      // Someone on the app with a name like this one probably joined without picking it.
+      setLinkTo((guest && appPlayers.find((p) => sameName(p.display_name, guest.display_name))?.user_id) || '');
       setConfirm(null);
     }
     // Only when it opens, so a reload behind it doesn't wipe what's typed.

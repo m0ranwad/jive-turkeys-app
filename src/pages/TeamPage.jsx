@@ -11,6 +11,7 @@ import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 import { guestAsPlayer } from '@/lib/dues';
 import { initials } from '@/lib/format';
+import { sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STATUS_ORDER = { active: 0, sub_pool: 1, on_break: 2 };
@@ -175,6 +176,8 @@ export function TeamPage() {
       <div className="space-y-2">
         {roster.map((p) => {
           const isMe = p.user_id === data.user.id;
+          // Captains: someone on the app with a name like this one probably joined without picking it.
+          const joinedAs = p.guest && data.isCaptain ? (data.profiles || []).find((a) => sameName(a.display_name, p.display_name)) : null;
           return (
             <div
               key={p.id}
@@ -235,6 +238,11 @@ export function TeamPage() {
                   </a>
                 )}
               </div>
+              {joinedAs && (
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
+                  Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
+                </p>
+              )}
               {(isMe || data.isCaptain) && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
                   {isMe && (

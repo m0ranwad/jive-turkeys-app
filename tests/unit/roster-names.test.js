@@ -11,6 +11,8 @@ describe('sameName', () => {
     expect(sameName('Brian', 'Brian Kircher')).toBe(true);
     expect(sameName('Brian Kircher', 'brian')).toBe(true);
     expect(sameName('Mary Ann Lee', 'Mary Ann Lee')).toBe(true);
+    // A player who adds their last name when they join.
+    expect(sameName('Sam Ortiz', 'Sam O')).toBe(true);
   });
 
   it('keeps different people apart', () => {
@@ -20,6 +22,8 @@ describe('sameName', () => {
     expect(sameName('Kim Kircher', 'Brian Kircher')).toBe(false);
     expect(sameName('Brian Kirk', 'Brian Kircher')).toBe(false);
     expect(sameName('', 'Brian')).toBe(false);
+    expect(sameName('Sam Adams', 'Sam B')).toBe(false);
+    expect(sameName('Sam A', 'Sam B')).toBe(false);
   });
 });
 
