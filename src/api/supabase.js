@@ -181,6 +181,12 @@ export function createSupabaseBackend(url, key) {
   };
 
   const users = {
+    /** Captains: a teammate who wasn't on the app joined; their payments and history move to their account. */
+    async linkGuest(guestId, userId) {
+      const { error } = await supabase.rpc('link_team_guest', { p_guest_id: guestId, p_user_id: userId });
+      if (error) fail(error);
+    },
+
     async setRole(userId, role) {
       const { error } = await supabase.from('users').update({ role }).eq('id', userId).select().single();
       if (error) fail(error);
@@ -243,11 +249,6 @@ export function createSupabaseBackend(url, key) {
     /** Links two players who pay together (either can be a guest); a null partner unlinks. */
     async setPartner(userId, partnerId) {
       const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
-      if (error) fail(error);
-    },
-    /** Captains: a teammate who wasn't on the app joined; their payments and history move to their account. */
-    async linkGuest(guestId, userId) {
-      const { error } = await supabase.rpc('link_dues_guest', { p_guest_id: guestId, p_user_id: userId });
       if (error) fail(error);
     },
   };

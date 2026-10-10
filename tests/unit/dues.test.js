@@ -118,16 +118,17 @@ describe('couples who pay together', () => {
 });
 
 describe('teammates who are not on the app', () => {
-  it('join the app players as one list, keyed like everyone else', () => {
+  it('join the app players as one list, keyed like everyone else, off the roster once removed or linked', () => {
     const { members, payments, history } = duesMembers({
       profiles: [
         { user_id: 'u1', display_name: 'Kelly', status: 'active', pays_with: null, pays_with_guest: 'g1' },
         { user_id: 'u2', display_name: 'Sam', status: 'active', pays_with: null },
       ],
       guests: [
-        { id: 'g1', display_name: 'Mike', active: true, pays_with_user: 'u1', pays_with_guest: null, linked_user_id: null },
-        { id: 'g2', display_name: 'Gone', active: false, linked_user_id: null },
-        { id: 'g3', display_name: 'Joined', active: false, linked_user_id: 'u2' },
+        { id: 'g1', display_name: 'Mike', status: 'active', removed: false, pays_with_user: 'u1', pays_with_guest: null, linked_user_id: null },
+        { id: 'g2', display_name: 'Gone', status: 'active', removed: true, linked_user_id: null },
+        { id: 'g3', display_name: 'Joined', status: 'active', removed: false, linked_user_id: 'u2' },
+        { id: 'g4', display_name: 'Resting', status: 'on_break', removed: false, linked_user_id: null },
       ],
       payments: [{ id: 'p1', user_id: null, guest_id: 'g1', paid: true }, { id: 'p2', user_id: 'u2', guest_id: null, paid: false }],
       history: [{ id: 'h1', user_id: null, guest_id: 'g1', paid: true }],
@@ -138,6 +139,7 @@ describe('teammates who are not on the app', () => {
       ['g1', 'active', 'u1', true],
       ['g2', 'inactive', null, true],
       ['g3', 'inactive', null, true],
+      ['g4', 'on_break', null, true],
     ]);
     expect(payments.map((p) => p.user_id)).toEqual(['g1', 'u2']);
     expect(history[0].user_id).toBe('g1');
@@ -146,7 +148,7 @@ describe('teammates who are not on the app', () => {
   it('count in the split and pay together with an app player', () => {
     const { members, payments } = duesMembers({
       profiles: [{ user_id: 'u1', display_name: 'Kelly', status: 'active', pays_with_guest: 'g1' }],
-      guests: [{ id: 'g1', display_name: 'Mike', active: true, pays_with_user: 'u1' }],
+      guests: [{ id: 'g1', display_name: 'Mike', status: 'active', pays_with_user: 'u1' }],
       payments: [],
       history: [],
     });

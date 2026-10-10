@@ -13,7 +13,7 @@ export function useDues() {
         api.entities.DuesPayment.list(),
         api.entities.DuesHistory.list('-created_date'),
         api.entities.PlayerProfile.list(),
-        api.entities.DuesGuest.list('display_name'),
+        api.entities.TeamGuest.list('display_name'),
         api.entities.Game.list('-date'),
       ]);
       // `profiles` is everyone who splits the dues: app players and guests alike.

@@ -96,10 +96,10 @@ $$;
 -- Teammates who aren't on the app, with a payment and its history (once that exists).
 do $$
 begin
-  if to_regclass('public.dues_guests') is not null then
+  if to_regclass('public.team_guests') is not null then
     execute $sql$
-      insert into public.dues_guests (id, display_name, created_by) values
-        ('f1111111-1111-4111-8111-111111111111', 'Mike Russo', '11111111-1111-4111-8111-111111111111');
+      insert into public.team_guests (id, display_name, gender, status, created_by) values
+        ('f1111111-1111-4111-8111-111111111111', 'Mike Russo', 'M', 'active', '11111111-1111-4111-8111-111111111111');
       insert into public.dues_payments (season_year, session, guest_id, paid, paid_date, paid_by) values
         (2026, 2, 'f1111111-1111-4111-8111-111111111111', true, '2026-10-04', '22222222-2222-4222-8222-222222222222');
       insert into public.dues_history (season_year, session, guest_id, paid, paid_date, changed_by, created_date) values

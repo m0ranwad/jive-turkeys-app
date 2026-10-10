@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -356,8 +357,21 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           </div>
         )}
 
-        {isCaptain && player.guest && (
-          <GuestSection player={player} profiles={profiles} busy={busy} run={run} onClose={() => onOpenChange(false)} />
+        {player.guest && (
+          <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500">
+            {player.display_name} isn't on the app.{' '}
+            {isCaptain ? (
+              <>
+                Change their name, status, or move them to their account once they join, on the{' '}
+                <Link to="/team" className="font-bold text-zinc-800 underline underline-offset-2">
+                  Team page
+                </Link>
+                .
+              </>
+            ) : (
+              'Anyone can mark them paid.'
+            )}
+          </p>
         )}
 
         <div className={SECTION}>
@@ -368,197 +382,6 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
             <p className="text-sm text-zinc-400">No changes yet this session.</p>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * Captains, for a teammate who isn't on the app: rename them, move them to
- * their account when they join, or stop counting them. The last two ask first.
- */
-function GuestSection({ player, profiles, busy, run, onClose }) {
-  const [name, setName] = useState(player.display_name);
-  const [linkTo, setLinkTo] = useState('');
-  const [confirm, setConfirm] = useState(null);
-  const appPlayers = profiles.filter((p) => !p.guest).sort((a, b) => a.display_name.localeCompare(b.display_name));
-  const linkName = appPlayers.find((p) => p.user_id === linkTo)?.display_name;
-
-  const rename = () => run(() => api.entities.DuesGuest.update(player.id, { display_name: name.trim() }), 'Name saved');
-  const link = async () => {
-    if (await run(() => api.dues.linkGuest(player.id, linkTo), `${player.display_name} moved to ${linkName}'s account`)) onClose();
-  };
-  const remove = async () => {
-    if (await run(() => api.entities.DuesGuest.update(player.id, { active: false }), `${player.display_name} removed from dues`)) onClose();
-  };
-
-  const confirmBox = (text, label, action) => (
-    <div className="space-y-3 rounded-2xl bg-red-50 p-4" role="alert">
-      <p className="text-sm text-red-900">{text}</p>
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="outline" onClick={() => setConfirm(null)} className="h-11 rounded-xl bg-white font-bold">
-          Cancel
-        </Button>
-        <Button variant="destructive" onClick={action} disabled={busy} className="h-11 rounded-xl font-bold">
-          {label}
-        </Button>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className={cn(SECTION, 'space-y-3')}>
-      <span className={cn(FIELD_LABEL, 'block')}>Not on the app</span>
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-name" className="text-xs font-semibold text-zinc-500">
-          Name
-        </Label>
-        <div className="flex gap-2">
-          <Input id="guest-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="h-11 rounded-xl" />
-          <Button
-            variant="outline"
-            onClick={rename}
-            disabled={busy || !name.trim() || name.trim() === player.display_name}
-            className="h-11 rounded-xl font-bold"
-          >
-            Save
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="guest-link" className="text-xs font-semibold text-zinc-500">
-          Joined the app?
-        </Label>
-        <div className="flex gap-2">
-          <select
-            id="guest-link"
-            value={linkTo}
-            onChange={(e) => {
-              setLinkTo(e.target.value);
-              setConfirm(null);
-            }}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
-          >
-            <option value="">Pick their account</option>
-            {appPlayers.map((p) => (
-              <option key={p.user_id} value={p.user_id}>
-                {p.display_name}
-              </option>
-            ))}
-          </select>
-          <Button variant="outline" onClick={() => setConfirm('link')} disabled={busy || !linkTo} className="h-11 rounded-xl font-bold">
-            Move
-          </Button>
-        </div>
-      </div>
-      {confirm === 'link' &&
-        confirmBox(
-          `${player.display_name}'s payments and history move to ${linkName}'s account, and ${player.display_name} leaves this list.`,
-          'Move them',
-          link,
-        )}
-
-      {confirm !== 'remove' ? (
-        <button
-          type="button"
-          onClick={() => setConfirm('remove')}
-          className="text-xs font-bold text-red-700 underline underline-offset-2"
-        >
-          Remove from dues
-        </button>
-      ) : (
-        confirmBox(
-          `${player.display_name} won't count in the split any more, so everyone else's share goes up. Their payments stay in the history.`,
-          'Remove',
-          remove,
-        )
-      )}
-    </div>
-  );
-}
-
-/** Captains: add a teammate who isn't on the app, or bring back one who was removed. */
-export function AddGuestDialog({ open, onOpenChange, guests, meId, onChanged }) {
-  const { toast } = useToast();
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open) setName('');
-  }, [open]);
-
-  const removed = guests.filter((g) => !g.active && !g.linked_user_id);
-
-  const work = async (action, done) => {
-    setBusy(true);
-    try {
-      await action();
-      await onChanged();
-      onOpenChange(false);
-      toast({ title: done, description: 'They count in the split now.' });
-    } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const add = (e) => {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    work(() => api.entities.DuesGuest.create({ display_name: trimmed, active: true, created_by: meId }), `${trimmed} added`);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={DIALOG}>
-        <DialogHeader className="text-left">
-          <DialogTitle className={DIALOG_TITLE}>Add someone not on the app</DialogTitle>
-        </DialogHeader>
-        <p className="-mt-2 text-sm text-zinc-500">
-          They count in the split, show in the list, and anyone can mark them paid. If they join the app later, link
-          them to their account from their details.
-        </p>
-        <form onSubmit={add} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="new-guest" className="text-xs font-semibold text-zinc-500">
-              Name
-            </Label>
-            <Input
-              id="new-guest"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="First and last name"
-              maxLength={60}
-              autoComplete="off"
-              className="h-11 rounded-xl"
-            />
-          </div>
-          <Button type="submit" disabled={busy || !name.trim()} className={BIG_BUTTON}>
-            Add to dues
-          </Button>
-        </form>
-        {removed.length > 0 && (
-          <div className={SECTION}>
-            <span className={cn(FIELD_LABEL, 'block')}>Removed earlier</span>
-            {removed.map((g) => (
-              <div key={g.id} className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold">{g.display_name}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => work(() => api.entities.DuesGuest.update(g.id, { active: true }), `${g.display_name} added back`)}
-                  className="rounded-full font-bold"
-                >
-                  Add back
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

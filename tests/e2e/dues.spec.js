@@ -243,7 +243,8 @@ test('teammates not on the app count in the split, and anyone can mark them paid
   await openDues(page);
   await page.getByRole('tab', { name: 'Team dues' }).click();
 
-  await expect(page.getByRole('button', { name: 'Add someone not on the app' })).toHaveCount(0);
+  // Captains add them on the Team page; players don't get the link.
+  await expect(page.getByRole('link', { name: /Add them on the Team page/ })).toHaveCount(0);
   await expect(page.getByTestId('dues-unpaid')).toContainText('Mike Russonot on the app');
   await expect(page.getByTestId('dues-paid')).toContainText('Dana Wellsnot on the app');
 
@@ -260,53 +261,15 @@ test('teammates not on the app count in the split, and anyone can mark them paid
   await expect(page.getByTestId('dues-paid')).toContainText('with Kelly M.');
 });
 
-test('a captain adds someone not on the app, and everyone’s share goes down', async ({ page }) => {
+test('the Dues page sends captains to the Team page to add someone not on the app', async ({ page }) => {
   await signIn(page);
   await openDues(page);
-  await expect(page.getByText('$61 each')).toBeVisible();
+  await page.getByRole('link', { name: /Add them on the Team page/ }).click();
+  await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Add someone not on the app' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add someone not on the app' });
-  await dialog.getByLabel('Name').fill('Pat Lee');
-  await dialog.getByRole('button', { name: 'Add to dues' }).click();
-  await expect(page.getByText('Pat Lee added')).toBeVisible();
-  // $721 across 13: $55.46, rounded up.
-  await expect(paidHeading(page, '6 of 13 paid')).toBeVisible();
-  await expect(page.getByText('$56 each')).toBeVisible();
-  await expect(page.getByTestId('dues-unpaid')).toContainText('Pat Leenot on the app');
-});
-
-test('a captain moves someone who joined the app to their account, or removes and adds them back', async ({ page }) => {
-  await signIn(page);
   await openDues(page);
-  await page.getByRole('button', { name: 'Mark Mike Russo paid' }).click();
-  await expect(paidHeading(page, '7 of 12 paid')).toBeVisible();
-
-  // Say Mike joined the app as Chris Dunn: his payment and history move to that account.
   await page.getByRole('button', { name: 'Details for Mike Russo' }).click();
   const sheet = page.getByRole('dialog', { name: 'Mike Russo' });
-  await sheet.getByLabel('Joined the app?').selectOption({ label: 'Chris Dunn' });
-  await sheet.getByRole('button', { name: 'Move', exact: true }).click();
-  await expect(sheet).toContainText("Mike Russo's payments and history move to Chris Dunn's account");
-  await sheet.getByRole('button', { name: 'Move them' }).click();
-  await expect(page.getByText("Mike Russo moved to Chris Dunn's account")).toBeVisible();
-  await expect(sheet).toHaveCount(0);
-  await expect(paidHeading(page, '7 of 11 paid')).toBeVisible();
-  await expect(page.getByTestId('dues-paid')).toContainText('Chris Dunn');
-  await expect(page.getByText('Mike Russo')).toHaveCount(0);
-  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Chris D. paid');
-
-  // Removing someone asks first, and they can be added back.
-  await page.getByRole('button', { name: 'Details for Dana Wells' }).click();
-  const dana = page.getByRole('dialog', { name: 'Dana Wells' });
-  await dana.getByRole('button', { name: 'Remove from dues' }).click();
-  await expect(dana).toContainText("won't count in the split any more");
-  await dana.getByRole('button', { name: 'Remove', exact: true }).click();
-  await expect(paidHeading(page, '6 of 10 paid')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Add someone not on the app' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add someone not on the app' });
-  await dialog.getByRole('button', { name: 'Add back' }).click();
-  await expect(page.getByText('Dana Wells added back')).toBeVisible();
-  await expect(paidHeading(page, '7 of 11 paid')).toBeVisible();
+  await expect(sheet).toContainText("Mike Russo isn't on the app.");
+  await expect(sheet.getByRole('link', { name: 'Team page' })).toBeVisible();
 });

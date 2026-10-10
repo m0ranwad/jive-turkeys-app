@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Phone, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pencil, Phone, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { Formation } from '@/components/team/Formation';
+import { GuestDialog } from '@/components/team/GuestDialog';
 import { InviteDialog, PickPositionCard } from '@/components/team/TeamDialogs';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
+import { guestAsPlayer } from '@/lib/dues';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -31,14 +33,29 @@ export function TeamPage() {
   const data = useSeasonData();
   const { toast } = useToast();
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Teammates who aren't on the app: on the roster like everyone else. `guestDialog` is null, 'new' or a guest.
+  const [guests, setGuests] = useState([]);
+  const [guestDialog, setGuestDialog] = useState(null);
+
+  const loadGuests = useCallback(async () => {
+    try {
+      setGuests(await api.entities.TeamGuest.list('display_name'));
+    } catch {
+      setGuests([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGuests();
+  }, [loadGuests]);
 
   const roster = useMemo(
     () =>
-      [...(data.profiles || [])].sort(
+      [...(data.profiles || []), ...guests.map(guestAsPlayer).filter((g) => g.status !== 'inactive')].sort(
         (a, b) =>
           (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3) || a.display_name.localeCompare(b.display_name),
       ),
-    [data.profiles],
+    [data.profiles, guests],
   );
 
   const totals = useMemo(() => {
@@ -56,8 +73,13 @@ export function TeamPage() {
 
   const setStatus = async (profile, status) => {
     try {
-      await api.entities.PlayerProfile.update(profile.id, { status });
-      await data.reload();
+      if (profile.guest) {
+        await api.entities.TeamGuest.update(profile.id, { status });
+        await loadGuests();
+      } else {
+        await api.entities.PlayerProfile.update(profile.id, { status });
+        await data.reload();
+      }
       toast({ title: `${profile.display_name} marked ${STATUS_LABEL[status]}` });
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });
@@ -107,7 +129,7 @@ export function TeamPage() {
 
       <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
         Set your own roster status anytime — On Break puts you in the sub pool for call-ups. Captains can adjust anyone's
-        status too.
+        status too, including teammates who aren't on the app. Active players split the dues.
       </p>
 
       <div className="space-y-2">
@@ -143,6 +165,11 @@ export function TeamPage() {
                       {STATUS_LABEL[p.status] || 'Active'}
                     </span>
                     <span className={cn(!p.position && 'text-zinc-400')}>{p.position || 'Floater'}</span>
+                    {p.guest && (
+                      <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                        Not on the app
+                      </span>
+                    )}
                     {p.year_joined && <span>Since {p.year_joined}</span>}
                     {p.is_captain && (
                       <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-lime-400">
@@ -167,7 +194,17 @@ export function TeamPage() {
                     <span className="mr-1 text-[9px] font-black uppercase tracking-[0.12em] text-zinc-400">My status</span>
                   )}
                   <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
-                  {!isMe && data.isCaptain && (
+                  {p.guest && data.isCaptain && (
+                    <button
+                      onClick={() => setGuestDialog(guests.find((g) => g.id === p.id))}
+                      aria-label={`Edit ${p.display_name}`}
+                      className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500 transition hover:bg-zinc-200"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
+                  {!isMe && !p.guest && data.isCaptain && (
                     <button
                       onClick={() => toggleCaptain(p)}
                       className={cn(
@@ -188,9 +225,32 @@ export function TeamPage() {
             No players yet. Teammates appear here once they sign up.
           </div>
         )}
+        {data.isCaptain && (
+          <button
+            onClick={() => setGuestDialog('new')}
+            className="flex w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-zinc-300 bg-white py-4 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add teammate not on the app
+          </button>
+        )}
       </div>
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} isCaptain={data.isCaptain} />
+      {data.isCaptain && (
+        <GuestDialog
+          open={!!guestDialog}
+          onOpenChange={(open) => !open && setGuestDialog(null)}
+          guest={guestDialog === 'new' ? null : guestDialog}
+          guests={guests}
+          appPlayers={[...(data.profiles || [])].sort((a, b) => a.display_name.localeCompare(b.display_name))}
+          meId={data.user.id}
+          onChanged={async () => {
+            await loadGuests();
+            await data.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

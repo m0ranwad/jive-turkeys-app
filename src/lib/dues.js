@@ -77,25 +77,34 @@ export function feeSentence(parts) {
 export const payNote = (year, session, names = []) =>
   [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
 
+/** A teammate who isn't on the app, shaped like a player profile (`user_id` is their own id). */
+export function guestAsPlayer(g) {
+  return {
+    id: g.id,
+    user_id: g.id,
+    display_name: g.display_name,
+    gender: g.gender ?? null,
+    position: g.position ?? null,
+    // Off the roster once removed, or once linked to the account they joined with.
+    status: g.removed || g.linked_user_id ? 'inactive' : g.status || 'active',
+    pays_with: g.pays_with_user ?? g.pays_with_guest ?? null,
+    linked_user_id: g.linked_user_id ?? null,
+    removed: !!g.removed,
+    guest: true,
+  };
+}
+
 /**
  * Everyone who splits the dues as one list: app players plus teammates who
- * aren't on the app (guests, flagged `guest`), all keyed by `user_id` (a
- * guest's is their own id). Payments and history rows get the same key,
- * whichever kind of player they belong to. A guest counts while they're
- * active and not yet linked to an app account.
+ * aren't on the app (guests, flagged `guest`), all keyed by `user_id`.
+ * Payments and history rows get the same key, whichever kind of player they
+ * belong to. Like everyone else, a guest counts while their roster status is
+ * Active.
  */
 export function duesMembers({ profiles, guests = [], payments, history }) {
   const members = [
     ...profiles.map((p) => ({ ...p, pays_with: p.pays_with ?? p.pays_with_guest ?? null })),
-    ...guests.map((g) => ({
-      id: g.id,
-      user_id: g.id,
-      display_name: g.display_name,
-      status: g.active && !g.linked_user_id ? 'active' : 'inactive',
-      pays_with: g.pays_with_user ?? g.pays_with_guest ?? null,
-      linked_user_id: g.linked_user_id ?? null,
-      guest: true,
-    })),
+    ...guests.map(guestAsPlayer),
   ];
   const keyed = (row) => ({ ...row, user_id: row.user_id ?? row.guest_id });
   return { members, payments: payments.map(keyed), history: history.map(keyed) };

@@ -9,7 +9,7 @@ export const TABLES = {
   SessionDues: 'session_dues',
   DuesPayment: 'dues_payments',
   DuesHistory: 'dues_history',
-  DuesGuest: 'dues_guests',
+  TeamGuest: 'team_guests',
   Message: 'messages',
   ChatThread: 'chat_threads',
   MessageReaction: 'message_reactions',
