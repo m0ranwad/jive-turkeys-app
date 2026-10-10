@@ -240,9 +240,14 @@ export function createSupabaseBackend(url, key) {
       });
       if (error) fail(error);
     },
-    /** Links two players who pay together; a null partner unlinks. */
+    /** Links two players who pay together (either can be a guest); a null partner unlinks. */
     async setPartner(userId, partnerId) {
       const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
+      if (error) fail(error);
+    },
+    /** Captains: a teammate who wasn't on the app joined; their payments and history move to their account. */
+    async linkGuest(guestId, userId) {
+      const { error } = await supabase.rpc('link_dues_guest', { p_guest_id: guestId, p_user_id: userId });
       if (error) fail(error);
     },
   };

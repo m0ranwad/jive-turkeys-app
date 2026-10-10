@@ -78,6 +78,30 @@ export const payNote = (year, session, names = []) =>
   [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
 
 /**
+ * Everyone who splits the dues as one list: app players plus teammates who
+ * aren't on the app (guests, flagged `guest`), all keyed by `user_id` (a
+ * guest's is their own id). Payments and history rows get the same key,
+ * whichever kind of player they belong to. A guest counts while they're
+ * active and not yet linked to an app account.
+ */
+export function duesMembers({ profiles, guests = [], payments, history }) {
+  const members = [
+    ...profiles.map((p) => ({ ...p, pays_with: p.pays_with ?? p.pays_with_guest ?? null })),
+    ...guests.map((g) => ({
+      id: g.id,
+      user_id: g.id,
+      display_name: g.display_name,
+      status: g.active && !g.linked_user_id ? 'active' : 'inactive',
+      pays_with: g.pays_with_user ?? g.pays_with_guest ?? null,
+      linked_user_id: g.linked_user_id ?? null,
+      guest: true,
+    })),
+  ];
+  const keyed = (row) => ({ ...row, user_id: row.user_id ?? row.guest_id });
+  return { members, payments: payments.map(keyed), history: history.map(keyed) };
+}
+
+/**
  * One session's dues for the whole team: the split, active players in list
  * order (by name, couples side by side), who pays with whom, and who still owes.
  * `profiles` is the whole roster, `payments` that session's dues_payments rows.

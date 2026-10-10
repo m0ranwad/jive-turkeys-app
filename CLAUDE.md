@@ -166,7 +166,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
-  always asks first. Only captains set fees, custom amounts and payment links.
+  always asks first. Only captains set fees, custom amounts and payment links. Teammates who aren't on the app are
+  `dues_guests` (captains add them by name); they split, pay and pair like everyone else (payments and history rows
+  have `guest_id` instead of `user_id`; `duesMembers()` merges both kinds), and `link_dues_guest()` moves one to
+  their account when they join.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`

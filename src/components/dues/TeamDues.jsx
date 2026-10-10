@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Pencil } from 'lucide-react';
+import { Copy, Pencil, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -9,7 +9,7 @@ import { CARD } from '@/lib/constants';
 import { DUES_DEFAULTS, cleanPayHandle, dollars, feeParts, feeTotal, reminderText, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { FeeDialog, PaySettingsDialog, PlayerSheet } from './DuesDialogs';
+import { AddGuestDialog, FeeDialog, PaySettingsDialog, PlayerSheet } from './DuesDialogs';
 import { Avatar, EYEBROW, HEADING, HistoryList, StatusChip, feeLine } from './DuesParts';
 
 const DARK_BUTTON =
@@ -76,6 +76,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
   const [feeOpen, setFeeOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const { row, payments, history } = sessionSlice(data, period);
   const total = row ? Number(row.total_fee) || 0 : 0;
@@ -140,6 +141,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
     const partner = team.partnerOf(p.user_id);
     const payment = payments.find((x) => x.user_id === p.user_id);
     const details = [
+      p.guest && 'not on the app',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
       share.paid && payment?.paid_by && payment.paid_by !== p.user_id && `marked by ${shortName(nameOf(payment.paid_by))}`,
@@ -152,7 +154,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
           aria-label={`Details for ${p.display_name}`}
           className="-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-left transition hover:bg-zinc-50"
         >
-          <Avatar name={p.display_name} />
+          <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{p.display_name}</span>
             {details.length > 0 && <span className="block truncate text-[11px] font-medium text-zinc-400">{details.join(' · ')}</span>}
@@ -203,6 +205,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
     <>
       {isCaptain && <FeeDialog open={feeOpen} onOpenChange={setFeeOpen} period={period} initial={feeStart} onSave={saveFee} />}
       {isCaptain && <PaySettingsDialog open={payOpen} onOpenChange={setPayOpen} settings={settings} onSaved={onSettingsSaved} />}
+      {isCaptain && <AddGuestDialog open={addOpen} onOpenChange={setAddOpen} guests={data.guests || []} meId={user.id} onChanged={onChanged} />}
       <PlayerSheet
         open={!!sheetFor}
         onOpenChange={(open) => !open && setSheetFor(null)}
@@ -269,6 +272,16 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
         )}
         {team.active.length === 0 && (
           <p className="py-3 text-sm text-zinc-400">No active players yet. Set roster statuses on the Team page.</p>
+        )}
+        {isCaptain && (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add someone not on the app
+          </button>
         )}
         <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-400">
           Tap a player to see their history, link a couple who pay together, or fix a mistake.

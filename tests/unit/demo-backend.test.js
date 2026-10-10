@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v6';
+const DB_KEY = 'jt_demo_db_v7';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -195,7 +195,13 @@ describe('dues', () => {
       [1, 595, 18, 7, 721],
       [2, 595, 18, 7, 721],
     ]);
-    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(5);
+    // Five app players, plus Dana Wells, who isn't on the app.
+    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(6);
+    const guests = await api.entities.DuesGuest.list('display_name');
+    expect(guests.map((g) => [g.display_name, g.active])).toEqual([
+      ['Dana Wells', true],
+      ['Mike Russo', true],
+    ]);
     const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
     const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
     expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
@@ -262,5 +268,51 @@ describe('dues', () => {
     await api.dues.setPartner(riley, null);
     expect([await partner('Sam Okafor'), await partner('Riley Novak')]).toEqual([null, null]);
     expect(alex).toBeTruthy();
+  });
+
+  it('marks teammates who are not on the app paid, with their own payment and history rows', async () => {
+    const { api, me } = await signedIn();
+    const [mike] = await api.entities.DuesGuest.filter({ display_name: 'Mike Russo' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09' });
+    const [row] = await api.entities.DuesPayment.filter({ session: 2, guest_id: mike.id });
+    expect(row).toMatchObject({ user_id: null, paid: true, paid_date: '2026-10-09', paid_by: me.id });
+    expect(await api.entities.DuesHistory.filter({ session: 2, guest_id: mike.id, paid: true })).toHaveLength(1);
+  });
+
+  it('pairs a guest with an app player, both ways', async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.DuesGuest.filter({ display_name: 'Mike Russo' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await api.dues.setPartner(kelly.user_id, mike.id);
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0]).toMatchObject({ pays_with: null, pays_with_guest: mike.id });
+    expect((await api.entities.DuesGuest.filter({ id: mike.id }))[0]).toMatchObject({ pays_with_user: kelly.user_id, pays_with_guest: null });
+    await api.dues.setPartner(mike.id, null);
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with_guest).toBeNull();
+  });
+
+  it("moves a guest's payments, history and partner to their account when a captain links them", async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.DuesGuest.filter({ display_name: 'Mike Russo' });
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09' });
+    await api.dues.setPartner(mike.id, kelly.user_id);
+
+    await api.dues.linkGuest(mike.id, chris.user_id);
+    const [moved] = await api.entities.DuesPayment.filter({ session: 2, user_id: chris.user_id });
+    expect(moved).toMatchObject({ guest_id: null, paid: true, paid_date: '2026-10-09' });
+    expect(await api.entities.DuesHistory.filter({ guest_id: mike.id })).toHaveLength(0);
+    expect((await api.entities.DuesGuest.filter({ id: mike.id }))[0]).toMatchObject({ active: false, linked_user_id: chris.user_id });
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with).toBe(chris.user_id);
+    await expect(api.dues.linkGuest(mike.id, chris.user_id)).rejects.toThrow('already linked');
+  });
+
+  it('only lets captains link a guest to an account', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const [mike] = await api.entities.DuesGuest.filter({ display_name: 'Mike Russo' });
+    await expect(api.dues.linkGuest(mike.id, (await api.auth.me()).id)).rejects.toThrow('Only captains');
   });
 });
