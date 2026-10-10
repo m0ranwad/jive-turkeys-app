@@ -2,10 +2,9 @@
 // in this browser's localStorage. Used when no Supabase keys are configured,
 // so the app can be tried (and developed) before the real backend exists.
 import dayjs from 'dayjs';
-import { splitDues } from '@/lib/dues';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v3';
+const DB_KEY = 'jt_demo_db_v4';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -180,15 +179,20 @@ function seed() {
   readUpTo(jerseys, 7000);
 
   // Dues: last session all paid; this session half paid, the captain included
-  // among those still to pay, so the pay buttons show on "My dues".
+  // among those still to pay, so the pay buttons show on "My dues". Alex and
+  // Riley are a couple who pay together.
+  profiles[4].pays_with = profiles[7].user_id;
+  profiles[7].pays_with = profiles[4].user_id;
   const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
   const sessionDues = [1, 2].map((session) => ({ id: uid(), season_year: year, session, ...fee, created_date: now(), updated_date: now() }));
   const duesPayments = profiles
     .map((p, i) => [p, i])
     .filter(([p]) => p.status === 'active')
     .flatMap(([p, i]) => [
-      { session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD') },
-      ...([1, 2, 3, 5, 6].includes(i) ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD') }] : []),
+      { session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD'), paid_by: captainId },
+      ...([1, 2, 3, 5, 6].includes(i)
+        ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'), paid_by: i === 3 ? captainId : p.user_id }]
+        : []),
     ].map((row) => ({
       id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
     })));
@@ -477,36 +481,33 @@ export function createDemoBackend() {
     },
   };
 
+  // Same as the database functions mark_dues_paid() and set_dues_partner().
   const dues = {
-    /** Same as the database's my_dues(): the signed-in player's share of each session's fee, newest first. */
-    async mine() {
+    async markPaid({ year, session, userIds, paid, paidDate }) {
       requireUser();
-      const me = currentUser();
-      const active = db.player_profiles.filter((p) => p.status === 'active').map((p) => p.user_id);
-      const rows = [...db.session_dues].sort((a, b) => b.season_year - a.season_year || b.session - a.session);
-      return delay(
-        rows.map((d) => {
-          const payments = db.dues_payments.filter((p) => p.season_year === d.season_year && p.session === d.session);
-          const split = splitDues(Number(d.total_fee) || 0, active, payments);
-          const share = split.players.find((p) => p.user_id === me.id);
-          const payment = payments.find((p) => p.user_id === me.id);
-          return {
-            season_year: d.season_year,
-            session: d.session,
-            total_fee: Number(d.total_fee) || 0,
-            league_fee: d.league_fee ?? null,
-            ref_fee: d.ref_fee ?? null,
-            game_count: d.game_count ?? null,
-            active_players: active.length,
-            per_player: split.perPlayer,
-            is_active: !!share,
-            custom: !!share?.custom,
-            amount: share ? share.amount : null,
-            paid: !!payment?.paid,
-            paid_date: payment?.paid_date ?? null,
-          };
-        }),
-      );
+      const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? currentUser().id : null, updated_date: now() };
+      for (const userId of userIds) {
+        const row = db.dues_payments.find((p) => p.season_year === Number(year) && p.session === Number(session) && p.user_id === userId);
+        if (row) Object.assign(row, patch);
+        else db.dues_payments.push({ id: uid(), season_year: Number(year), session: Number(session), user_id: userId, override_amount: null, created_date: now(), ...patch });
+      }
+      save(db);
+      return delay(null);
+    },
+    async setPartner(userId, partnerId) {
+      requireUser();
+      const ids = [userId, partnerId];
+      db.player_profiles.forEach((p) => {
+        if (ids.includes(p.user_id) || ids.includes(p.pays_with)) p.pays_with = null;
+      });
+      if (partnerId && partnerId !== userId) {
+        db.player_profiles.forEach((p) => {
+          if (p.user_id === userId) p.pays_with = partnerId;
+          if (p.user_id === partnerId) p.pays_with = userId;
+        });
+      }
+      save(db);
+      return delay(null);
     },
   };
 

@@ -1,5 +1,7 @@
 -- Dues: the session fee as the league bills it (a league fee plus a ref fee
--- for every game), how players pay, and each player's own share.
+-- for every game), how players pay, couples who pay together, and the whole
+-- team able to see the dues and mark anyone paid. Captains still set fees,
+-- custom amounts and payment details.
 
 -- total_fee stays the amount that's split; these record how it was worked out.
 alter table public.session_dues
@@ -14,73 +16,71 @@ alter table public.team_settings
   add column pay_zelle text,
   add column pay_note text;
 
+-- Who marked a payment paid, so the team can see it.
+alter table public.dues_payments
+  add column paid_by uuid references public.users (id) on delete set null;
+
+-- Couples who send one payment for both. Always set on both players together
+-- (by set_dues_partner below).
+alter table public.player_profiles
+  add column pays_with uuid references public.users (id) on delete set null;
+
+-- The whole team can see the fee and who has paid (captains could already).
+create policy session_dues_select on public.session_dues for select to authenticated using (true);
+create policy dues_payments_select on public.dues_payments for select to authenticated using (true);
+
 -- ---------------------------------------------------------------------------
--- A player's own dues: one row per session the captains have set a fee for,
--- newest first, with how it splits and the signed-in player's share and
--- payment. Only captains can read dues_payments, so this runs with the
--- owner's rights and returns nothing about anyone else's amount or payment.
--- Splits the same way as splitDues() in src/lib/dues.js.
+-- Any player can mark players paid or unpaid: themselves, their partner, or
+-- anyone else. Only the paid fields change; custom amounts stay captains-only.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.my_dues()
-returns table (
-  season_year integer,
-  session integer,
-  total_fee numeric,
-  league_fee numeric,
-  ref_fee numeric,
-  game_count integer,
-  active_players integer,
-  per_player numeric,
-  is_active boolean,
-  custom boolean,
-  amount numeric,
-  paid boolean,
-  paid_date date
+create or replace function public.mark_dues_paid(
+  p_season_year integer,
+  p_session integer,
+  p_user_ids uuid[],
+  p_paid boolean,
+  p_paid_date date
 )
+returns void
 language sql
-stable
 security definer
 set search_path = public
 as $$
-  with me as (
-    select (select auth.uid()) as id
-  ),
-  split as (
-    select d.id, d.season_year, d.session, d.total_fee, d.league_fee, d.ref_fee, d.game_count,
-      count(a.user_id)::integer as active_players,
-      count(a.user_id) filter (where p.override_amount is null)::integer as auto_players,
-      coalesce(sum(p.override_amount), 0) as custom_sum
-    from public.session_dues d
-    left join public.player_profiles a on a.status = 'active'
-    left join public.dues_payments p
-      on p.season_year = d.season_year and p.session = d.session and p.user_id = a.user_id
-    group by d.id
-  ),
-  shares as (
-    select s.*,
-      case when s.auto_players > 0
-        then ceil(greatest(0, s.total_fee - s.custom_sum) / s.auto_players)
-        else 0
-      end as per_player
-    from split s
-  )
-  select s.season_year, s.session, s.total_fee, s.league_fee, s.ref_fee, s.game_count,
-    s.active_players,
-    s.per_player,
-    a.user_id is not null,
-    a.user_id is not null and mine.override_amount is not null,
-    case when a.user_id is not null then coalesce(mine.override_amount, s.per_player) end,
-    coalesce(mine.paid, false),
-    mine.paid_date
-  from shares s
-  cross join me
-  left join public.player_profiles a on a.user_id = me.id and a.status = 'active'
-  left join public.dues_payments mine
-    on mine.season_year = s.season_year and mine.session = s.session and mine.user_id = me.id
-  where me.id is not null
-  order by s.season_year desc, s.session desc;
+  insert into public.dues_payments (season_year, session, user_id, paid, paid_date, paid_by)
+  select p_season_year, p_session, u.id, p_paid,
+    case when p_paid then coalesce(p_paid_date, current_date) end,
+    case when p_paid then (select auth.uid()) end
+  from public.users u
+  where u.id = any (p_user_ids) and (select auth.uid()) is not null
+  on conflict (season_year, session, user_id) do update
+    set paid = excluded.paid, paid_date = excluded.paid_date, paid_by = excluded.paid_by;
 $$;
 
-revoke execute on function public.my_dues() from public, anon;
-grant execute on function public.my_dues() to authenticated, service_role;
+-- ---------------------------------------------------------------------------
+-- Links two players who pay together, or unlinks a player (p_partner_id null).
+-- Anyone can do it. A player is only ever linked to one other player.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.set_dues_partner(p_user_id uuid, p_partner_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Not signed in';
+  end if;
+  update public.player_profiles set pays_with = null
+    where user_id in (p_user_id, p_partner_id) or pays_with in (p_user_id, p_partner_id);
+  if p_partner_id is not null and p_partner_id <> p_user_id then
+    update public.player_profiles set pays_with = p_partner_id where user_id = p_user_id;
+    update public.player_profiles set pays_with = p_user_id where user_id = p_partner_id;
+  end if;
+end;
+$$;
+
+revoke execute on function public.mark_dues_paid(integer, integer, uuid[], boolean, date) from public, anon;
+revoke execute on function public.set_dues_partner(uuid, uuid) from public, anon;
+grant execute on function public.mark_dues_paid(integer, integer, uuid[], boolean, date) to authenticated, service_role;
+grant execute on function public.set_dues_partner(uuid, uuid) to authenticated, service_role;

@@ -8,9 +8,11 @@ import {
   feeParts,
   feeSentence,
   feeTotal,
+  payNote,
   payOptions,
   reminderText,
   splitDues,
+  teamDues,
 } from '@/lib/dues';
 
 describe('the session fee', () => {
@@ -83,7 +85,41 @@ describe('splitting the fee', () => {
   });
 });
 
+describe('couples who pay together', () => {
+  const profile = (name, extra = {}) => ({ user_id: name.toLowerCase(), display_name: name, status: 'active', ...extra });
+  const profiles = [
+    profile('Casey', { pays_with: 'zed' }),
+    profile('Alex', { pays_with: 'riley' }),
+    profile('Riley', { pays_with: 'alex' }),
+    profile('Morgan'),
+    profile('Zed', { status: 'sub_pool', pays_with: 'casey' }),
+  ];
+
+  it('list side by side, and only count while both are active', () => {
+    const team = teamDues(400, profiles, []);
+    expect(team.active.map((p) => p.display_name)).toEqual(['Alex', 'Riley', 'Casey', 'Morgan']);
+    expect(team.partnerOf('alex').display_name).toBe('Riley');
+    expect(team.partnerOf('casey')).toBeNull();
+    expect(team.perPlayer).toBe(100);
+  });
+
+  it('show up in the reminder as one line with one amount while both still owe', () => {
+    expect(teamDues(400, profiles, []).stillToPay).toEqual([
+      { name: 'Alex & Riley', amount: 200 },
+      { name: 'Casey', amount: 100 },
+      { name: 'Morgan', amount: 100 },
+    ]);
+    const oneMarked = teamDues(400, profiles, [{ user_id: 'riley', paid: true }]);
+    expect(oneMarked.stillToPay.map((p) => p.name)).toEqual(['Alex', 'Casey', 'Morgan']);
+  });
+});
+
 describe('pay buttons', () => {
+  it("carry a note saying who it's for", () => {
+    expect(payNote(2026, 2)).toBe('Jive Turkeys dues · Session 2 2026');
+    expect(payNote(2026, 2, ['Alex Chen', 'Riley Novak'])).toBe('Jive Turkeys dues · Session 2 2026 · Alex Chen & Riley Novak');
+  });
+
   const note = 'Jive Turkeys dues · Session 2 2026';
 
   it('fill in the amount for Venmo and Cash App, and show Zelle details to copy', () => {

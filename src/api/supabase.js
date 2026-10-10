@@ -229,19 +229,21 @@ export function createSupabaseBackend(url, key) {
   };
 
   const dues = {
-    /** The signed-in player's own dues, one row per session with a fee set, newest first. */
-    async mine() {
-      const { data, error } = await supabase.rpc('my_dues');
+    /** Marks players paid (or unpaid again) for a session. Any player can, for anyone. */
+    async markPaid({ year, session, userIds, paid, paidDate }) {
+      const { error } = await supabase.rpc('mark_dues_paid', {
+        p_season_year: Number(year),
+        p_session: Number(session),
+        p_user_ids: userIds,
+        p_paid: paid,
+        p_paid_date: paid ? paidDate : null,
+      });
       if (error) fail(error);
-      const money = (value) => (value == null ? null : Number(value));
-      return data.map((row) => ({
-        ...row,
-        total_fee: money(row.total_fee),
-        league_fee: money(row.league_fee),
-        ref_fee: money(row.ref_fee),
-        per_player: money(row.per_player),
-        amount: money(row.amount),
-      }));
+    },
+    /** Links two players who pay together; a null partner unlinks. */
+    async setPartner(userId, partnerId) {
+      const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
+      if (error) fail(error);
     },
   };
 

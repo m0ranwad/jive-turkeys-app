@@ -203,10 +203,10 @@ test.describe('the thread row on phones', () => {
 
   test('says "Start a thread" when there are none yet', async ({ page }) => {
     await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem('jt_demo_db_v3'));
+      const db = JSON.parse(localStorage.getItem('jt_demo_db_v4'));
       db.chat_threads = [];
       db.messages = db.messages.filter((m) => !m.thread_id);
-      localStorage.setItem('jt_demo_db_v3', JSON.stringify(db));
+      localStorage.setItem('jt_demo_db_v4', JSON.stringify(db));
     });
     await page.reload();
     await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);

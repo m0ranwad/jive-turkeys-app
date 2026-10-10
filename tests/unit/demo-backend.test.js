@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v3';
+const DB_KEY = 'jt_demo_db_v4';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -188,52 +188,53 @@ describe('persistence', () => {
 });
 
 describe('dues', () => {
-  it('has sample dues: $595 + 7 × $18 split across 10 active players, half paid, the captain still to pay', async () => {
+  it('has sample dues: $595 + 7 × $18 for two sessions, half paid this session, and a couple who pay together', async () => {
     const { api } = await signedIn();
-    const [current, earlier] = await api.dues.mine();
-    expect(current).toMatchObject({
-      session: 2,
-      total_fee: 721,
-      league_fee: 595,
-      ref_fee: 18,
-      game_count: 7,
-      active_players: 10,
-      per_player: 73,
-      is_active: true,
-      custom: false,
-      amount: 73,
-      paid: false,
-    });
-    expect(earlier).toMatchObject({ session: 1, paid: true });
-    const payments = await api.entities.DuesPayment.filter({ session: 2, paid: true });
-    expect(payments).toHaveLength(5);
+    const dues = await api.entities.SessionDues.list();
+    expect(dues.map((d) => [d.session, d.league_fee, d.ref_fee, d.game_count, d.total_fee]).sort()).toEqual([
+      [1, 595, 18, 7, 721],
+      [2, 595, 18, 7, 721],
+    ]);
+    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(5);
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
+    expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
     const [settings] = await api.entities.TeamSettings.list();
     expect(settings.pay_venmo).toBeTruthy();
   });
 
-  it("shows each player only their own share and payment, like the database's my_dues()", async () => {
+  it('lets any player mark players paid, recording who did it, without touching custom amounts', async () => {
     const api = createDemoBackend();
     await api.auth.signIn('jordan@demo.test', 'demo1234');
-    const [jordan] = await api.dues.mine();
-    expect(jordan).toMatchObject({ amount: 73, paid: true });
-    expect(Object.keys(jordan).sort()).toEqual(
-      [
-        'season_year', 'session', 'total_fee', 'league_fee', 'ref_fee', 'game_count', 'active_players',
-        'per_player', 'is_active', 'custom', 'amount', 'paid', 'paid_date',
-      ].sort(),
-    );
+    const jordan = await api.auth.me();
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.entities.DuesPayment.create({ season_year: year, session: 2, user_id: kelly.user_id, override_amount: 40, paid: false });
 
-    await api.auth.signIn('drew@demo.test', 'demo1234'); // in the sub pool
-    expect((await api.dues.mine())[0]).toMatchObject({ is_active: false, amount: null, paid: false });
+    await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id, kelly.user_id], paid: true, paidDate: '2026-10-09' });
+    const rows = await api.entities.DuesPayment.filter({ session: 2, user_id: [alex.user_id, kelly.user_id] });
+    expect(rows.map((r) => [r.paid, r.paid_date, r.paid_by])).toEqual([
+      [true, '2026-10-09', jordan.id],
+      [true, '2026-10-09', jordan.id],
+    ]);
+    expect(rows.find((r) => r.user_id === kelly.user_id).override_amount).toBe(40);
+
+    await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id], paid: false, paidDate: '2026-10-09' });
+    const [again] = await api.entities.DuesPayment.filter({ session: 2, user_id: alex.user_id });
+    expect([again.paid, again.paid_date, again.paid_by]).toEqual([false, null, null]);
   });
 
-  it('follows custom amounts and payments the captain records', async () => {
-    const { api, me } = await signedIn();
-    const [jordan] = await api.entities.PlayerProfile.filter({ display_name: 'Jordan Rivera' });
-    const [jordanPaid] = await api.entities.DuesPayment.filter({ session: 2, user_id: jordan.user_id });
-    await api.entities.DuesPayment.update(jordanPaid.id, { override_amount: 40 });
-    await api.entities.DuesPayment.create({ season_year: jordanPaid.season_year, session: 2, user_id: me.id, paid: true, paid_date: '2026-10-09' });
-    // $721 - $40 = $681 across the other 9: $75.67, rounded up.
-    expect((await api.dues.mine())[0]).toMatchObject({ per_player: 76, amount: 76, paid: true, paid_date: '2026-10-09' });
+  it('links a couple both ways, moves a relinked player, and unlinks both', async () => {
+    const { api } = await signedIn();
+    const id = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].user_id;
+    const partner = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].pays_with ?? null;
+    const [alex, riley, sam] = [await id('Alex Chen'), await id('Riley Novak'), await id('Sam Okafor')];
+
+    await api.dues.setPartner(sam, riley);
+    expect([await partner('Sam Okafor'), await partner('Riley Novak'), await partner('Alex Chen')]).toEqual([riley, sam, null]);
+    await api.dues.setPartner(riley, null);
+    expect([await partner('Sam Okafor'), await partner('Riley Novak')]).toEqual([null, null]);
+    expect(alex).toBeTruthy();
   });
 });

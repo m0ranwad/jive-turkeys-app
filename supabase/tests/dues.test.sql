@@ -1,5 +1,5 @@
--- Dues database tests: what a player can see of the dues (only their own
--- share, through public.my_dues()) and who can change them. Run by
+-- Dues database tests: the whole team sees the dues and can mark anyone paid
+-- or link a couple; only captains set fees, custom amounts and payment details. Run by
 -- scripts/test-db.sh after every migration is applied. Everything happens in
 -- one transaction that's rolled back, so the other test files never see it.
 -- The first failed check stops the run with "FAILED: <what was expected>".
@@ -62,9 +62,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- A captain, three more active players and one in the sub pool. Session 2
--- costs $595 + 7 games × $18 = $721; Dex has a custom $40, so the other three
--- split $681: $227 each, rounded up. tests/unit/dues.test.js checks the
--- same numbers against the page's own split.
+-- costs $595 + 7 games × $18 = $721; Dex has a custom $40.
 -- ---------------------------------------------------------------------------
 
 delete from public.dues_payments;
@@ -87,54 +85,60 @@ select id, initcap(name), case when name = 'sub' then 'sub_pool' else 'active' e
 
 insert into public.session_dues (season_year, session, total_fee, league_fee, ref_fee, game_count) values
   (2026, 2, 721, 595, 18, 7);
--- Saved before the fee breakdown existed: a total only.
-insert into public.session_dues (season_year, session, total_fee) values (2026, 1, 300);
 
 insert into public.dues_payments (season_year, session, user_id, override_amount, paid, paid_date) values
   (2026, 2, dues_test.id('dex'), 40, false, null),
-  (2026, 2, dues_test.id('dot'), null, true, '2026-10-03'),
-  (2026, 1, dues_test.id('dana'), null, true, '2026-08-01');
+  (2026, 2, dues_test.id('dot'), null, true, '2026-10-03');
+
+create function dues_test.payment(who text) returns public.dues_payments language sql as $$
+  select * from public.dues_payments where season_year = 2026 and session = 2 and user_id = dues_test.id(who);
+$$;
+create function dues_test.partner(who text) returns uuid language sql as $$
+  select pays_with from public.player_profiles where user_id = dues_test.id(who);
+$$;
+grant execute on function dues_test.payment(text), dues_test.partner(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- What each player sees
+-- Players: see everything, mark anyone paid, link couples
 -- ---------------------------------------------------------------------------
 
 select dues_test.sign_in('dana');
+select dues_test.ok((select count(*) from public.session_dues) = 1, 'a player can see the session fee');
+select dues_test.ok((select count(*) from public.dues_payments) = 2, 'a player can see who has paid');
+
+select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, '2026-10-09');
 select dues_test.ok(
-  (select array_agg(session order by ord) from (select session, row_number() over () as ord from public.my_dues()) x) = '{2,1}',
-  'a player sees every session with dues set, newest first');
+  (select paid and paid_date = '2026-10-09' and paid_by = dues_test.id('dana') from dues_test.payment('dana')),
+  'a player can mark themselves paid, and it records who marked it');
+
+select public.mark_dues_paid(2026, 2, array[dues_test.id('dex'), dues_test.id('kim')], true, '2026-10-09');
 select dues_test.ok(
-  (select total_fee = 721 and league_fee = 595 and ref_fee = 18 and game_count = 7 from public.my_dues() where session = 2),
-  'a player sees how the fee is made up');
+  (select paid and paid_by = dues_test.id('dana') and override_amount = 40 from dues_test.payment('dex'))
+  and (select paid from dues_test.payment('kim')),
+  'a player can mark others paid, two at once, without touching custom amounts');
+
+select public.mark_dues_paid(2026, 2, array[dues_test.id('kim')], false, null);
 select dues_test.ok(
-  (select active_players = 4 and per_player = 227 and is_active and not custom and amount = 227 and not paid
-   from public.my_dues() where session = 2),
-  'a player sees their even share after custom amounts, rounded up');
-select dues_test.ok(
-  (select paid from public.my_dues() where session = 1) and (select amount from public.my_dues() where session = 1) = 75,
-  'a player sees their own payment for an older session (saved as a total only)');
-select dues_test.ok((select count(*) from public.dues_payments) = 0, 'a player still cannot read anyone''s payment rows');
-select dues_test.ok((select count(*) from public.session_dues) = 0, 'a player still cannot read the dues table directly');
-select dues_test.touches($$update public.dues_payments set paid = true$$, 0, 'a player cannot mark anyone paid, themselves included');
-select dues_test.refused($$insert into public.dues_payments (season_year, session, user_id, paid) values (2026, 3, dues_test.id('dana'), true)$$,
-  'a player cannot add a payment');
+  (select not paid and paid_date is null and paid_by is null from dues_test.payment('kim')),
+  'a player can mark someone unpaid again');
+
+select dues_test.touches($$update public.dues_payments set override_amount = 1$$, 0, 'a player cannot change amounts');
+select dues_test.refused($$insert into public.dues_payments (season_year, session, user_id, override_amount) values (2026, 3, dues_test.id('dana'), 1)$$,
+  'a player cannot add a custom amount');
+select dues_test.touches($$delete from public.dues_payments$$, 0, 'a player cannot delete payments');
 select dues_test.touches($$update public.session_dues set total_fee = 1$$, 0, 'a player cannot change the fee');
 select dues_test.touches($$update public.team_settings set pay_venmo = 'not-the-captain'$$, 0, 'a player cannot change how players pay');
-reset role;
 
-select dues_test.sign_in('dex');
-select dues_test.ok((select custom and amount = 40 and not paid from public.my_dues() where session = 2),
-  'a player with a custom amount sees that amount');
-reset role;
-
-select dues_test.sign_in('dot');
-select dues_test.ok((select paid and paid_date = '2026-10-03' and amount = 227 from public.my_dues() where session = 2),
-  'a player marked paid sees it, with the date');
-reset role;
-
-select dues_test.sign_in('sub');
-select dues_test.ok((select not is_active and amount is null and not paid from public.my_dues() where session = 2),
-  'a sub pool player owes nothing');
+select public.set_dues_partner(dues_test.id('dex'), dues_test.id('dot'));
+select dues_test.ok(dues_test.partner('dex') = dues_test.id('dot') and dues_test.partner('dot') = dues_test.id('dex'),
+  'a player can link a couple who pay together, both ways');
+select public.set_dues_partner(dues_test.id('dot'), dues_test.id('dana'));
+select dues_test.ok(dues_test.partner('dex') is null and dues_test.partner('dot') = dues_test.id('dana')
+  and dues_test.partner('dana') = dues_test.id('dot'), 'relinking a player unlinks their old partner');
+select public.set_dues_partner(dues_test.id('dana'), null);
+select dues_test.ok(dues_test.partner('dana') is null and dues_test.partner('dot') is null, 'unlinking clears both players');
+select dues_test.touches($$update public.player_profiles set display_name = 'Renamed' where user_id = dues_test.id('dex')$$, 0,
+  'a player still cannot edit someone else''s profile');
 reset role;
 
 -- ---------------------------------------------------------------------------
@@ -144,14 +148,18 @@ reset role;
 select dues_test.sign_in('kim');
 select dues_test.touches($$update public.session_dues set league_fee = 600, total_fee = 726 where session = 2$$, 1,
   'a captain can change the fee breakdown');
-select dues_test.ok((select per_player from public.my_dues() where session = 2) = 229, 'the split follows the new fee');
+select dues_test.touches($$update public.dues_payments set override_amount = 50 where user_id = dues_test.id('dex')$$, 1,
+  'a captain can change a custom amount');
 select dues_test.touches($$update public.team_settings set pay_venmo = 'kim-pays', pay_note = 'Cash at the field works too'$$, 1,
   'a captain can set how players pay');
-select dues_test.ok((select count(*) from public.dues_payments) = 3, 'a captain sees every payment');
 reset role;
 
 set role anon;
-select dues_test.refused($$select * from public.my_dues()$$, 'signed-out visitors cannot see dues');
+select dues_test.refused($$select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, null)$$,
+  'signed-out visitors cannot mark anyone paid');
+select dues_test.refused($$select public.set_dues_partner(dues_test.id('dana'), dues_test.id('dex'))$$,
+  'signed-out visitors cannot link players');
+select dues_test.refused($$select count(*) from public.dues_payments$$, 'signed-out visitors cannot see who has paid');
 reset role;
 
 rollback;

@@ -160,20 +160,27 @@ describe('subscribe', () => {
   });
 });
 
-describe('dues.mine', () => {
-  it("calls the player's dues function and turns amounts into numbers", async () => {
-    result = {
-      data: [{ session: 2, total_fee: '721.00', league_fee: '595.00', ref_fee: '18.00', game_count: 7, per_player: '73', amount: '73', paid: false }],
-      error: null,
-    };
-    expect(await api.dues.mine()).toEqual([
-      { session: 2, total_fee: 721, league_fee: 595, ref_fee: 18, game_count: 7, per_player: 73, amount: 73, paid: false },
+describe('dues', () => {
+  it('marks players paid through the database function, with the date only when paid', async () => {
+    await api.dues.markPaid({ year: '2026', session: 2, userIds: ['a', 'b'], paid: true, paidDate: '2026-10-09' });
+    await api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: false, paidDate: '2026-10-09' });
+    expect(calls).toEqual([
+      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a', 'b'], p_paid: true, p_paid_date: '2026-10-09' }],
+      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a'], p_paid: false, p_paid_date: null }],
     ]);
-    expect(calls).toEqual([['rpc', 'my_dues', undefined]]);
   });
 
-  it('keeps "not set" and "nothing owed" empty', async () => {
-    result = { data: [{ total_fee: '300.00', league_fee: null, ref_fee: null, amount: null, per_player: '75' }], error: null };
-    expect((await api.dues.mine())[0]).toMatchObject({ league_fee: null, ref_fee: null, amount: null, total_fee: 300 });
+  it('links and unlinks couples through the database function', async () => {
+    await api.dues.setPartner('a', 'b');
+    await api.dues.setPartner('a', null);
+    expect(calls).toEqual([
+      ['rpc', 'set_dues_partner', { p_user_id: 'a', p_partner_id: 'b' }],
+      ['rpc', 'set_dues_partner', { p_user_id: 'a', p_partner_id: null }],
+    ]);
+  });
+
+  it('reports database errors', async () => {
+    result = { data: null, error: { message: 'nope' } };
+    await expect(api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: true })).rejects.toThrow('nope');
   });
 });

@@ -1,7 +1,6 @@
 // Dues: the session fee as the league bills it (a league fee plus a ref fee
-// for every game), how it splits across the active roster, and the links
-// players pay with. The database function public.my_dues() splits the same
-// way for a player's own view, so keep the two in step.
+// for every game), how it splits across the active roster, couples who pay
+// together, and the links players pay with.
 
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
@@ -72,8 +71,51 @@ export function feeSentence(parts) {
   return `the ${dollars(parts.league_fee)} league fee plus ${dollars(parts.ref_fee)} refs × ${num(parts.game_count)} games = ${dollars(total)}`;
 }
 
-/** The note players' payments carry, so the captain can tell what they're for. */
-export const payNote = (year, session) => `Jive Turkeys dues · Session ${session} ${year}`;
+/** The note payments carry, so whoever collects can tell who and what they're for. */
+export const payNote = (year, session, names = []) =>
+  [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
+
+/**
+ * One session's dues for the whole team: the split, active players in list
+ * order (by name, couples side by side), who pays with whom, and who still owes.
+ * `profiles` is the whole roster, `payments` that session's dues_payments rows.
+ */
+export function teamDues(total, profiles, payments) {
+  const name = (p) => p.display_name || '';
+  const active = profiles.filter((p) => p.status === 'active');
+  const byUser = new Map(active.map((p) => [p.user_id, p]));
+  // Couples count only while both are on the active roster.
+  const partners = new Map(
+    active.filter((p) => p.pays_with && p.pays_with !== p.user_id && byUser.has(p.pays_with)).map((p) => [p.user_id, p.pays_with]),
+  );
+  const groupName = (p) => {
+    const partner = byUser.get(partners.get(p.user_id));
+    return partner && name(partner).localeCompare(name(p)) < 0 ? name(partner) : name(p);
+  };
+  const ordered = [...active].sort((a, b) => groupName(a).localeCompare(groupName(b)) || name(a).localeCompare(name(b)));
+
+  const split = splitDues(total, ordered.map((p) => p.user_id), payments);
+  const shares = new Map(split.players.map((s) => [s.user_id, s]));
+  const shareOf = (userId) => shares.get(userId) || null;
+  const partnerOf = (userId) => byUser.get(partners.get(userId)) || null;
+
+  // Who still owes, with a couple who both still owe as one line and one amount.
+  const stillToPay = [];
+  const listed = new Set();
+  for (const p of ordered) {
+    if (listed.has(p.user_id) || shareOf(p.user_id).paid) continue;
+    const partner = partnerOf(p.user_id);
+    const together = partner && !shareOf(partner.user_id).paid ? partner : null;
+    listed.add(p.user_id);
+    if (together) listed.add(together.user_id);
+    stillToPay.push({
+      name: together ? `${name(p)} & ${name(together)}` : name(p),
+      amount: fromCents(cents(shareOf(p.user_id).amount) + (together ? cents(shareOf(together.user_id).amount) : 0)),
+    });
+  }
+
+  return { ...split, active: ordered, shareOf, partnerOf, stillToPay };
+}
 
 /** The ways to pay the captains have set up, with the amount filled in where the app allows it. */
 export function payOptions(settings, amount, note) {
