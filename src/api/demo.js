@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v2';
+const DB_KEY = 'jt_demo_db_v3';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -197,9 +197,43 @@ function seed() {
         potm_mode: 'separate',
         email_reminders: false,
         rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
-        quick_hits: ['No slide tackles', 'Men max 2 goals per game', '3 women on the field at all times', 'Blue card = 2 minutes off'],
-        rules_bullets: ['Sample rule text — captains can replace these on the Rules page.', 'Kick-ins instead of throw-ins.', 'Goalies may not punt the ball over half.'],
-        rules_footer: 'Sample data — this is demo mode.',
+        quick_hits: [
+          'Waiver must be on file with the complex before you can play',
+          'Shin guards required, jewelry off or taped',
+          'No offside, no slide tackles (goalie excepted in the box), no boarding',
+          "Coed: 3 women field players minimum at all times (a woman in goal doesn't count), 2-goal limit per man, women take all kicks",
+          'Blue card = 2 minutes down a player; red card = minimum 1-game suspension',
+        ],
+        // The real rules, sorted into sections (a line ending with a colon starts one).
+        rules_bullets: [
+          'Before you play:',
+          'Players must have a completed liability waiver form on file before they will be permitted to play.',
+          'Shin guards must be worn by all players. Jewelry must be taped or removed.',
+          'Blood from any wound must be stopped and fully covered before a player may be on the field of play.',
+          'The game:',
+          'Games consist of two 25-minute halves with a 5-minute halftime. The clock starts promptly at the appointed time and will not be stopped.',
+          'Substitutions are "on the fly." Guaranteed substitutions are allowed when the ball leaves the field of play and must be completed within 20 seconds. Substitutions are not guaranteed during the final two minutes of a half.',
+          'Offside rules do not apply.',
+          'A team down by five goals may add an additional field player as long as the differential exists.',
+          'The ball and restarts:',
+          'Three-line violations occur when a ball is played in the air over all three lines without touching anything. The ball is placed in the middle of the first red line it passed over and a restart is given to the opposing team.',
+          'A ball hitting the roof is given to the opposing team and reset at the nearest line.',
+          'Out-of-bounds balls are brought back into play at the point they went out.',
+          'Passing back to the goalie is permitted from anywhere, but the goalie is NOT permitted to pick the ball up if it is played back with the feet.',
+          'Kicks are all direct. Minor fouls inside the box are brought outside the penalty area.',
+          'Restarts and penalty kicks must be taken within five seconds.',
+          'Fouls and cards:',
+          'Slide tackling is not permitted and may result in a red card. The only exception is the goalie, who may slide in the penalty area.',
+          'Intentional or violent boarding is not permitted.',
+          'Foul or abusive language is not permitted.',
+          'Sporting behavior is expected from players and fans. Fighting will result in permanent suspension from the facility without a refund.',
+          'Cards: An offending player is sent off for two minutes and the team plays a person down. Three blue cards on the same player result in a red card, and the team plays a person down for five minutes. Red cards are serious and result in at least a one-game suspension, reviewed by management for possible further action.',
+          'Coed rules:',
+          'Two-goal limit per male.',
+          'Minimum of three women field players on the field at all times. A woman playing in goal does not count as a field player.',
+          'Women take all kicks.',
+        ],
+        rules_footer: 'Final decisions regarding all rules and interpretations are made by the owners of North Coast Premier Soccer Complex.',
         created_date: now(),
         updated_date: now(),
       },
