@@ -10,7 +10,13 @@ const LINES = [
 
 function PlayerChip({ player }) {
   return (
-    <span className="inline-flex max-w-[46%] items-center gap-1.5 rounded-full bg-white/95 px-2 py-1 shadow-sm">
+    <span
+      className={cn(
+        'inline-flex max-w-[46%] items-center gap-1.5 rounded-full px-2 py-1 shadow-sm',
+        // Not joined yet: dashed, like their roster card.
+        player.guest ? 'border border-dashed border-zinc-400 bg-white/75' : 'bg-white/95',
+      )}
+    >
       <span className={cn('h-2 w-2 shrink-0 rounded-full', player.gender === 'F' ? 'bg-lime-500' : 'bg-zinc-900')} />
       <span className="truncate text-[10px] font-bold text-zinc-800">{player.display_name}</span>
     </span>
