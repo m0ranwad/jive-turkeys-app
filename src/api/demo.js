@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v5';
+const DB_KEY = 'jt_demo_db_v6';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -196,6 +196,19 @@ function seed() {
     ].map((row) => ({
       id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
     })));
+  const at = (date, hour) => dayjs(date).hour(hour).toISOString();
+  const duesHistory = duesPayments.map((p) => ({
+    id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, paid: true, paid_date: p.paid_date,
+    changed_by: p.paid_by, created_date: at(p.paid_date, 19),
+  }));
+  // Taylor was marked not paid by mistake yesterday, and the captain put it back.
+  const taylor = duesPayments.find((p) => p.session === 2 && p.user_id === profiles[6].user_id);
+  const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+  duesHistory.push(
+    { id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: false, paid_date: null, changed_by: profiles[10].user_id, created_date: at(yesterday, 20) },
+    { id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: true, paid_date: yesterday, changed_by: captainId, created_date: at(yesterday, 21) },
+  );
+  Object.assign(taylor, { paid_date: yesterday, paid_by: captainId });
 
   return {
     users,
@@ -253,16 +266,19 @@ function seed() {
           'Women take all kicks.',
         ],
         rules_footer: 'Final decisions regarding all rules and interpretations are made by the owners of North Coast Premier Soccer Complex.',
-        pay_venmo: 'Casey-Captain-Demo',
-        pay_cashapp: 'CaseyCaptainDemo',
-        pay_zelle: 'captain@demo.test',
-        pay_note: 'Cash to Casey at the field works too.',
+        // The team's real Venmo and PayPal, so the preview's pay buttons can be tried.
+        pay_venmo: 'B-Kircher',
+        pay_paypal: 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ',
+        pay_cashapp: null,
+        pay_zelle: null,
+        pay_note: 'Cash at the field works too.',
         created_date: now(),
         updated_date: now(),
       },
     ],
     session_dues: sessionDues,
     dues_payments: duesPayments,
+    dues_history: duesHistory,
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -519,11 +535,16 @@ export function createDemoBackend() {
   const dues = {
     async markPaid({ year, session, userIds, paid, paidDate }) {
       requireUser();
-      const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? currentUser().id : null, updated_date: now() };
+      const me = currentUser().id;
+      const where = { season_year: Number(year), session: Number(session) };
+      const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? me : null, updated_date: now() };
       for (const userId of userIds) {
-        const row = db.dues_payments.find((p) => p.season_year === Number(year) && p.session === Number(session) && p.user_id === userId);
+        const row = db.dues_payments.find((p) => matches(p, { ...where, user_id: userId }));
+        // Only a real change: marking a paid player paid again keeps their original date.
+        if (!!row?.paid === paid) continue;
         if (row) Object.assign(row, patch);
-        else db.dues_payments.push({ id: uid(), season_year: Number(year), session: Number(session), user_id: userId, override_amount: null, created_date: now(), ...patch });
+        else db.dues_payments.push({ id: uid(), ...where, user_id: userId, override_amount: null, created_date: now(), ...patch });
+        db.dues_history.push({ id: uid(), ...where, user_id: userId, paid, paid_date: patch.paid_date, changed_by: me, created_date: now() });
       }
       save(db);
       return delay(null);

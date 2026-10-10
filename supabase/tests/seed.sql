@@ -79,3 +79,16 @@ begin
   end if;
 end;
 $$;
+
+-- Dues history (once that exists).
+do $$
+begin
+  if to_regclass('public.dues_history') is not null then
+    execute $sql$
+      insert into public.dues_history (season_year, session, user_id, paid, paid_date, changed_by, created_date) values
+        (2026, 2, '33333333-3333-4333-8333-333333333333', true, '2026-10-02', '22222222-2222-4222-8222-222222222222', '2026-10-02 18:00+00'),
+        (2026, 2, '33333333-3333-4333-8333-333333333333', false, null, '33333333-3333-4333-8333-333333333333', '2026-10-03 18:00+00');
+    $sql$;
+  end if;
+end;
+$$;

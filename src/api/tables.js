@@ -8,6 +8,7 @@ export const TABLES = {
   TeamSettings: 'team_settings',
   SessionDues: 'session_dues',
   DuesPayment: 'dues_payments',
+  DuesHistory: 'dues_history',
   Message: 'messages',
   ChatThread: 'chat_threads',
   MessageReaction: 'message_reactions',

@@ -65,6 +65,7 @@ $$;
 -- costs $595 + 7 games × $18 = $721; Dex has a custom $40.
 -- ---------------------------------------------------------------------------
 
+delete from public.dues_history;
 delete from public.dues_payments;
 delete from public.session_dues;
 delete from public.player_profiles;
@@ -122,6 +123,20 @@ select dues_test.ok(
   (select not paid and paid_date is null and paid_by is null from dues_test.payment('kim')),
   'a player can mark someone unpaid again');
 
+select public.mark_dues_paid(2026, 2, array[dues_test.id('dot')], true, '2026-10-09');
+select dues_test.ok((select paid_date = '2026-10-03' from dues_test.payment('dot'))
+  and not exists (select 1 from public.dues_history where user_id = dues_test.id('dot')),
+  'marking a paid player paid again keeps their original date and adds no history');
+
+select dues_test.ok(
+  (select array_agg(paid order by created_date, paid desc) from public.dues_history where user_id = dues_test.id('kim')) = '{t,f}'
+  and (select count(*) from public.dues_history where paid and changed_by = dues_test.id('dana') and paid_date = '2026-10-09') = 3,
+  'every change is kept in the history, including the paid date an unmark cleared');
+select dues_test.refused($$insert into public.dues_history (season_year, session, user_id, paid) values (2026, 2, dues_test.id('dana'), true)$$,
+  'a player cannot add to the history directly');
+select dues_test.touches($$update public.dues_history set paid = false$$, 0, 'a player cannot change the history');
+select dues_test.touches($$delete from public.dues_history$$, 0, 'a player cannot remove the history');
+
 select dues_test.touches($$update public.dues_payments set override_amount = 1$$, 0, 'a player cannot change amounts');
 select dues_test.refused($$insert into public.dues_payments (season_year, session, user_id, override_amount) values (2026, 3, dues_test.id('dana'), 1)$$,
   'a player cannot add a custom amount');
@@ -150,8 +165,9 @@ select dues_test.touches($$update public.session_dues set league_fee = 600, tota
   'a captain can change the fee breakdown');
 select dues_test.touches($$update public.dues_payments set override_amount = 50 where user_id = dues_test.id('dex')$$, 1,
   'a captain can change a custom amount');
-select dues_test.touches($$update public.team_settings set pay_venmo = 'kim-pays', pay_note = 'Cash at the field works too'$$, 1,
+select dues_test.touches($$update public.team_settings set pay_venmo = 'kim-pays', pay_paypal = 'kimpays', pay_note = 'Cash at the field works too'$$, 1,
   'a captain can set how players pay');
+select dues_test.touches($$delete from public.dues_history$$, 0, 'a captain cannot remove the history either');
 reset role;
 
 set role anon;
