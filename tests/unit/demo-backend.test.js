@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v2';
+const DB_KEY = 'jt_demo_db_v3';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -184,5 +184,56 @@ describe('persistence', () => {
     expect((await upgraded.chat.history(null)).at(-1).body).toBe('Before the upgrade');
     await upgraded.chat.markRead(null, new Date().toISOString());
     expect(await upgraded.entities.ChatRead.list()).toHaveLength(1);
+  });
+});
+
+describe('dues', () => {
+  it('has sample dues: $595 + 7 × $18 split across 10 active players, half paid, the captain still to pay', async () => {
+    const { api } = await signedIn();
+    const [current, earlier] = await api.dues.mine();
+    expect(current).toMatchObject({
+      session: 2,
+      total_fee: 721,
+      league_fee: 595,
+      ref_fee: 18,
+      game_count: 7,
+      active_players: 10,
+      per_player: 73,
+      is_active: true,
+      custom: false,
+      amount: 73,
+      paid: false,
+    });
+    expect(earlier).toMatchObject({ session: 1, paid: true });
+    const payments = await api.entities.DuesPayment.filter({ session: 2, paid: true });
+    expect(payments).toHaveLength(5);
+    const [settings] = await api.entities.TeamSettings.list();
+    expect(settings.pay_venmo).toBeTruthy();
+  });
+
+  it("shows each player only their own share and payment, like the database's my_dues()", async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const [jordan] = await api.dues.mine();
+    expect(jordan).toMatchObject({ amount: 73, paid: true });
+    expect(Object.keys(jordan).sort()).toEqual(
+      [
+        'season_year', 'session', 'total_fee', 'league_fee', 'ref_fee', 'game_count', 'active_players',
+        'per_player', 'is_active', 'custom', 'amount', 'paid', 'paid_date',
+      ].sort(),
+    );
+
+    await api.auth.signIn('drew@demo.test', 'demo1234'); // in the sub pool
+    expect((await api.dues.mine())[0]).toMatchObject({ is_active: false, amount: null, paid: false });
+  });
+
+  it('follows custom amounts and payments the captain records', async () => {
+    const { api, me } = await signedIn();
+    const [jordan] = await api.entities.PlayerProfile.filter({ display_name: 'Jordan Rivera' });
+    const [jordanPaid] = await api.entities.DuesPayment.filter({ session: 2, user_id: jordan.user_id });
+    await api.entities.DuesPayment.update(jordanPaid.id, { override_amount: 40 });
+    await api.entities.DuesPayment.create({ season_year: jordanPaid.season_year, session: 2, user_id: me.id, paid: true, paid_date: '2026-10-09' });
+    // $721 - $40 = $681 across the other 9: $75.67, rounded up.
+    expect((await api.dues.mine())[0]).toMatchObject({ per_player: 76, amount: 76, paid: true, paid_date: '2026-10-09' });
   });
 });

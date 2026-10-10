@@ -107,7 +107,7 @@ export function Layout() {
   const menuItems = [
     { to: CHAT_PATH, label: 'Team Chat', icon: MessageSquare, show: true },
     { to: '/announcements', label: 'Announcements', icon: Megaphone, show: true },
-    { to: '/dues', label: 'Dues', icon: DollarSign, show: isCaptain },
+    { to: '/dues', label: 'Dues', icon: DollarSign, show: true },
     { to: '/settings', label: 'Team Settings', icon: SlidersHorizontal, show: isCaptain },
     { to: '/rules', label: 'Field Rules', icon: BookOpen, show: true },
     { to: '/profile', label: 'My Profile', icon: User, show: true },

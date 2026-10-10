@@ -159,3 +159,21 @@ describe('subscribe', () => {
     expect(channels[0].bindings.map((b) => b.filter.event)).toEqual(['INSERT']);
   });
 });
+
+describe('dues.mine', () => {
+  it("calls the player's dues function and turns amounts into numbers", async () => {
+    result = {
+      data: [{ session: 2, total_fee: '721.00', league_fee: '595.00', ref_fee: '18.00', game_count: 7, per_player: '73', amount: '73', paid: false }],
+      error: null,
+    };
+    expect(await api.dues.mine()).toEqual([
+      { session: 2, total_fee: 721, league_fee: 595, ref_fee: 18, game_count: 7, per_player: 73, amount: 73, paid: false },
+    ]);
+    expect(calls).toEqual([['rpc', 'my_dues', undefined]]);
+  });
+
+  it('keeps "not set" and "nothing owed" empty', async () => {
+    result = { data: [{ total_fee: '300.00', league_fee: null, ref_fee: null, amount: null, per_player: '75' }], error: null };
+    expect((await api.dues.mine())[0]).toMatchObject({ league_fee: null, ref_fee: null, amount: null, total_fee: 300 });
+  });
+});

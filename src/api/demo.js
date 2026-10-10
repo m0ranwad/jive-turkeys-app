@@ -2,9 +2,10 @@
 // in this browser's localStorage. Used when no Supabase keys are configured,
 // so the app can be tried (and developed) before the real backend exists.
 import dayjs from 'dayjs';
+import { splitDues } from '@/lib/dues';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v2';
+const DB_KEY = 'jt_demo_db_v3';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -178,6 +179,20 @@ function seed() {
   say(jerseys, me, 'Order placed, thanks all. Closing this one.', 7000);
   readUpTo(jerseys, 7000);
 
+  // Dues: last session all paid; this session half paid, the captain included
+  // among those still to pay, so the pay buttons show on "My dues".
+  const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
+  const sessionDues = [1, 2].map((session) => ({ id: uid(), season_year: year, session, ...fee, created_date: now(), updated_date: now() }));
+  const duesPayments = profiles
+    .map((p, i) => [p, i])
+    .filter(([p]) => p.status === 'active')
+    .flatMap(([p, i]) => [
+      { session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD') },
+      ...([1, 2, 3, 5, 6].includes(i) ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD') }] : []),
+    ].map((row) => ({
+      id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
+    })));
+
   return {
     users,
     player_profiles: profiles,
@@ -200,12 +215,16 @@ function seed() {
         quick_hits: ['No slide tackles', 'Men max 2 goals per game', '3 women on the field at all times', 'Blue card = 2 minutes off'],
         rules_bullets: ['Sample rule text — captains can replace these on the Rules page.', 'Kick-ins instead of throw-ins.', 'Goalies may not punt the ball over half.'],
         rules_footer: 'Sample data — this is demo mode.',
+        pay_venmo: 'Casey-Captain-Demo',
+        pay_cashapp: 'CaseyCaptainDemo',
+        pay_zelle: 'captain@demo.test',
+        pay_note: 'Cash to Casey at the field works too.',
         created_date: now(),
         updated_date: now(),
       },
     ],
-    session_dues: [],
-    dues_payments: [],
+    session_dues: sessionDues,
+    dues_payments: duesPayments,
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -458,6 +477,39 @@ export function createDemoBackend() {
     },
   };
 
+  const dues = {
+    /** Same as the database's my_dues(): the signed-in player's share of each session's fee, newest first. */
+    async mine() {
+      requireUser();
+      const me = currentUser();
+      const active = db.player_profiles.filter((p) => p.status === 'active').map((p) => p.user_id);
+      const rows = [...db.session_dues].sort((a, b) => b.season_year - a.season_year || b.session - a.session);
+      return delay(
+        rows.map((d) => {
+          const payments = db.dues_payments.filter((p) => p.season_year === d.season_year && p.session === d.session);
+          const split = splitDues(Number(d.total_fee) || 0, active, payments);
+          const share = split.players.find((p) => p.user_id === me.id);
+          const payment = payments.find((p) => p.user_id === me.id);
+          return {
+            season_year: d.season_year,
+            session: d.session,
+            total_fee: Number(d.total_fee) || 0,
+            league_fee: d.league_fee ?? null,
+            ref_fee: d.ref_fee ?? null,
+            game_count: d.game_count ?? null,
+            active_players: active.length,
+            per_player: split.perPlayer,
+            is_active: !!share,
+            custom: !!share?.custom,
+            amount: share ? share.amount : null,
+            paid: !!payment?.paid,
+            paid_date: payment?.paid_date ?? null,
+          };
+        }),
+      );
+    },
+  };
+
   // Previews can't receive real notifications (there's no sender); lib/push.js
   // shows a local sample instead, so the flow can still be tried.
   const push = {
@@ -477,6 +529,7 @@ export function createDemoBackend() {
     entities,
     users,
     chat,
+    dues,
     push,
     resetDemo() {
       db = seed();

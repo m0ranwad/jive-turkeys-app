@@ -228,6 +228,23 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
+  const dues = {
+    /** The signed-in player's own dues, one row per session with a fee set, newest first. */
+    async mine() {
+      const { data, error } = await supabase.rpc('my_dues');
+      if (error) fail(error);
+      const money = (value) => (value == null ? null : Number(value));
+      return data.map((row) => ({
+        ...row,
+        total_fee: money(row.total_fee),
+        league_fee: money(row.league_fee),
+        ref_fee: money(row.ref_fee),
+        per_player: money(row.per_player),
+        amount: money(row.amount),
+      }));
+    },
+  };
+
   const notifyChat = async (action) => {
     const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action } });
     if (error) throw new Error("Notifications aren't ready yet. Try again in a few minutes.");
@@ -258,5 +275,5 @@ export function createSupabaseBackend(url, key) {
     test: () => notifyChat('test'),
   };
 
-  return { mode: 'supabase', auth, entities, users, chat, push };
+  return { mode: 'supabase', auth, entities, users, chat, dues, push };
 }
