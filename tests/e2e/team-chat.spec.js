@@ -183,7 +183,7 @@ test('emoji-only messages show big', async ({ page }) => {
 test('load earlier messages keeps your place', async ({ page }) => {
   // Give Team Chat a long history (sample data lives in this browser).
   await page.evaluate(() => {
-    const db = JSON.parse(localStorage.getItem('jt_demo_db_v4'));
+    const db = JSON.parse(localStorage.getItem('jt_demo_db_v5'));
     const sam = db.player_profiles[2];
     for (let i = 1; i <= 80; i += 1) {
       const when = new Date(Date.now() - (3000 + i * 3) * 60000).toISOString();
@@ -198,7 +198,7 @@ test('load earlier messages keeps your place', async ({ page }) => {
         updated_date: when,
       });
     }
-    localStorage.setItem('jt_demo_db_v4', JSON.stringify(db));
+    localStorage.setItem('jt_demo_db_v5', JSON.stringify(db));
   });
   await page.reload();
   const log = page.getByRole('log');
@@ -220,7 +220,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
   // Regression: a reaction landing between tapping "Load earlier" and the older
   // messages arriving used to throw the view back to the very top.
   await page.evaluate(() => {
-    const db = JSON.parse(localStorage.getItem('jt_demo_db_v4'));
+    const db = JSON.parse(localStorage.getItem('jt_demo_db_v5'));
     const [sam, alex] = [db.player_profiles[2], db.player_profiles[4]];
     for (let i = 1; i <= 80; i += 1) {
       const when = new Date(Date.now() - (3000 + i * 3) * 60000).toISOString();
@@ -245,7 +245,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
           updated_date: when,
         });
     }
-    localStorage.setItem('jt_demo_db_v4', JSON.stringify(db));
+    localStorage.setItem('jt_demo_db_v5', JSON.stringify(db));
   });
   await page.reload();
   const log = page.getByRole('log');
