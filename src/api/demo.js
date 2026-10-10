@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v6';
+const DB_KEY = 'jt_demo_db_v9';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -196,10 +196,21 @@ function seed() {
     ].map((row) => ({
       id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
     })));
+  // Two teammates who aren't on the app: Dana has paid this session, Mike hasn't.
+  const guest = (display_name, gender, position) => ({
+    id: uid(), display_name, gender, position, status: 'active', removed: false, pays_with_user: null, pays_with_guest: null,
+    linked_user_id: null, created_by: captainId, created_date: now(), updated_date: now(),
+  });
+  const teamGuests = [guest('Mike Russo', 'M', 'Defense'), guest('Dana Wells', 'F', 'Forward')];
+  const guestPaid = (g, session, daysAgo) => ({
+    id: uid(), season_year: year, session, user_id: null, guest_id: g.id, override_amount: null, paid: true,
+    paid_date: dayjs().subtract(daysAgo, 'day').format('YYYY-MM-DD'), paid_by: captainId, created_date: now(), updated_date: now(),
+  });
+  duesPayments.push(guestPaid(teamGuests[0], 1, 45), guestPaid(teamGuests[1], 1, 44), guestPaid(teamGuests[1], 2, 3));
   const at = (date, hour) => dayjs(date).hour(hour).toISOString();
   const duesHistory = duesPayments.map((p) => ({
-    id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, paid: true, paid_date: p.paid_date,
-    changed_by: p.paid_by, created_date: at(p.paid_date, 19),
+    id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, guest_id: p.guest_id ?? null, paid: true,
+    paid_date: p.paid_date, changed_by: p.paid_by, created_date: at(p.paid_date, 19),
   }));
   // Taylor was marked not paid by mistake yesterday, and the captain put it back.
   const taylor = duesPayments.find((p) => p.session === 2 && p.user_id === profiles[6].user_id);
@@ -279,6 +290,7 @@ function seed() {
     session_dues: sessionDues,
     dues_payments: duesPayments,
     dues_history: duesHistory,
+    team_guests: teamGuests,
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -475,7 +487,46 @@ export function createDemoBackend() {
     },
   };
 
+  const moveGuest = async (guestId, userId) => {
+    const guest = db.team_guests.find((g) => g.id === guestId && !g.linked_user_id);
+    if (!guest) throw new Error('That name has already been picked');
+    if (db.team_guests.some((g) => g.linked_user_id === userId)) throw new Error('That player already has a name on the roster');
+    for (const row of db.dues_payments.filter((p) => p.guest_id === guestId)) {
+      const mine = db.dues_payments.find((p) => p.user_id === userId && p.season_year === row.season_year && p.session === row.session);
+      if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
+      else {
+        // Where both have one, a payment made under the roster name counts, and so does its custom amount.
+        if (row.paid && !mine.paid) Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by });
+        mine.override_amount = mine.override_amount ?? row.override_amount ?? null;
+      }
+    }
+    db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
+    db.player_profiles
+      .filter((p) => p.user_id === userId)
+      .forEach((p) => Object.assign(p, { gender: p.gender || guest.gender, position: p.position || guest.position }));
+    const partner = guest.pays_with_user ?? guest.pays_with_guest;
+    Object.assign(guest, { linked_user_id: userId, pays_with_user: null, pays_with_guest: null, updated_date: now() });
+    save(db);
+    if (partner) await dues.setPartner(userId, partner);
+  };
+
   const users = {
+    // Same as the database's move_team_guest(), claim_team_guest() and link_team_guest().
+    async claimGuest(guestId) {
+      requireUser();
+      const guest = db.team_guests.find((g) => g.id === guestId && !g.removed);
+      if (!guest) throw new Error('That name is no longer on the roster');
+      await moveGuest(guestId, currentUser().id);
+      db.player_profiles.filter((p) => p.user_id === currentUser().id).forEach((p) => (p.status = guest.status));
+      save(db);
+      return delay(null);
+    },
+    async linkGuest(guestId, userId) {
+      requireUser();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can link a player');
+      await moveGuest(guestId, userId);
+      return delay(null);
+    },
     async setRole(userId, role) {
       if (currentUser()?.role !== 'admin') throw new Error("You don't have permission to do that.");
       const user = db.users.find((u) => u.id === userId);
@@ -531,35 +582,47 @@ export function createDemoBackend() {
     },
   };
 
-  // Same as the database functions mark_dues_paid() and set_dues_partner().
+  // Same as the database functions mark_dues_paid(), set_dues_partner() and
+  // link_team_guest(). Ids can be app players' or guests' (roster players who haven't joined yet).
+  const isGuest = (id) => db.team_guests.some((g) => g.id === id);
+  const playerKey = (id) => (isGuest(id) ? { user_id: null, guest_id: id } : { user_id: id, guest_id: null });
+
   const dues = {
     async markPaid({ year, session, userIds, paid, paidDate }) {
       requireUser();
       const me = currentUser().id;
       const where = { season_year: Number(year), session: Number(session) };
       const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? me : null, updated_date: now() };
-      for (const userId of userIds) {
-        const row = db.dues_payments.find((p) => matches(p, { ...where, user_id: userId }));
+      for (const id of userIds) {
+        const key = playerKey(id);
+        const row = db.dues_payments.find((p) => matches(p, where) && (p.user_id ?? p.guest_id) === id);
         // Only a real change: marking a paid player paid again keeps their original date.
         if (!!row?.paid === paid) continue;
         if (row) Object.assign(row, patch);
-        else db.dues_payments.push({ id: uid(), ...where, user_id: userId, override_amount: null, created_date: now(), ...patch });
-        db.dues_history.push({ id: uid(), ...where, user_id: userId, paid, paid_date: patch.paid_date, changed_by: me, created_date: now() });
+        else db.dues_payments.push({ id: uid(), ...where, ...key, override_amount: null, created_date: now(), ...patch });
+        db.dues_history.push({ id: uid(), ...where, ...key, paid, paid_date: patch.paid_date, changed_by: me, created_date: now() });
       }
       save(db);
       return delay(null);
     },
     async setPartner(userId, partnerId) {
       requireUser();
-      const ids = [userId, partnerId];
+      const ids = [userId, partnerId].filter(Boolean);
       db.player_profiles.forEach((p) => {
-        if (ids.includes(p.user_id) || ids.includes(p.pays_with)) p.pays_with = null;
+        if ([p.user_id, p.pays_with, p.pays_with_guest].some((id) => ids.includes(id))) Object.assign(p, { pays_with: null, pays_with_guest: null });
+      });
+      db.team_guests.forEach((g) => {
+        if ([g.id, g.pays_with_user, g.pays_with_guest].some((id) => ids.includes(id))) Object.assign(g, { pays_with_user: null, pays_with_guest: null });
       });
       if (partnerId && partnerId !== userId) {
-        db.player_profiles.forEach((p) => {
-          if (p.user_id === userId) p.pays_with = partnerId;
-          if (p.user_id === partnerId) p.pays_with = userId;
-        });
+        const point = (self, other) => {
+          const user = isGuest(other) ? null : other;
+          const guest = isGuest(other) ? other : null;
+          db.player_profiles.filter((p) => p.user_id === self).forEach((p) => Object.assign(p, { pays_with: user, pays_with_guest: guest }));
+          db.team_guests.filter((g) => g.id === self).forEach((g) => Object.assign(g, { pays_with_user: user, pays_with_guest: guest }));
+        };
+        point(userId, partnerId);
+        point(partnerId, userId);
       }
       save(db);
       return delay(null);

@@ -213,3 +213,38 @@ export function recordVsOpponents(games = []) {
     .map((row) => ({ ...row, played: row.played.sort((a, b) => (a.date < b.date ? 1 : -1)) }))
     .sort((a, b) => b.played.length - a.played.length || a.opponent.localeCompare(b.opponent));
 }
+
+const nameWords = (name = '') => name.toLowerCase().replace(/\./g, '').split(/\s+/).filter(Boolean);
+
+/**
+ * Probably the same person: same first name, and last names that agree as far
+ * as both go ("Brian K." and "Brian Kircher", or "Brian" and anything Brian).
+ */
+export function sameName(a, b) {
+  const [first, ...rest] = nameWords(a);
+  const [otherFirst, ...otherRest] = nameWords(b);
+  if (!first || first !== otherFirst) return false;
+  const last = rest.join(' ');
+  const otherLast = otherRest.join(' ');
+  if (!last || !otherLast) return true;
+  return last === otherLast || (last.length === 1 && otherLast.startsWith(last)) || (otherLast.length === 1 && last.startsWith(otherLast));
+}
+
+/**
+ * Names pasted one per line, sorted out against the roster: new ones, ones
+ * already on it (same name), ones that look like someone on it, and ones too
+ * long to save. Blank lines and repeats are dropped.
+ */
+export function sortPastedNames(text, rosterNames, maxLength = 60) {
+  const lines = text.split('\n').map((n) => n.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  const typed = lines.filter((n, i) => lines.findIndex((m) => m.toLowerCase() === n.toLowerCase()) === i);
+  const result = { fresh: [], existing: [], lookalike: [], tooLong: [] };
+  for (const name of typed) {
+    const like = rosterNames.find((r) => sameName(name, r));
+    if (name.length > maxLength) result.tooLong.push(name);
+    else if (rosterNames.some((r) => r.trim().toLowerCase() === name.toLowerCase())) result.existing.push(name);
+    else if (like) result.lookalike.push({ name, like });
+    else result.fresh.push(name);
+  }
+  return result;
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -205,8 +206,10 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
       await work();
       await onChanged();
       if (done) toast({ title: done });
+      return true;
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -229,13 +232,19 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
     run(async () => {
       const patch = { override_amount: value };
       if (payment) await api.entities.DuesPayment.update(payment.id, patch);
-      else await api.entities.DuesPayment.create({ season_year: Number(period.year), session: Number(period.session), user_id: player.user_id, ...patch });
+      else {
+        const who = player.guest ? { guest_id: player.user_id } : { user_id: player.user_id };
+        await api.entities.DuesPayment.create({ season_year: Number(period.year), session: Number(period.session), ...who, ...patch });
+      }
     }, value == null ? 'Back on the even split' : 'Custom amount saved');
 
   const setPartner = (partnerId) =>
     run(() => api.dues.setPartner(player.user_id, partnerId || null), partnerId ? 'Linked as paying together' : 'Unlinked');
 
-  const roster = profiles.filter((p) => p.user_id !== player.user_id).sort((a, b) => a.display_name.localeCompare(b.display_name));
+  // Anyone to pay with, except guests who no longer count.
+  const roster = profiles
+    .filter((p) => p.user_id !== player.user_id && !(p.guest && p.status !== 'active'))
+    .sort((a, b) => a.display_name.localeCompare(b.display_name));
   const events = history.filter((e) => e.user_id === player.user_id);
   const markedBy = payment?.paid_by && payment.paid_by !== player.user_id ? ` by ${nameOf(payment.paid_by).split(' ')[0]}` : '';
 
@@ -249,6 +258,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
         <div className="-mt-2 flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-zinc-500">
             {dollars(share.amount)} · {share.custom ? 'custom amount' : 'even split'}
+            {player.guest && ' · not joined yet'}
           </span>
           <StatusChip paid={share.paid} date={share.paid_date} />
         </div>
@@ -345,6 +355,24 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
               </button>
             )}
           </div>
+        )}
+
+        {player.guest && (
+          <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500">
+            {player.display_name} hasn't joined the app yet. When they sign up and pick their name, their payments
+            come with them.{' '}
+            {isCaptain ? (
+              <>
+                Change their name or status on the{' '}
+                <Link to="/team" className="font-bold text-zinc-800 underline underline-offset-2">
+                  Team page
+                </Link>
+                .
+              </>
+            ) : (
+              'Anyone can mark them paid.'
+            )}
+          </p>
         )}
 
         <div className={SECTION}>

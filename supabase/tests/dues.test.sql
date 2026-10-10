@@ -170,12 +170,157 @@ select dues_test.touches($$update public.team_settings set pay_venmo = 'kim-pays
 select dues_test.touches($$delete from public.dues_history$$, 0, 'a captain cannot remove the history either');
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Teammates who aren't on the app
+-- ---------------------------------------------------------------------------
+
+create function dues_test.guest(who text) returns uuid language sql stable as $$
+  select id from public.team_guests where display_name = who;
+$$;
+grant execute on function dues_test.guest(text) to authenticated;
+
+select dues_test.sign_in('dana');
+select dues_test.refused($$insert into public.team_guests (display_name) values ('Sneaky Pete')$$,
+  'a player cannot add someone who is not on the app');
+reset role;
+
+select dues_test.sign_in('kim');
+select dues_test.touches($$insert into public.team_guests (display_name, gender, created_by) values ('Mike Russo', 'M', dues_test.id('kim')), ('Pat Lee', 'F', dues_test.id('kim'))$$, 2,
+  'a captain can add teammates who are not on the app');
+select dues_test.ok((select status = 'active' and not removed from public.team_guests where display_name = 'Pat Lee'), 'they start out active on the team');
+select dues_test.refused($$insert into public.team_guests (display_name) values ('   ')$$, 'a guest needs a name');
+select dues_test.refused($$update public.team_guests set status = 'retired' where display_name = 'Pat Lee'$$, 'a guest has the usual roster statuses');
+select dues_test.touches($$update public.team_guests set status = 'sub_pool' where display_name = 'Pat Lee'$$, 1,
+  'a captain can change a guest''s roster status');
+select dues_test.touches($$insert into public.dues_payments (season_year, session, guest_id, override_amount) values (2026, 2, dues_test.guest('Pat Lee'), 30)$$, 1,
+  'a captain can give a guest a custom amount');
+select dues_test.refused($$insert into public.dues_payments (season_year, session, override_amount) values (2026, 2, 30)$$,
+  'a payment belongs to a player');
+select dues_test.refused($$insert into public.dues_payments (season_year, session, user_id, guest_id) values (2026, 3, dues_test.id('kim'), dues_test.guest('Pat Lee'))$$,
+  'a payment belongs to only one player');
+reset role;
+
+select dues_test.sign_in('dana');
+select dues_test.ok((select count(*) from public.team_guests) = 2, 'players can see teammates who are not on the app');
+select public.mark_dues_paid(2026, 2, array[dues_test.guest('Mike Russo')], true, '2026-10-09');
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-09' and paid_by = dues_test.id('dana') and user_id is null
+   from public.dues_payments where guest_id = dues_test.guest('Mike Russo')),
+  'a player can mark a guest paid');
+select dues_test.ok(
+  exists (select 1 from public.dues_history where guest_id = dues_test.guest('Mike Russo') and paid and changed_by = dues_test.id('dana')),
+  'marking a guest paid goes in the history');
+select dues_test.touches($$update public.team_guests set display_name = 'Renamed'$$, 0, 'a player cannot rename a guest');
+select dues_test.touches($$update public.team_guests set status = 'on_break'$$, 0, 'a player cannot change a guest''s status');
+select public.set_dues_partner(dues_test.id('dot'), dues_test.guest('Mike Russo'));
+select dues_test.ok(
+  dues_test.partner('dot') is null
+  and (select pays_with_guest from public.player_profiles where user_id = dues_test.id('dot')) = dues_test.guest('Mike Russo')
+  and (select pays_with_user from public.team_guests where display_name = 'Mike Russo') = dues_test.id('dot'),
+  'an app player and a guest can pay together');
+select dues_test.refused($$select public.link_team_guest(dues_test.guest('Mike Russo'), dues_test.id('sub'))$$,
+  'a player cannot link a guest to an account');
+reset role;
+
+select dues_test.sign_in('kim');
+select dues_test.touches($$delete from public.team_guests$$, 0, 'nobody can delete a guest, captains included');
+select public.link_team_guest(dues_test.guest('Mike Russo'), dues_test.id('sub'));
+select dues_test.ok(
+  (select paid and guest_id is null from public.dues_payments where user_id = dues_test.id('sub') and session = 2)
+  and not exists (select 1 from public.dues_history where guest_id = dues_test.guest('Mike Russo'))
+  and exists (select 1 from public.dues_history where user_id = dues_test.id('sub') and paid and changed_by = dues_test.id('dana')),
+  'linking a guest to their account moves their payments and history');
+select dues_test.ok(
+  (select linked_user_id = dues_test.id('sub') from public.team_guests where display_name = 'Mike Russo')
+  and dues_test.partner('sub') = dues_test.id('dot') and dues_test.partner('dot') = dues_test.id('sub'),
+  'the guest is kept, marked as linked, and their partner moves with them');
+select dues_test.refused($$select public.link_team_guest(dues_test.guest('Mike Russo'), dues_test.id('dana'))$$,
+  'a guest can only be linked once');
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- A new player picks their name on the roster
+-- ---------------------------------------------------------------------------
+
+insert into dues_test.people values ('newbie', '00000000-0000-4000-8000-0000000000d6');
+insert into auth.users (id, email) values (dues_test.id('newbie'), 'newbie@dues.test');
+insert into public.player_profiles (user_id, display_name) values (dues_test.id('newbie'), 'Rosa');
+
+select dues_test.sign_in('kim');
+insert into public.team_guests (display_name, gender, position, status) values ('Rosa Diaz', 'F', 'Goalie', 'sub_pool');
+select public.mark_dues_paid(2026, 2, array[dues_test.guest('Rosa Diaz')], true, '2026-10-05');
+reset role;
+
+select dues_test.sign_in('newbie');
+select dues_test.refused($$select public.move_team_guest(dues_test.guest('Rosa Diaz'), dues_test.id('newbie'))$$,
+  'players cannot use the move step directly');
+select public.claim_team_guest(dues_test.guest('Rosa Diaz'));
+select dues_test.ok(
+  (select status = 'sub_pool' and gender = 'F' and position = 'Goalie' from public.player_profiles where user_id = dues_test.id('newbie')),
+  'picking your name brings over your roster status and details');
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-05' and guest_id is null from public.dues_payments where user_id = dues_test.id('newbie') and session = 2)
+  and (select linked_user_id = dues_test.id('newbie') from public.team_guests where display_name = 'Rosa Diaz'),
+  'and your dues payment moves to your account');
+select dues_test.refused($$select public.claim_team_guest(dues_test.guest('Pat Lee'))$$, 'you can only pick one name');
+reset role;
+
+select dues_test.sign_in('dana');
+select dues_test.refused($$select public.claim_team_guest(dues_test.guest('Rosa Diaz'))$$, 'nobody else can pick a name that is taken');
+reset role;
+select dues_test.sign_in('kim');
+update public.team_guests set removed = true where display_name = 'Pat Lee';
+reset role;
+select dues_test.sign_in('dana');
+select dues_test.refused($$select public.claim_team_guest(dues_test.guest('Pat Lee'))$$, 'a name taken off the roster cannot be picked');
+reset role;
+
+-- Someone who joined without picking their name, was marked separately, and
+-- is then linked: nothing either of them had is lost.
+insert into dues_test.people values ('late', '00000000-0000-4000-8000-0000000000d7');
+insert into auth.users (id, email) values (dues_test.id('late'), 'late@dues.test');
+insert into public.player_profiles (user_id, display_name, status) values (dues_test.id('late'), 'Lou', 'active');
+
+select dues_test.sign_in('kim');
+insert into public.team_guests (display_name) values ('Lou Late');
+insert into public.dues_payments (season_year, session, guest_id, override_amount, paid, paid_date, paid_by) values
+  (2026, 2, dues_test.guest('Lou Late'), null, true, '2026-10-01', dues_test.id('kim')),
+  (2026, 3, dues_test.guest('Lou Late'), 25, false, null, null),
+  (2026, 4, dues_test.guest('Lou Late'), null, true, '2026-10-02', dues_test.id('kim')),
+  (2026, 5, dues_test.guest('Lou Late'), null, true, '2026-10-04', dues_test.id('kim'));
+insert into public.dues_payments (season_year, session, user_id, override_amount, paid, paid_date, paid_by) values
+  (2026, 2, dues_test.id('late'), 50, false, null, null),
+  (2026, 3, dues_test.id('late'), null, false, null, null),
+  (2026, 5, dues_test.id('late'), null, true, '2026-09-30', dues_test.id('dana'));
+select public.link_team_guest(dues_test.guest('Lou Late'), dues_test.id('late'));
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-01' and paid_by = dues_test.id('kim') and override_amount = 50
+   from public.dues_payments where user_id = dues_test.id('late') and session = 2),
+  'linking: a payment made under the roster name counts, and the account''s custom amount stays');
+select dues_test.ok(
+  (select not paid and override_amount = 25 from public.dues_payments where user_id = dues_test.id('late') and session = 3),
+  'linking: a custom amount set under the roster name carries over');
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-02' and guest_id is null from public.dues_payments where user_id = dues_test.id('late') and session = 4),
+  'linking: a session only the roster name had moves over');
+select dues_test.ok(
+  (select paid and paid_date = '2026-09-30' and paid_by = dues_test.id('dana') from public.dues_payments where user_id = dues_test.id('late') and session = 5),
+  'linking: a payment the account already had stays as it was');
+select dues_test.ok(
+  (select count(*) = 3 from public.dues_payments where guest_id = dues_test.guest('Lou Late'))
+  and (select count(*) = 4 from public.dues_payments where user_id = dues_test.id('late')),
+  'linking: the roster name''s own rows are kept, not deleted');
+reset role;
+
 set role anon;
 select dues_test.refused($$select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, null)$$,
   'signed-out visitors cannot mark anyone paid');
 select dues_test.refused($$select public.set_dues_partner(dues_test.id('dana'), dues_test.id('dex'))$$,
   'signed-out visitors cannot link players');
 select dues_test.refused($$select count(*) from public.dues_payments$$, 'signed-out visitors cannot see who has paid');
+select dues_test.refused($$select count(*) from public.team_guests$$, 'signed-out visitors cannot see guests');
+select dues_test.refused($$select public.link_team_guest(gen_random_uuid(), gen_random_uuid())$$, 'signed-out visitors cannot link guests');
+select dues_test.refused($$select public.claim_team_guest(gen_random_uuid())$$, 'signed-out visitors cannot pick a name');
 reset role;
 
 rollback;

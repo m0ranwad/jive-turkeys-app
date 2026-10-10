@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v6';
+const DB_KEY = 'jt_demo_db_v9';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -195,7 +195,13 @@ describe('dues', () => {
       [1, 595, 18, 7, 721],
       [2, 595, 18, 7, 721],
     ]);
-    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(5);
+    // Five app players, plus Dana Wells, who isn't on the app.
+    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(6);
+    const guests = await api.entities.TeamGuest.list('display_name');
+    expect(guests.map((g) => [g.display_name, g.gender, g.status, g.removed])).toEqual([
+      ['Dana Wells', 'F', 'active', false],
+      ['Mike Russo', 'M', 'active', false],
+    ]);
     const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
     const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
     expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
@@ -262,5 +268,90 @@ describe('dues', () => {
     await api.dues.setPartner(riley, null);
     expect([await partner('Sam Okafor'), await partner('Riley Novak')]).toEqual([null, null]);
     expect(alex).toBeTruthy();
+  });
+
+  it('marks teammates who are not on the app paid, with their own payment and history rows', async () => {
+    const { api, me } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09' });
+    const [row] = await api.entities.DuesPayment.filter({ session: 2, guest_id: mike.id });
+    expect(row).toMatchObject({ user_id: null, paid: true, paid_date: '2026-10-09', paid_by: me.id });
+    expect(await api.entities.DuesHistory.filter({ session: 2, guest_id: mike.id, paid: true })).toHaveLength(1);
+  });
+
+  it('pairs a guest with an app player, both ways', async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await api.dues.setPartner(kelly.user_id, mike.id);
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0]).toMatchObject({ pays_with: null, pays_with_guest: mike.id });
+    expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0]).toMatchObject({ pays_with_user: kelly.user_id, pays_with_guest: null });
+    await api.dues.setPartner(mike.id, null);
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with_guest).toBeNull();
+  });
+
+  it("moves a guest's payments, history and partner to their account when a captain links them", async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09' });
+    await api.dues.setPartner(mike.id, kelly.user_id);
+
+    await api.users.linkGuest(mike.id, chris.user_id);
+    const [moved] = await api.entities.DuesPayment.filter({ session: 2, user_id: chris.user_id });
+    expect(moved).toMatchObject({ guest_id: null, paid: true, paid_date: '2026-10-09' });
+    expect(await api.entities.DuesHistory.filter({ guest_id: mike.id })).toHaveLength(0);
+    expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0]).toMatchObject({ linked_user_id: chris.user_id });
+    expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with).toBe(chris.user_id);
+    await expect(api.users.linkGuest(mike.id, chris.user_id)).rejects.toThrow('already been picked');
+  });
+
+  it('keeps what both had when a captain links someone who was also marked under their account', async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    const row = (session, who, extra) => api.entities.DuesPayment.create({ season_year: year, session, user_id: null, guest_id: null, paid: false, override_amount: null, ...who, ...extra });
+    // Session 3: paid under the roster name only. Session 4: a custom amount under the roster name only.
+    await row(3, { guest_id: mike.id }, { paid: true, paid_date: '2026-10-01' });
+    await row(4, { guest_id: mike.id }, { override_amount: 25 });
+    await row(3, { user_id: chris.user_id }, { override_amount: 50 });
+    await row(4, { user_id: chris.user_id });
+
+    await api.users.linkGuest(mike.id, chris.user_id);
+    const [three] = await api.entities.DuesPayment.filter({ season_year: year, session: 3, user_id: chris.user_id });
+    const [four] = await api.entities.DuesPayment.filter({ season_year: year, session: 4, user_id: chris.user_id });
+    expect(three).toMatchObject({ paid: true, paid_date: '2026-10-01', override_amount: 50 });
+    expect(four).toMatchObject({ paid: false, override_amount: 25 });
+    // Both had paid session 1, and nothing is deleted: Mike's own rows stay under his roster name.
+    expect(await api.entities.DuesPayment.filter({ guest_id: mike.id })).toHaveLength(3);
+    expect(await api.entities.DuesPayment.filter({ session: 1, user_id: chris.user_id })).toHaveLength(1);
+  });
+
+  it('only lets captains link a guest to an account', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    await expect(api.users.linkGuest(mike.id, (await api.auth.me()).id)).rejects.toThrow('Only captains');
+  });
+
+  it('lets a new player pick their name: status, details, payments and history become theirs, once', async () => {
+    const api = createDemoBackend();
+    await api.auth.signUp('mike@demo.test', 'demo1234');
+    const me = await api.auth.me();
+    await api.entities.PlayerProfile.create({ user_id: me.id, display_name: 'Mike Russo', status: 'active' });
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [dana] = await api.entities.TeamGuest.filter({ display_name: 'Dana Wells' });
+    await api.entities.TeamGuest.update(mike.id, { status: 'sub_pool' });
+
+    await api.users.claimGuest(mike.id);
+    const [profile] = await api.entities.PlayerProfile.filter({ user_id: me.id });
+    expect(profile).toMatchObject({ status: 'sub_pool', gender: 'M', position: 'Defense' });
+    expect(await api.entities.DuesPayment.filter({ session: 1, user_id: me.id, paid: true })).toHaveLength(1);
+    expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0].linked_user_id).toBe(me.id);
+    await expect(api.users.claimGuest(dana.id)).rejects.toThrow('already has a name');
   });
 });

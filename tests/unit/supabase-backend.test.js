@@ -184,3 +184,20 @@ describe('dues', () => {
     await expect(api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: true })).rejects.toThrow('nope');
   });
 });
+
+describe('roster names', () => {
+  it('picks a name and links one through the database functions', async () => {
+    await api.users.claimGuest('g1');
+    await api.users.linkGuest('g2', 'u1');
+    expect(calls).toEqual([
+      ['rpc', 'claim_team_guest', { p_guest_id: 'g1' }],
+      ['rpc', 'link_team_guest', { p_guest_id: 'g2', p_user_id: 'u1' }],
+    ]);
+  });
+
+  it('reports a name someone already picked', async () => {
+    result = { data: null, error: { message: 'That name has already been picked' } };
+    await expect(api.users.claimGuest('g1')).rejects.toThrow('already been picked');
+    await expect(api.users.linkGuest('g1', 'u1')).rejects.toThrow('already been picked');
+  });
+});

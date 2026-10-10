@@ -181,6 +181,17 @@ export function createSupabaseBackend(url, key) {
   };
 
   const users = {
+    /** A new player picks their name on the roster: its status, dues payments and history become theirs. */
+    async claimGuest(guestId) {
+      const { error } = await supabase.rpc('claim_team_guest', { p_guest_id: guestId });
+      if (error) fail(error);
+    },
+    /** Captains: link a roster name to the account its player joined with. */
+    async linkGuest(guestId, userId) {
+      const { error } = await supabase.rpc('link_team_guest', { p_guest_id: guestId, p_user_id: userId });
+      if (error) fail(error);
+    },
+
     async setRole(userId, role) {
       const { error } = await supabase.from('users').update({ role }).eq('id', userId).select().single();
       if (error) fail(error);
@@ -240,7 +251,7 @@ export function createSupabaseBackend(url, key) {
       });
       if (error) fail(error);
     },
-    /** Links two players who pay together; a null partner unlinks. */
+    /** Links two players who pay together (either can be a guest); a null partner unlinks. */
     async setPartner(userId, partnerId) {
       const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
       if (error) fail(error);

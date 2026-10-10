@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DUES_DEFAULTS,
   cleanPayHandle,
+  duesMembers,
   currentSession,
   dollars,
   feeParts,
@@ -113,6 +114,48 @@ describe('couples who pay together', () => {
     ]);
     const oneMarked = teamDues(400, profiles, [{ user_id: 'riley', paid: true }]);
     expect(oneMarked.stillToPay.map((p) => p.name)).toEqual(['Alex', 'Casey', 'Morgan']);
+  });
+});
+
+describe('teammates who are not on the app', () => {
+  it('join the app players as one list, keyed like everyone else, off the roster once removed or linked', () => {
+    const { members, payments, history } = duesMembers({
+      profiles: [
+        { user_id: 'u1', display_name: 'Kelly', status: 'active', pays_with: null, pays_with_guest: 'g1' },
+        { user_id: 'u2', display_name: 'Sam', status: 'active', pays_with: null },
+      ],
+      guests: [
+        { id: 'g1', display_name: 'Mike', status: 'active', removed: false, pays_with_user: 'u1', pays_with_guest: null, linked_user_id: null },
+        { id: 'g2', display_name: 'Gone', status: 'active', removed: true, linked_user_id: null },
+        { id: 'g3', display_name: 'Joined', status: 'active', removed: false, linked_user_id: 'u2' },
+        { id: 'g4', display_name: 'Resting', status: 'on_break', removed: false, linked_user_id: null },
+      ],
+      payments: [{ id: 'p1', user_id: null, guest_id: 'g1', paid: true }, { id: 'p2', user_id: 'u2', guest_id: null, paid: false }],
+      history: [{ id: 'h1', user_id: null, guest_id: 'g1', paid: true }],
+    });
+    expect(members.map((m) => [m.user_id, m.status, m.pays_with, !!m.guest])).toEqual([
+      ['u1', 'active', 'g1', false],
+      ['u2', 'active', null, false],
+      ['g1', 'active', 'u1', true],
+      ['g2', 'inactive', null, true],
+      ['g3', 'inactive', null, true],
+      ['g4', 'on_break', null, true],
+    ]);
+    expect(payments.map((p) => p.user_id)).toEqual(['g1', 'u2']);
+    expect(history[0].user_id).toBe('g1');
+  });
+
+  it('count in the split and pay together with an app player', () => {
+    const { members, payments } = duesMembers({
+      profiles: [{ user_id: 'u1', display_name: 'Kelly', status: 'active', pays_with_guest: 'g1' }],
+      guests: [{ id: 'g1', display_name: 'Mike', status: 'active', pays_with_user: 'u1' }],
+      payments: [],
+      history: [],
+    });
+    const team = teamDues(100, members, payments);
+    expect(team.perPlayer).toBe(50);
+    expect(team.partnerOf('u1').display_name).toBe('Mike');
+    expect(team.stillToPay).toEqual([{ name: 'Kelly & Mike', amount: 100 }]);
   });
 });
 
