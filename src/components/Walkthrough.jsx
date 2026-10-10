@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { api } from '@/api';
 import { ProfileForm } from '@/components/ProfileForm';
+import { signOut } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -13,7 +14,10 @@ const STEPS = [
   { eyebrow: 'Step 4', title: 'New to the complex?', body: 'Check the Field Rules tab. Indoor rules are different.' },
 ];
 
-/** "How to use" slides; for a new player, the last step creates their profile. */
+/**
+ * "How to use" slides. A new player can't skip the last step: it creates their
+ * profile, which is what puts them on the team.
+ */
 export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -42,14 +46,18 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
         <div className="flex items-center justify-between px-6 pt-6">
           <span className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-lime-400 font-display text-[11px] font-black text-black">JT</span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">How to use</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
+              {onProfileStep ? 'New player' : 'How to use'}
+            </span>
           </span>
-          <button
-            onClick={() => onClose(needsProfile ? false : undefined)}
-            className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 transition hover:text-zinc-900"
-          >
-            Skip
-          </button>
+          {!onProfileStep && (
+            <button
+              onClick={() => (needsProfile ? setStep(STEPS.length) : onClose())}
+              className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 transition hover:text-zinc-900"
+            >
+              Skip
+            </button>
+          )}
         </div>
 
         <div className="max-h-[75vh] overflow-y-auto px-6 pb-6 pt-5">
@@ -63,10 +71,10 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
             >
               {onProfileStep ? (
                 <div>
-                  <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Your profile</h2>
+                  <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Name and gender are required — everything else is optional. You can set your preferred position later
-                    on the Team tab.
+                    Set up your profile to get on the roster and into game headcounts. Name and gender are required.
+                    Everything else is optional, and you can pick your position later on the Team tab.
                   </p>
                   <div className="mt-5">
                     <ProfileForm
@@ -77,6 +85,12 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       hidePosition
                     />
                   </div>
+                  <p className="mt-4 text-center text-xs text-zinc-400">
+                    Wrong account?{' '}
+                    <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
+                      Sign out
+                    </button>
+                  </p>
                 </div>
               ) : (
                 <div>
