@@ -228,6 +228,25 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
+  const dues = {
+    /** Marks players paid (or unpaid again) for a session. Any player can, for anyone. */
+    async markPaid({ year, session, userIds, paid, paidDate }) {
+      const { error } = await supabase.rpc('mark_dues_paid', {
+        p_season_year: Number(year),
+        p_session: Number(session),
+        p_user_ids: userIds,
+        p_paid: paid,
+        p_paid_date: paid ? paidDate : null,
+      });
+      if (error) fail(error);
+    },
+    /** Links two players who pay together; a null partner unlinks. */
+    async setPartner(userId, partnerId) {
+      const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
+      if (error) fail(error);
+    },
+  };
+
   const notifyChat = async (action) => {
     const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action } });
     if (error) throw new Error("Notifications aren't ready yet. Try again in a few minutes.");
@@ -258,5 +277,5 @@ export function createSupabaseBackend(url, key) {
     test: () => notifyChat('test'),
   };
 
-  return { mode: 'supabase', auth, entities, users, chat, push };
+  return { mode: 'supabase', auth, entities, users, chat, dues, push };
 }

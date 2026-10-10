@@ -159,3 +159,28 @@ describe('subscribe', () => {
     expect(channels[0].bindings.map((b) => b.filter.event)).toEqual(['INSERT']);
   });
 });
+
+describe('dues', () => {
+  it('marks players paid through the database function, with the date only when paid', async () => {
+    await api.dues.markPaid({ year: '2026', session: 2, userIds: ['a', 'b'], paid: true, paidDate: '2026-10-09' });
+    await api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: false, paidDate: '2026-10-09' });
+    expect(calls).toEqual([
+      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a', 'b'], p_paid: true, p_paid_date: '2026-10-09' }],
+      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a'], p_paid: false, p_paid_date: null }],
+    ]);
+  });
+
+  it('links and unlinks couples through the database function', async () => {
+    await api.dues.setPartner('a', 'b');
+    await api.dues.setPartner('a', null);
+    expect(calls).toEqual([
+      ['rpc', 'set_dues_partner', { p_user_id: 'a', p_partner_id: 'b' }],
+      ['rpc', 'set_dues_partner', { p_user_id: 'a', p_partner_id: null }],
+    ]);
+  });
+
+  it('reports database errors', async () => {
+    result = { data: null, error: { message: 'nope' } };
+    await expect(api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: true })).rejects.toThrow('nope');
+  });
+});
