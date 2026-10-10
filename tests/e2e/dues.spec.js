@@ -8,11 +8,23 @@ import { expect, signIn, test } from './helpers';
 const ALEX = 'alex@demo.test';
 const JORDAN = 'jordan@demo.test'; // paid, and marked it herself
 
+/** The Dues tab: bottom bar on phones, top bar on computers. */
 async function openDues(page) {
-  await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('link', { name: 'Dues' }).click();
+  await page.locator('a[href="/dues"]:visible').first().click();
   await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
 }
+
+test('Dues has its own tab where Profile was, and Profile is in the menu', async ({ page }) => {
+  await signIn(page, JORDAN);
+  const tabs = page.locator('nav:visible a');
+  await expect(tabs).toHaveText([/Schedule/i, /Stats/i, /Team/i, /Chat/i, /Rules/i, /Dues/i]);
+  await openDues(page);
+  await expect(page.getByTestId('my-dues')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'My Profile' }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+});
 
 test('a player sees what they owe, how it adds up, and pays for themselves and their partner', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
