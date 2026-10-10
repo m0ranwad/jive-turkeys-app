@@ -14,6 +14,11 @@ README.md has the service inventory and the current setup status.
   ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)). Don't promise invites. New players
   sign up at https://jiveturkeys.app themselves.
 - No player data came over from Base44. The field rules are seeded by the setup migration.
+- The logo and app icons are the original turkey with an Afro, round shades, an Afro pick and a soccer ball
+  (`docs/design/jive-turkey/c6-just-the-ball.svg`; the other concepts are saved beside it). To change them,
+  edit `docs/design/jive-turkey/classic.py`, run it, then `node scripts/make-icons.mjs`. Keep the icon file
+  names and sizes (`tests/e2e/install.spec.js` checks them). iPhones keep the icon a Home Screen app was
+  added with; to see a new one, players remove it and add it again.
 - Players can add the site to their phone's Home Screen and it opens like an app (`public/manifest.json`,
   the icons in `public/`, `public/sw.js`, and the guide in `src/components/InstallApp.jsx`). The service
   worker caches nothing on purpose, so every visit gets the latest site. Don't add caching to it without

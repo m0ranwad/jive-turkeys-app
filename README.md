@@ -176,6 +176,8 @@ src/api/               Data layer: supabase.js (real) and demo.js (sample data),
 src/lib/               Team logic (headcount, records, leaderboards), formatting, schedule import
 src/pages/             One file per screen, incl. LegalPages.jsx (/privacy, /terms)
 src/components/        Shared pieces and shadcn-style UI primitives
+public/                Icons, manifest and the service worker (icons made by scripts/make-icons.mjs)
+docs/                  chat.md (how the chat should work), design/ (logo and icon concepts)
 supabase/migrations/   Database schema + security rules; new changes go in new files
 supabase/functions/    notify-chat (chat notifications) and invite-user (not deployed yet, issue #1)
 supabase/templates/    Sign-up code email
@@ -183,5 +185,5 @@ supabase/templates/    Sign-up code email
 vendor/                SheetJS tarball (cloud sessions can't reach cdn.sheetjs.com)
 wrangler.jsonc         Cloudflare Worker settings (domain, preview URLs, page routing)
 CLAUDE.md              How Claude works in this repo (preview/publish workflow, rules)
-scripts/               Test and rehearsal scripts, notification key generator, optional Base44 import
+scripts/               Test and rehearsal scripts, icon maker, notification key generator, optional Base44 import
 ```
