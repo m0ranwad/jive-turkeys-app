@@ -1,8 +1,10 @@
--- Teammates who aren't on the app ("guests"). Captains add them on the Team
--- page with a name, man/woman and a roster status, like everyone else's. They
--- count in the dues split while Active, and anyone can mark them paid. If one
--- joins the app later, a captain links them to their account and their
--- payments and history move over.
+-- Roster players who haven't joined the app yet ("guests"). Captains add the
+-- team by name on the Team page, so the roster and the dues split are right
+-- from day one. A guest has a roster status like everyone else, counts in the
+-- dues while Active, and anyone can mark them paid. When they sign up, they
+-- pick their name (claim_team_guest) and their status, dues payments and
+-- history move to their account; a captain can also link them
+-- (link_team_guest). Some may never join, and that's fine.
 
 create table public.team_guests (
   id uuid primary key default gen_random_uuid(),
@@ -16,7 +18,7 @@ create table public.team_guests (
   -- Pays together with an app player or another guest (set by set_dues_partner).
   pays_with_user uuid references public.users (id) on delete set null,
   pays_with_guest uuid references public.team_guests (id) on delete set null,
-  -- Set when they join the app and a captain links them (link_team_guest).
+  -- Their account, once they've joined and picked their name (or a captain linked them).
   linked_user_id uuid references public.users (id) on delete set null,
   created_by uuid references public.users (id) on delete set null,
   created_date timestamptz not null default now(),
@@ -164,48 +166,55 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- A guest joined the app: their payments and history move to their account,
--- and so does their partner. Captains only. The guest row stays, marked as
--- linked (and off the roster), so nothing is lost.
+-- A guest joined the app: their dues payments and history move to their
+-- account, and so does their partner. The guest row stays, marked as linked
+-- (and off the roster), so nothing is lost. Only for the two functions below.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.link_team_guest(p_guest_id uuid, p_user_id uuid)
+create or replace function public.move_team_guest(p_guest_id uuid, p_user_id uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  g public.team_guests;
   partner uuid;
 begin
-  if not (select public.is_captain()) then
-    raise exception 'Only captains can link a player';
-  end if;
-  if not exists (select 1 from public.team_guests where id = p_guest_id and linked_user_id is null) then
-    raise exception 'That player is already linked';
+  select * into g from public.team_guests where id = p_guest_id;
+  if g.id is null or g.linked_user_id is not null then
+    raise exception 'That name has already been picked';
   end if;
   if not exists (select 1 from public.users where id = p_user_id) then
     raise exception 'No such player on the app';
   end if;
+  if exists (select 1 from public.team_guests where linked_user_id = p_user_id) then
+    raise exception 'That player already has a name on the roster';
+  end if;
 
   -- Sessions the app player has nothing for yet move over as they are.
-  update public.dues_payments g set user_id = p_user_id, guest_id = null
-  where g.guest_id = p_guest_id
+  update public.dues_payments d set user_id = p_user_id, guest_id = null
+  where d.guest_id = p_guest_id
     and not exists (
       select 1 from public.dues_payments u
-      where u.user_id = p_user_id and u.season_year = g.season_year and u.session = g.session
+      where u.user_id = p_user_id and u.season_year = d.season_year and u.session = d.session
     );
   -- Where both have one, a payment the guest made counts.
   update public.dues_payments u set
-      paid = true, paid_date = g.paid_date, paid_by = g.paid_by,
-      override_amount = coalesce(u.override_amount, g.override_amount)
-    from public.dues_payments g
-    where g.guest_id = p_guest_id and u.user_id = p_user_id
-      and u.season_year = g.season_year and u.session = g.session
-      and g.paid and not u.paid;
+      paid = true, paid_date = d.paid_date, paid_by = d.paid_by,
+      override_amount = coalesce(u.override_amount, d.override_amount)
+    from public.dues_payments d
+    where d.guest_id = p_guest_id and u.user_id = p_user_id
+      and u.season_year = d.season_year and u.session = d.session
+      and d.paid and not u.paid;
   update public.dues_history set user_id = p_user_id, guest_id = null where guest_id = p_guest_id;
 
-  select coalesce(pays_with_user, pays_with_guest) into partner from public.team_guests where id = p_guest_id;
+  -- Details the player hasn't filled in come from the roster.
+  update public.player_profiles
+    set gender = coalesce(gender, g.gender), position = coalesce(position, g.position)
+    where user_id = p_user_id;
+
+  partner := coalesce(g.pays_with_user, g.pays_with_guest);
   update public.team_guests
     set linked_user_id = p_user_id, pays_with_user = null, pays_with_guest = null
     where id = p_guest_id;
@@ -215,5 +224,50 @@ begin
 end;
 $$;
 
+revoke execute on function public.move_team_guest(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.move_team_guest(uuid, uuid) to service_role;
+
+-- A new player picks their name on the roster when they join. Anyone signed
+-- in can, once, for a name nobody has picked; their roster status carries over.
+create or replace function public.claim_team_guest(p_guest_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := (select auth.uid());
+  roster_status text;
+begin
+  if me is null then
+    raise exception 'Not signed in';
+  end if;
+  select status into roster_status from public.team_guests where id = p_guest_id and not removed;
+  if roster_status is null then
+    raise exception 'That name is no longer on the roster';
+  end if;
+  perform public.move_team_guest(p_guest_id, me);
+  update public.player_profiles set status = roster_status where user_id = me;
+end;
+$$;
+
+-- Captains link someone who joined without picking their name (or joined
+-- before they were added). Their own roster status stays as it is.
+create or replace function public.link_team_guest(p_guest_id uuid, p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (select public.is_captain()) then
+    raise exception 'Only captains can link a player';
+  end if;
+  perform public.move_team_guest(p_guest_id, p_user_id);
+end;
+$$;
+
+revoke execute on function public.claim_team_guest(uuid) from public, anon;
 revoke execute on function public.link_team_guest(uuid, uuid) from public, anon;
+grant execute on function public.claim_team_guest(uuid) to authenticated, service_role;
 grant execute on function public.link_team_guest(uuid, uuid) to authenticated, service_role;

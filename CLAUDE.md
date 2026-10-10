@@ -167,11 +167,14 @@ manages the GitHub, Cloudflare and Supabase accounts.
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
   always asks first. Only captains set fees, custom amounts and payment links.
-- Teammates who aren't on the app are `team_guests`. Captains add and edit them on the Team page
-  (`src/components/team/GuestDialog.jsx`), where they're on the roster with the usual statuses, counts and
-  positions. In dues they split, pay and pair like everyone else (payments and history rows have `guest_id`
-  instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds), and
-  `link_team_guest()` moves one to their account when they join. Game sign-ups and stats don't include them.
+- Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
+  (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts
+  and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough
+  (`src/components/Walkthrough.jsx`, `claim_team_guest()`), which brings over their status and moves their dues
+  payments and history to their account; captains can also link one (`link_team_guest()`); both use
+  `move_team_guest()`. In dues they split, pay and pair like everyone else (payments and history rows have
+  `guest_id` instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds).
+  Game sign-ups and stats don't include them.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`

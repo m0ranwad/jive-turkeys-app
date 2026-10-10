@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v8';
+const DB_KEY = 'jt_demo_db_v9';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -487,24 +487,42 @@ export function createDemoBackend() {
     },
   };
 
+  const moveGuest = async (guestId, userId) => {
+    const guest = db.team_guests.find((g) => g.id === guestId && !g.linked_user_id);
+    if (!guest) throw new Error('That name has already been picked');
+    if (db.team_guests.some((g) => g.linked_user_id === userId)) throw new Error('That player already has a name on the roster');
+    for (const row of db.dues_payments.filter((p) => p.guest_id === guestId)) {
+      const mine = db.dues_payments.find((p) => p.user_id === userId && p.season_year === row.season_year && p.session === row.session);
+      if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
+      else if (row.paid && !mine.paid) {
+        Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, override_amount: mine.override_amount ?? row.override_amount });
+      }
+    }
+    db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
+    db.player_profiles
+      .filter((p) => p.user_id === userId)
+      .forEach((p) => Object.assign(p, { gender: p.gender || guest.gender, position: p.position || guest.position }));
+    const partner = guest.pays_with_user ?? guest.pays_with_guest;
+    Object.assign(guest, { linked_user_id: userId, pays_with_user: null, pays_with_guest: null, updated_date: now() });
+    save(db);
+    if (partner) await dues.setPartner(userId, partner);
+  };
+
   const users = {
+    // Same as the database's move_team_guest(), claim_team_guest() and link_team_guest().
+    async claimGuest(guestId) {
+      requireUser();
+      const guest = db.team_guests.find((g) => g.id === guestId && !g.removed);
+      if (!guest) throw new Error('That name is no longer on the roster');
+      await moveGuest(guestId, currentUser().id);
+      db.player_profiles.filter((p) => p.user_id === currentUser().id).forEach((p) => (p.status = guest.status));
+      save(db);
+      return delay(null);
+    },
     async linkGuest(guestId, userId) {
       requireUser();
       if (currentUser().role !== 'admin') throw new Error('Only captains can link a player');
-      const guest = db.team_guests.find((g) => g.id === guestId && !g.linked_user_id);
-      if (!guest) throw new Error('That player is already linked');
-      for (const row of db.dues_payments.filter((p) => p.guest_id === guestId)) {
-        const mine = db.dues_payments.find((p) => p.user_id === userId && p.season_year === row.season_year && p.session === row.session);
-        if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
-        else if (row.paid && !mine.paid) {
-          Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, override_amount: mine.override_amount ?? row.override_amount });
-        }
-      }
-      db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
-      const partner = guest.pays_with_user ?? guest.pays_with_guest;
-      Object.assign(guest, { linked_user_id: userId, pays_with_user: null, pays_with_guest: null, updated_date: now() });
-      save(db);
-      if (partner) await dues.setPartner(userId, partner);
+      await moveGuest(guestId, userId);
       return delay(null);
     },
     async setRole(userId, role) {
@@ -563,7 +581,7 @@ export function createDemoBackend() {
   };
 
   // Same as the database functions mark_dues_paid(), set_dues_partner() and
-  // link_team_guest(). Ids can be app players' or guests' (teammates not on the app).
+  // link_team_guest(). Ids can be app players' or guests' (roster players who haven't joined yet).
   const isGuest = (id) => db.team_guests.some((g) => g.id === id);
   const playerKey = (id) => (isGuest(id) ? { user_id: null, guest_id: id } : { user_id: id, guest_id: null });
 

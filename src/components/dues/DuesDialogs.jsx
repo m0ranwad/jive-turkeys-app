@@ -258,7 +258,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
         <div className="-mt-2 flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-zinc-500">
             {dollars(share.amount)} · {share.custom ? 'custom amount' : 'even split'}
-            {player.guest && ' · not on the app'}
+            {player.guest && ' · not joined yet'}
           </span>
           <StatusChip paid={share.paid} date={share.paid_date} />
         </div>
@@ -359,10 +359,11 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
 
         {player.guest && (
           <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500">
-            {player.display_name} isn't on the app.{' '}
+            {player.display_name} hasn't joined the app yet. When they sign up and pick their name, their payments
+            come with them.{' '}
             {isCaptain ? (
               <>
-                Change their name, status, or move them to their account once they join, on the{' '}
+                Change their name or status on the{' '}
                 <Link to="/team" className="font-bold text-zinc-800 underline underline-offset-2">
                   Team page
                 </Link>

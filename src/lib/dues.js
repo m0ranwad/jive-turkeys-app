@@ -77,7 +77,7 @@ export function feeSentence(parts) {
 export const payNote = (year, session, names = []) =>
   [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
 
-/** A teammate who isn't on the app, shaped like a player profile (`user_id` is their own id). */
+/** A roster player who hasn't joined the app yet, shaped like a player profile (`user_id` is their own id). */
 export function guestAsPlayer(g) {
   return {
     id: g.id,

@@ -141,7 +141,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
     const partner = team.partnerOf(p.user_id);
     const payment = payments.find((x) => x.user_id === p.user_id);
     const details = [
-      p.guest && 'not on the app',
+      p.guest && 'not joined yet',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
       share.paid && payment?.paid_by && payment.paid_by !== p.user_id && `marked by ${shortName(nameOf(payment.paid_by))}`,
@@ -278,7 +278,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
           >
             <UserPlus className="h-4 w-4" />
-            Someone not on the app? Add them on the Team page
+            Add players to the roster on the Team page
           </Link>
         )}
         <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-400">

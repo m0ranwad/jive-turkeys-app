@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v8';
+const DB_KEY = 'jt_demo_db_v9';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -306,7 +306,7 @@ describe('dues', () => {
     expect(await api.entities.DuesHistory.filter({ guest_id: mike.id })).toHaveLength(0);
     expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0]).toMatchObject({ linked_user_id: chris.user_id });
     expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with).toBe(chris.user_id);
-    await expect(api.users.linkGuest(mike.id, chris.user_id)).rejects.toThrow('already linked');
+    await expect(api.users.linkGuest(mike.id, chris.user_id)).rejects.toThrow('already been picked');
   });
 
   it('only lets captains link a guest to an account', async () => {
@@ -314,5 +314,22 @@ describe('dues', () => {
     await api.auth.signIn('jordan@demo.test', 'demo1234');
     const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
     await expect(api.users.linkGuest(mike.id, (await api.auth.me()).id)).rejects.toThrow('Only captains');
+  });
+
+  it('lets a new player pick their name: status, details, payments and history become theirs, once', async () => {
+    const api = createDemoBackend();
+    await api.auth.signUp('mike@demo.test', 'demo1234');
+    const me = await api.auth.me();
+    await api.entities.PlayerProfile.create({ user_id: me.id, display_name: 'Mike Russo', status: 'active' });
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [dana] = await api.entities.TeamGuest.filter({ display_name: 'Dana Wells' });
+    await api.entities.TeamGuest.update(mike.id, { status: 'sub_pool' });
+
+    await api.users.claimGuest(mike.id);
+    const [profile] = await api.entities.PlayerProfile.filter({ user_id: me.id });
+    expect(profile).toMatchObject({ status: 'sub_pool', gender: 'M', position: 'Defense' });
+    expect(await api.entities.DuesPayment.filter({ session: 1, user_id: me.id, paid: true })).toHaveLength(1);
+    expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0].linked_user_id).toBe(me.id);
+    await expect(api.users.claimGuest(dana.id)).rejects.toThrow('already has a name');
   });
 });

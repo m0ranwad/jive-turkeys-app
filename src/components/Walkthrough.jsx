@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { api } from '@/api';
@@ -21,6 +21,18 @@ const STEPS = [
 export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Names on the roster nobody has picked yet; then the one this player picked
+  // (undefined: not chosen yet, null: "I'm not on the list").
+  const [names, setNames] = useState(null);
+  const [pick, setPick] = useState(undefined);
+
+  useEffect(() => {
+    if (!open || !needsProfile) return;
+    api.entities.TeamGuest.list('display_name')
+      .then((rows) => setNames(rows.filter((g) => !g.removed && !g.linked_user_id)))
+      .catch(() => setNames([]));
+  }, [open, needsProfile]);
+
   if (!open) return null;
 
   const total = STEPS.length + (needsProfile ? 1 : 0);
@@ -32,6 +44,14 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
     try {
       const me = await api.auth.me();
       await api.entities.PlayerProfile.create({ ...values, user_id: me.id, email: me.email, status: 'active' });
+      if (pick) {
+        try {
+          // Their roster status, dues payments and history become theirs.
+          await api.users.claimGuest(pick.id);
+        } catch {
+          // Someone picked it first: they're still on the team, and a captain can link them.
+        }
+      }
       onClose();
       // Every page holds its own copy of the roster; start fresh with the new profile.
       window.location.reload();
@@ -69,16 +89,71 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
-              {onProfileStep ? (
+              {onProfileStep && names === null ? (
+                <p className="py-10 text-center text-sm text-zinc-400">One moment…</p>
+              ) : onProfileStep && names.length > 0 && pick === undefined ? (
                 <div>
                   <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Set up your profile to get on the roster and into game headcounts. Name and gender are required.
-                    Everything else is optional, and you can pick your position later on the Team tab.
+                    Find your name. Your captain already put you on the roster, so your spot and your dues are waiting
+                    for you.
                   </p>
+                  <div className="mt-4 grid gap-2">
+                    {names.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setPick(g)}
+                        className="flex items-center justify-between rounded-2xl border-2 border-dashed border-zinc-300 px-4 py-3 text-left text-sm font-bold transition hover:border-zinc-900"
+                      >
+                        {g.display_name}
+                        <ChevronRight className="h-4 w-4 text-zinc-400" />
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPick(null)}
+                    className="mt-4 w-full text-center text-sm font-semibold text-zinc-500 underline underline-offset-2"
+                  >
+                    I'm not on the list
+                  </button>
+                  <p className="mt-4 text-center text-xs text-zinc-400">
+                    Wrong account?{' '}
+                    <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
+                      Sign out
+                    </button>
+                  </p>
+                </div>
+              ) : onProfileStep ? (
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
+                  {pick ? (
+                    <p className="mt-1.5 text-sm text-zinc-500">
+                      You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details: your roster
+                      spot and dues come with you.{' '}
+                      <button type="button" onClick={() => setPick(undefined)} className="font-semibold text-zinc-700 underline underline-offset-2">
+                        Not you?
+                      </button>
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-sm text-zinc-500">
+                      Set up your profile to get on the roster and into game headcounts. Name and gender are required.
+                      Everything else is optional, and you can pick your position later on the Team tab.
+                      {names.length > 0 && (
+                        <>
+                          {' '}
+                          <button type="button" onClick={() => setPick(undefined)} className="font-semibold text-zinc-700 underline underline-offset-2">
+                            Back to the names
+                          </button>
+                        </>
+                      )}
+                    </p>
+                  )}
                   <div className="mt-5">
                     <ProfileForm
-                      initial={profile}
+                      key={pick?.id || 'new'}
+                      initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
                       onSubmit={createProfile}
                       submitLabel="Start using the app"
                       busy={busy}

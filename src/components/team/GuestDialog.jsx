@@ -3,7 +3,7 @@ import { api } from '@/api';
 import { DIALOG, DIALOG_TITLE, EYEBROW } from '@/components/dues/DuesParts';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { POSITIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -69,13 +69,15 @@ function GuestFields({ form, setForm }) {
 }
 
 /**
- * Captains: add a teammate who isn't on the app (or bring back one who was
- * removed), or, with `guest`, edit one: details, moving them to the account
- * they joined with, or taking them off the team. Those last two ask first.
+ * Captains: add players to the roster by name (or bring back one who was
+ * removed), or, with `guest`, edit one who hasn't joined yet: details, linking
+ * the account they joined with, or taking them off the team. Those last two
+ * ask first.
  */
 export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meId, onChanged }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ display_name: '', gender: null, position: null });
+  const [names, setNames] = useState('');
   const [linkTo, setLinkTo] = useState('');
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -83,6 +85,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
   useEffect(() => {
     if (open) {
       setForm({ display_name: guest?.display_name || '', gender: guest?.gender ?? null, position: guest?.position ?? null });
+      setNames('');
       setLinkTo('');
       setConfirm(null);
     }
@@ -122,30 +125,56 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
   );
 
   if (!guest) {
+    // One name per line; skip blanks, repeats, and anyone already on the roster.
+    const taken = new Set(
+      [...appPlayers.map((p) => p.display_name), ...(guests || []).filter((g) => !g.removed && !g.linked_user_id).map((g) => g.display_name)].map(
+        (n) => n.trim().toLowerCase(),
+      ),
+    );
+    const typed = [...new Map(names.split('\n').map((n) => n.trim()).filter(Boolean).map((n) => [n.toLowerCase(), n])).values()];
+    const fresh = typed.filter((n) => !taken.has(n.toLowerCase()) && n.length <= 60);
+    const skipped = typed.filter((n) => !fresh.includes(n));
+
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={DIALOG}>
           <DialogHeader className="text-left">
-            <DialogTitle className={DIALOG_TITLE}>Add teammate not on the app</DialogTitle>
+            <DialogTitle className={DIALOG_TITLE}>Add players to the roster</DialogTitle>
           </DialogHeader>
           <p className="-mt-2 text-sm text-zinc-500">
-            For teammates who won't use the app. They're on the roster with everyone else, count in the dues while
-            Active, and anyone can mark them paid.
+            Type or paste names, one per line. They're on the roster and in the dues right away. When each one signs
+            up, they pick their name and everything comes with them. Some may never join, and that's fine.
           </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!fields.display_name) return;
+              if (!fresh.length) return;
               run(
-                () => api.entities.TeamGuest.create({ ...fields, status: 'active', removed: false, created_by: meId }),
-                `${fields.display_name} added to the team`,
+                () => api.entities.TeamGuest.bulkCreate(fresh.map((display_name) => ({ display_name, status: 'active', removed: false, created_by: meId }))),
+                fresh.length === 1 ? `${fresh[0]} added to the roster` : `${fresh.length} players added to the roster`,
+                skipped.length ? `Already on the roster: ${skipped.join(', ')}` : 'Set man / woman with Edit, or they will when they join.',
               );
             }}
-            className="space-y-4"
+            className="space-y-3"
           >
-            <GuestFields form={form} setForm={setForm} />
-            <Button type="submit" disabled={busy || !fields.display_name} className={BIG_BUTTON}>
-              Add to the team
+            <div className="space-y-1.5">
+              <Label htmlFor="guest-names" className={FIELD_LABEL}>
+                Names
+              </Label>
+              <Textarea
+                id="guest-names"
+                value={names}
+                onChange={(e) => setNames(e.target.value)}
+                placeholder={'Mike Russo\nDana Wells\n…'}
+                rows={6}
+                className="rounded-xl text-base"
+              />
+              {skipped.length > 0 && (
+                <p className="text-[11px] font-medium text-zinc-400">Already on the roster, so skipped: {skipped.join(', ')}</p>
+              )}
+            </div>
+            <Button type="submit" disabled={busy || !fresh.length} className={BIG_BUTTON}>
+              {fresh.length > 1 ? `Add ${fresh.length} players` : 'Add to the roster'}
             </Button>
           </form>
           {removed.length > 0 && (
@@ -180,7 +209,10 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>{guest.display_name}</DialogTitle>
         </DialogHeader>
-        <p className="-mt-2 text-sm text-zinc-500">Not on the app. Their roster status is on their card.</p>
+        <p className="-mt-2 text-sm text-zinc-500">
+          Hasn't joined yet. When they sign up, they pick their name and their spot and dues come with them. Their
+          roster status is on their card.
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -197,7 +229,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
 
         <div className={SECTION}>
           <Label htmlFor="guest-link" className={FIELD_LABEL}>
-            Joined the app?
+            Joined without picking their name?
           </Label>
           <div className="flex gap-2">
             <select
@@ -222,7 +254,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
           </div>
           {confirm === 'link' &&
             confirmBox(
-              `${guest.display_name}'s dues payments and history move to ${linkName}'s account, and ${guest.display_name} leaves the roster.`,
+              `${linkName}'s account takes over ${guest.display_name}'s spot: their dues payments and history move over, and the grey card goes away.`,
               'Move them',
               () =>
                 run(() => api.users.linkGuest(guest.id, linkTo), `${guest.display_name} moved to ${linkName}'s account`),

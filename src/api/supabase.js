@@ -181,7 +181,12 @@ export function createSupabaseBackend(url, key) {
   };
 
   const users = {
-    /** Captains: a teammate who wasn't on the app joined; their payments and history move to their account. */
+    /** A new player picks their name on the roster: its status, dues payments and history become theirs. */
+    async claimGuest(guestId) {
+      const { error } = await supabase.rpc('claim_team_guest', { p_guest_id: guestId });
+      if (error) fail(error);
+    },
+    /** Captains: link a roster name to the account its player joined with. */
     async linkGuest(guestId, userId) {
       const { error } = await supabase.rpc('link_team_guest', { p_guest_id: guestId, p_user_id: userId });
       if (error) fail(error);
