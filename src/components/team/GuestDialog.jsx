@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { POSITIONS } from '@/lib/constants';
+import { sortPastedNames } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
@@ -78,6 +79,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
   const { toast } = useToast();
   const [form, setForm] = useState({ display_name: '', gender: null, position: null });
   const [names, setNames] = useState('');
+  const [addLookalikes, setAddLookalikes] = useState(false);
   const [linkTo, setLinkTo] = useState('');
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -86,6 +88,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
     if (open) {
       setForm({ display_name: guest?.display_name || '', gender: guest?.gender ?? null, position: guest?.position ?? null });
       setNames('');
+      setAddLookalikes(false);
       setLinkTo('');
       setConfirm(null);
     }
@@ -125,15 +128,14 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
   );
 
   if (!guest) {
-    // One name per line; skip blanks, repeats, and anyone already on the roster.
-    const taken = new Set(
-      [...appPlayers.map((p) => p.display_name), ...(guests || []).filter((g) => !g.removed && !g.linked_user_id).map((g) => g.display_name)].map(
-        (n) => n.trim().toLowerCase(),
-      ),
-    );
-    const typed = [...new Map(names.split('\n').map((n) => n.trim()).filter(Boolean).map((n) => [n.toLowerCase(), n])).values()];
-    const fresh = typed.filter((n) => !taken.has(n.toLowerCase()) && n.length <= 60);
-    const skipped = typed.filter((n) => !fresh.includes(n));
+    // One name per line, checked against everyone already on the roster.
+    const rosterNames = [
+      ...appPlayers.map((p) => p.display_name),
+      ...(guests || []).filter((g) => !g.removed && !g.linked_user_id).map((g) => g.display_name),
+    ];
+    const sorted = sortPastedNames(names, rosterNames);
+    const fresh = [...sorted.fresh, ...(addLookalikes ? sorted.lookalike.map((l) => l.name) : [])];
+    const skipped = [...sorted.existing, ...(addLookalikes ? [] : sorted.lookalike.map((l) => l.name))];
 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,10 +171,32 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
                 rows={6}
                 className="rounded-xl text-base"
               />
-              {skipped.length > 0 && (
-                <p className="text-[11px] font-medium text-zinc-400">Already on the roster, so skipped: {skipped.join(', ')}</p>
+              {sorted.existing.length > 0 && (
+                <p className="text-[11px] font-medium text-zinc-400">Already on the roster, so skipped: {sorted.existing.join(', ')}</p>
+              )}
+              {sorted.tooLong.length > 0 && (
+                <p className="text-[11px] font-medium text-red-700">Too long (60 letters at most): {sorted.tooLong.join(', ')}</p>
               )}
             </div>
+            {sorted.lookalike.length > 0 && (
+              <div className="space-y-2 rounded-2xl bg-amber-50 p-3.5" data-testid="lookalikes">
+                <p className="text-xs font-semibold text-amber-900">
+                  These look like people already on the roster, so they're skipped. Adding them would count them twice in
+                  the dues.
+                </p>
+                <ul className="text-xs font-medium text-amber-900">
+                  {sorted.lookalike.map((l) => (
+                    <li key={l.name}>
+                      {l.name} <span className="text-amber-700">looks like</span> {l.like}
+                    </li>
+                  ))}
+                </ul>
+                <label className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                  <input type="checkbox" checked={addLookalikes} onChange={(e) => setAddLookalikes(e.target.checked)} />
+                  They're different people. Add them too.
+                </label>
+              </div>
+            )}
             <Button type="submit" disabled={busy || !fresh.length} className={BIG_BUTTON}>
               {fresh.length > 1 ? `Add ${fresh.length} players` : 'Add to the roster'}
             </Button>

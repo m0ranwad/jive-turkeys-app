@@ -199,14 +199,17 @@ begin
       select 1 from public.dues_payments u
       where u.user_id = p_user_id and u.season_year = d.season_year and u.session = d.session
     );
-  -- Where both have one, a payment the guest made counts.
+  -- Where both have one, a payment the guest made counts, and so does a
+  -- custom amount the app player doesn't have.
   update public.dues_payments u set
-      paid = true, paid_date = d.paid_date, paid_by = d.paid_by,
+      paid = u.paid or d.paid,
+      paid_date = case when u.paid then u.paid_date else d.paid_date end,
+      paid_by = case when u.paid then u.paid_by else d.paid_by end,
       override_amount = coalesce(u.override_amount, d.override_amount)
     from public.dues_payments d
     where d.guest_id = p_guest_id and u.user_id = p_user_id
       and u.season_year = d.season_year and u.session = d.session
-      and d.paid and not u.paid;
+      and ((d.paid and not u.paid) or (u.override_amount is null and d.override_amount is not null));
   update public.dues_history set user_id = p_user_id, guest_id = null where guest_id = p_guest_id;
 
   -- Details the player hasn't filled in come from the roster.

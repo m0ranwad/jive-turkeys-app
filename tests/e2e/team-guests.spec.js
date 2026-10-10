@@ -68,6 +68,26 @@ test('a captain adds several players at once, and they split the dues', async ({
   await expect(page.getByTestId('dues-unpaid')).toContainText('Pat Leenot joined yet');
 });
 
+test('pasting someone already on the app under a different name asks before counting them twice', async ({ page }) => {
+  await signIn(page);
+  await openTeam(page);
+  await page.getByRole('button', { name: 'Add players to the roster' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add players to the roster' });
+  await dialog.getByLabel('Names').fill(['Jamie F.', 'Kelly', 'Kelly Martin', 'Mike R', 'X'.repeat(61)].join('\n'));
+  const lookalikes = dialog.getByTestId('lookalikes');
+  await expect(lookalikes).toContainText('Jamie F. looks like Jamie Fox');
+  await expect(lookalikes).toContainText('Kelly looks like Kelly Moss');
+  await expect(lookalikes).toContainText('Mike R looks like Mike Russo');
+  await expect(dialog).toContainText(`Too long (60 letters at most): ${'X'.repeat(61)}`);
+  // Only Kelly Martin is new, unless they really are different people.
+  await expect(dialog.getByRole('button', { name: 'Add to the roster' })).toBeEnabled();
+  await lookalikes.getByLabel("They're different people. Add them too.").check();
+  await dialog.getByRole('button', { name: 'Add 4 players' }).click();
+  await expect(page.getByText('4 players added to the roster')).toBeVisible();
+  await expect(page.getByText('16 active · 2 subs (incl. on break) · 6 not joined yet')).toBeVisible();
+  await expect(card(page, 'Jamie F.')).toContainText('Not joined yet');
+});
+
 test("a captain's status change takes a player who has not joined out of the split", async ({ page }) => {
   await signIn(page);
   await openTeam(page);

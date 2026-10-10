@@ -275,6 +275,43 @@ select dues_test.sign_in('dana');
 select dues_test.refused($$select public.claim_team_guest(dues_test.guest('Pat Lee'))$$, 'a name taken off the roster cannot be picked');
 reset role;
 
+-- Someone who joined without picking their name, was marked separately, and
+-- is then linked: nothing either of them had is lost.
+insert into dues_test.people values ('late', '00000000-0000-4000-8000-0000000000d7');
+insert into auth.users (id, email) values (dues_test.id('late'), 'late@dues.test');
+insert into public.player_profiles (user_id, display_name, status) values (dues_test.id('late'), 'Lou', 'active');
+
+select dues_test.sign_in('kim');
+insert into public.team_guests (display_name) values ('Lou Late');
+insert into public.dues_payments (season_year, session, guest_id, override_amount, paid, paid_date, paid_by) values
+  (2026, 2, dues_test.guest('Lou Late'), null, true, '2026-10-01', dues_test.id('kim')),
+  (2026, 3, dues_test.guest('Lou Late'), 25, false, null, null),
+  (2026, 4, dues_test.guest('Lou Late'), null, true, '2026-10-02', dues_test.id('kim')),
+  (2026, 5, dues_test.guest('Lou Late'), null, true, '2026-10-04', dues_test.id('kim'));
+insert into public.dues_payments (season_year, session, user_id, override_amount, paid, paid_date, paid_by) values
+  (2026, 2, dues_test.id('late'), 50, false, null, null),
+  (2026, 3, dues_test.id('late'), null, false, null, null),
+  (2026, 5, dues_test.id('late'), null, true, '2026-09-30', dues_test.id('dana'));
+select public.link_team_guest(dues_test.guest('Lou Late'), dues_test.id('late'));
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-01' and paid_by = dues_test.id('kim') and override_amount = 50
+   from public.dues_payments where user_id = dues_test.id('late') and session = 2),
+  'linking: a payment made under the roster name counts, and the account''s custom amount stays');
+select dues_test.ok(
+  (select not paid and override_amount = 25 from public.dues_payments where user_id = dues_test.id('late') and session = 3),
+  'linking: a custom amount set under the roster name carries over');
+select dues_test.ok(
+  (select paid and paid_date = '2026-10-02' and guest_id is null from public.dues_payments where user_id = dues_test.id('late') and session = 4),
+  'linking: a session only the roster name had moves over');
+select dues_test.ok(
+  (select paid and paid_date = '2026-09-30' and paid_by = dues_test.id('dana') from public.dues_payments where user_id = dues_test.id('late') and session = 5),
+  'linking: a payment the account already had stays as it was');
+select dues_test.ok(
+  (select count(*) = 3 from public.dues_payments where guest_id = dues_test.guest('Lou Late'))
+  and (select count(*) = 4 from public.dues_payments where user_id = dues_test.id('late')),
+  'linking: the roster name''s own rows are kept, not deleted');
+reset role;
+
 set role anon;
 select dues_test.refused($$select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, null)$$,
   'signed-out visitors cannot mark anyone paid');

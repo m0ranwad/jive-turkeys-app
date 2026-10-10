@@ -309,6 +309,28 @@ describe('dues', () => {
     await expect(api.users.linkGuest(mike.id, chris.user_id)).rejects.toThrow('already been picked');
   });
 
+  it('keeps what both had when a captain links someone who was also marked under their account', async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    const row = (session, who, extra) => api.entities.DuesPayment.create({ season_year: year, session, user_id: null, guest_id: null, paid: false, override_amount: null, ...who, ...extra });
+    // Session 3: paid under the roster name only. Session 4: a custom amount under the roster name only.
+    await row(3, { guest_id: mike.id }, { paid: true, paid_date: '2026-10-01' });
+    await row(4, { guest_id: mike.id }, { override_amount: 25 });
+    await row(3, { user_id: chris.user_id }, { override_amount: 50 });
+    await row(4, { user_id: chris.user_id });
+
+    await api.users.linkGuest(mike.id, chris.user_id);
+    const [three] = await api.entities.DuesPayment.filter({ season_year: year, session: 3, user_id: chris.user_id });
+    const [four] = await api.entities.DuesPayment.filter({ season_year: year, session: 4, user_id: chris.user_id });
+    expect(three).toMatchObject({ paid: true, paid_date: '2026-10-01', override_amount: 50 });
+    expect(four).toMatchObject({ paid: false, override_amount: 25 });
+    // Both had paid session 1, and nothing is deleted: Mike's own rows stay under his roster name.
+    expect(await api.entities.DuesPayment.filter({ guest_id: mike.id })).toHaveLength(3);
+    expect(await api.entities.DuesPayment.filter({ session: 1, user_id: chris.user_id })).toHaveLength(1);
+  });
+
   it('only lets captains link a guest to an account', async () => {
     const api = createDemoBackend();
     await api.auth.signIn('jordan@demo.test', 'demo1234');

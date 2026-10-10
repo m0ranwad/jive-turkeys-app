@@ -494,8 +494,10 @@ export function createDemoBackend() {
     for (const row of db.dues_payments.filter((p) => p.guest_id === guestId)) {
       const mine = db.dues_payments.find((p) => p.user_id === userId && p.season_year === row.season_year && p.session === row.session);
       if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
-      else if (row.paid && !mine.paid) {
-        Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, override_amount: mine.override_amount ?? row.override_amount });
+      else {
+        // Where both have one, a payment made under the roster name counts, and so does its custom amount.
+        if (row.paid && !mine.paid) Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by });
+        mine.override_amount = mine.override_amount ?? row.override_amount ?? null;
       }
     }
     db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
