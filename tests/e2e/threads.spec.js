@@ -3,6 +3,7 @@
 import {
   composer,
   expect,
+  goToSchedule,
   isPhone,
   message,
   openChat,
@@ -151,4 +152,85 @@ test('an unsent message waits in its room while you look at another', async ({ p
   await expect(composer(page)).toHaveValue('');
   await openTeamChat(page);
   await expect(composer(page)).toHaveValue('Half-typed thought');
+});
+
+test.describe('the thread row on phones', () => {
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(!isPhone(testInfo), 'phones only; computers show the list beside the chat');
+  });
+
+  const chips = (page) => page.getByRole('navigation', { name: 'Rooms' });
+
+  test('shows Team Chat, then open threads by latest activity, with unread counts', async ({ page }) => {
+    const row = chips(page);
+    await expect(row).toBeVisible();
+    const rooms = row.locator('[data-strip-room]');
+    await expect(rooms).toHaveCount(4);
+    await expect(rooms.nth(0)).toHaveText(/Team Chat/);
+    await expect(rooms.nth(0)).toHaveAttribute('aria-current', 'page');
+    await expect(rooms.nth(1)).toContainText('Sunday pickup?');
+    await expect(rooms.nth(1).getByLabel('3 unread')).toBeVisible();
+    await expect(rooms.nth(2)).toContainText('Fantasy football league');
+    await expect(rooms.nth(2).getByLabel('New')).toBeVisible();
+    await expect(rooms.nth(3)).toContainText('Post-game food spot');
+    // Closed threads stay in the full list only.
+    await expect(row).not.toContainText('Jersey order');
+  });
+
+  test('tapping a thread opens it, and Team Chat is one tap back', async ({ page }) => {
+    await chips(page).locator('[data-strip-room]', { hasText: 'Fantasy football league' }).click();
+    await expect(page.getByRole('heading', { name: 'Fantasy football league' })).toBeVisible();
+    await expect(message(page, 'Count me in')).toBeVisible();
+    const current = chips(page).locator('[aria-current="page"]');
+    await expect(current).toContainText('Fantasy football league');
+    await expect(current).toBeInViewport();
+    await expect(chips(page).locator('[data-strip-room]', { hasText: 'Fantasy football league' }).getByLabel('New')).toHaveCount(
+      0,
+    );
+
+    await chips(page).locator('[data-strip-room="team"]').click();
+    await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+  });
+
+  test('New in the row starts a thread', async ({ page }) => {
+    await chips(page).getByRole('button', { name: 'New thread' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New thread' });
+    await dialog.locator('#thread-title').fill('🚗 Carpool');
+    await dialog.getByRole('button', { name: 'Start thread' }).click();
+    await expect(page.getByRole('heading', { name: 'Carpool' })).toBeVisible();
+    await expect(chips(page).locator('[aria-current="page"]')).toContainText('Carpool');
+  });
+
+  test('says "Start a thread" when there are none yet', async ({ page }) => {
+    await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem('jt_demo_db_v2'));
+      db.chat_threads = [];
+      db.messages = db.messages.filter((m) => !m.thread_id);
+      localStorage.setItem('jt_demo_db_v2', JSON.stringify(db));
+    });
+    await page.reload();
+    await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);
+  });
+
+  test('steps aside while typing, so the keyboard has room', async ({ page }) => {
+    // Stand in for the iPhone keyboard (see phone-keyboard.spec.js).
+    await page.evaluate(() => {
+      const fake = new EventTarget();
+      Object.assign(fake, { width: innerWidth, height: innerHeight, offsetTop: 0, offsetLeft: 0, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: fake });
+      window.keyboard = (height) => {
+        fake.height = innerHeight - height;
+        fake.dispatchEvent(new Event('resize'));
+      };
+    });
+    // Reopen the chat in-app so it picks up the stand-in (a reload would remove it).
+    await goToSchedule(page);
+    await openChat(page);
+    await composer(page).click();
+    await page.evaluate(() => window.keyboard(330));
+    await expect(chips(page)).toHaveCount(0);
+    await composer(page).blur();
+    await page.evaluate(() => window.keyboard(0));
+    await expect(chips(page)).toBeVisible();
+  });
 });

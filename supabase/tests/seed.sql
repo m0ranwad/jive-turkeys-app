@@ -66,3 +66,16 @@ begin
   end if;
 end;
 $$;
+
+-- Devices signed up for notifications (once that exists).
+do $$
+begin
+  if to_regclass('public.push_subscriptions') is not null then
+    execute $sql$
+      insert into public.push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent) values
+        ('e1111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 'https://web.push.apple.com/seed-jordan', 'seed-p256dh', 'seed-auth', 'iPhone'),
+        ('e2222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333', 'https://fcm.googleapis.com/fcm/send/seed-sam', 'seed-p256dh', 'seed-auth', 'Android');
+    $sql$;
+  end if;
+end;
+$$;

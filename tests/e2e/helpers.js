@@ -17,12 +17,13 @@ export const test = base.extend({
   },
 });
 
-/** Signs in to the demo site (fresh sample data per test) and skips the welcome slides and chat tip. */
-export async function signIn(page, email = CAPTAIN, { tip = false } = {}) {
+/** Signs in to the demo site (fresh sample data per test) and skips the welcome slides, chat tip and notifications card. */
+export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = false } = {}) {
   // A fixed midday start, so sample messages from "26 hours ago" are always Yesterday.
   await page.clock.install({ time: new Date('2026-10-08T12:00:00') });
   await page.goto('/login');
   if (!tip) await page.evaluate(() => localStorage.setItem('jt_chat_tip_seen', '1'));
+  if (!pushPrompt) await page.evaluate(() => localStorage.setItem('jt_push_prompt_dismissed', '1'));
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();

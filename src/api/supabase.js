@@ -220,7 +220,43 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('chat_mark_read', { p_thread_id: threadId, p_read_at: readAt });
       if (error) fail(error);
     },
+
+    /** "I'm looking at this room", so this player's phone doesn't buzz for it. */
+    async viewing(threadId) {
+      const { error } = await supabase.rpc('chat_viewing', { p_thread_id: threadId });
+      if (error) fail(error);
+    },
   };
 
-  return { mode: 'supabase', auth, entities, users, chat };
+  const notifyChat = async (action) => {
+    const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action } });
+    if (error) throw new Error("Notifications aren't ready yet. Try again in a few minutes.");
+    return data;
+  };
+
+  const push = {
+    /** The key this site's notifications are signed with (needed to sign a device up). */
+    async publicKey() {
+      return (await notifyChat('config')).publicKey;
+    },
+    /** Saves this device's push subscription for the signed-in player. */
+    async save(subscription) {
+      const { endpoint, keys } = subscription.toJSON();
+      const { error } = await supabase.rpc('push_subscribe', {
+        p_endpoint: endpoint,
+        p_p256dh: keys.p256dh,
+        p_auth: keys.auth,
+        p_user_agent: navigator.userAgent,
+      });
+      if (error) fail(error);
+    },
+    async remove(endpoint) {
+      const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error) fail(error);
+    },
+    /** Sends a test notification to the signed-in player's devices. Resolves to { sent, failed }. */
+    test: () => notifyChat('test'),
+  };
+
+  return { mode: 'supabase', auth, entities, users, chat, push };
 }

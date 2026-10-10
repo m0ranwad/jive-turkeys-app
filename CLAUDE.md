@@ -14,6 +14,16 @@ README.md has the service inventory and the current setup status.
   ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)). Don't promise invites. New players
   sign up at https://jiveturkeys.app themselves.
 - No player data came over from Base44. The field rules are seeded by the setup migration.
+- Players can add the site to their phone's Home Screen and it opens like an app (`public/manifest.json`,
+  the icons in `public/`, `public/sw.js`, and the guide in `src/components/InstallApp.jsx`). The service
+  worker caches nothing on purpose, so every visit gets the latest site. Don't add caching to it without
+  a plan for updates. It also shows chat notifications.
+- **Chat notifications** (Web Push, no email) are turned on with the bell in the chat header. On an iPhone
+  they need the Home Screen app. The database decides who gets each one and calls the `notify-chat`
+  Supabase function, which `.github/workflows/functions.yml` deploys when `supabase/functions/` changes
+  on `main`, using the `SUPABASE_ACCESS_TOKEN` secret. The workflow made the sending keys (`VAPID_*`
+  function secrets) once. Never replace them: everyone's notifications would stop until they turn them on
+  again. Previews only show a sample notification. Rules: section 7 of `docs/chat.md`.
 
 ## Who you're working with
 
@@ -148,6 +158,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   features show up there.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, and `src/hooks/useChatUnread.js`
   (the Chat tab badge). `docs/chat.md` is the expected behavior.
+- Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
+  `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
   and `scripts/db-rehearsal.sh`.
 

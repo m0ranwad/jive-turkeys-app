@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Hash, Lock, MessageSquare, Plus } from 'lucide-react';
 import { shortWhen, splitLeadingEmoji } from '@/lib/chat';
 import { shortName } from '@/lib/format';
@@ -156,5 +156,72 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
         )}
       </div>
     </div>
+  );
+}
+
+/** Phones: a row of every open room under the chat header, so threads are one tap away. */
+export function ThreadStrip({ rooms, activeRoom, onOpen, onNewThread }) {
+  const strip = useRef(null);
+
+  // Bring the room you're in into view.
+  useEffect(() => {
+    const el = strip.current;
+    const chip = el?.querySelector('[aria-current="page"]');
+    if (!chip) return;
+    const left = chip.offsetLeft - el.offsetLeft;
+    if (left < el.scrollLeft || left + chip.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({ left: Math.max(0, left - 12), behavior: 'smooth' });
+    }
+  }, [activeRoom]);
+
+  const chip = (active) =>
+    cn(
+      'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition',
+      active ? 'bg-zinc-950 text-lime-400' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200',
+    );
+
+  return (
+    <nav
+      ref={strip}
+      aria-label="Rooms"
+      className="flex gap-2 overflow-x-auto border-b border-black/5 px-3 py-2 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden"
+    >
+      <button
+        data-strip-room="team"
+        onClick={() => onOpen(null)}
+        aria-current={activeRoom === null ? 'page' : undefined}
+        className={chip(activeRoom === null)}
+      >
+        <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.6} />
+        Team Chat
+        {activeRoom !== null && rooms.team.unread > 0 && <UnreadCount n={rooms.team.unread} />}
+      </button>
+      {rooms.open.map((room) => {
+        const active = activeRoom === room.thread.id;
+        const { emoji, text } = splitLeadingEmoji(room.thread.title);
+        return (
+          <button
+            key={room.thread.id}
+            data-strip-room={room.thread.id}
+            onClick={() => onOpen(room.thread.id)}
+            aria-current={active ? 'page' : undefined}
+            className={chip(active)}
+          >
+            {emoji ? <span className="text-sm leading-none">{emoji}</span> : <Hash className="h-3.5 w-3.5" />}
+            <span className="max-w-[10rem] truncate">{text}</span>
+            {!active && room.isNew && <span aria-label="New" className="h-2 w-2 rounded-full bg-lime-500" />}
+            {!active && !room.isNew && room.unread > 0 && <UnreadCount n={room.unread} />}
+          </button>
+        );
+      })}
+      <button
+        onClick={onNewThread}
+        aria-label="New thread"
+        className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-dashed border-zinc-300 px-3 text-xs font-bold text-zinc-500 transition hover:border-lime-400 hover:text-zinc-800"
+      >
+        <Plus className="h-3.5 w-3.5" strokeWidth={3} />
+        {rooms.open.length ? 'New' : 'Start a thread'}
+      </button>
+    </nav>
   );
 }

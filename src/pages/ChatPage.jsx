@@ -5,8 +5,9 @@ import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
 import { ConfirmDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
+import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { Conversation } from '@/components/chat/Conversation';
-import { ThreadIcon, ThreadList, UnreadCount } from '@/components/chat/ThreadList';
+import { ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
@@ -118,18 +119,21 @@ function useChatViewport(ref, ready) {
     };
   }, [ref, ready]);
 
-  if (!box) return { height: 'calc(100vh - 12rem)' };
-  if (!box.keyboard) return { height: box.height };
+  if (!box) return { keyboard: false, style: { height: 'calc(100vh - 12rem)' } };
+  if (!box.keyboard) return { keyboard: false, style: { height: box.height } };
   // Above the site header and tab bar (z-40), below dialogs (z-50).
   return {
-    position: 'fixed',
-    left: 0,
-    right: 0,
-    top: box.top,
-    height: box.height,
-    zIndex: 45,
-    padding: 6,
-    background: '#FAFAF7',
+    keyboard: true,
+    style: {
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      top: box.top,
+      height: box.height,
+      zIndex: 45,
+      padding: 6,
+      background: '#FAFAF7',
+    },
   };
 }
 
@@ -154,7 +158,9 @@ export function ChatPage() {
 
   const shell = useRef(null);
   const composer = useRef(null);
-  const shellStyle = useChatViewport(shell, !loading);
+  const { style: shellStyle, keyboard } = useChatViewport(shell, !loading);
+  const pushStatus = usePush();
+  const [notifyOpen, setNotifyOpen] = useState(false);
 
   // Live handlers read these instead of re-subscribing on every change.
   const live = useRef({});
@@ -285,6 +291,16 @@ export function ChatPage() {
       .then((rows) => setExtras((current) => ({ ...current, ...Object.fromEntries(rows.map((m) => [m.id, m])) })))
       .catch(() => {});
   }, [loaded, extras]);
+
+  // While a room is on screen, check in every 15 seconds so this player's phone
+  // doesn't buzz for the conversation they're already reading.
+  useEffect(() => {
+    if (!loaded || listOpen || !visible) return undefined;
+    const checkIn = () => api.chat.viewing(loaded.room).catch(() => {});
+    checkIn();
+    const timer = setInterval(checkIn, 15000);
+    return () => clearInterval(timer);
+  }, [loaded?.room, listOpen, visible]);
 
   // Mark the open room read while it's on screen: right away when it opens (so
   // a quick look counts), then shortly after new messages settle.
@@ -579,6 +595,8 @@ export function ChatPage() {
             </p>
           </div>
 
+          <NotificationsButton state={pushStatus} onClick={() => setNotifyOpen(true)} />
+
           {!room && (
             <button
               onClick={showThreads}
@@ -637,7 +655,13 @@ export function ChatPage() {
           )}
         </header>
 
+        {/* Phones: every room one tap away (hidden while typing, to keep room above the keyboard). */}
+        {threads && !keyboard && (
+          <ThreadStrip rooms={rooms} activeRoom={room} onOpen={openRoom} onNewThread={() => setDialog({ kind: 'new' })} />
+        )}
+
         <ChatTip />
+        {!keyboard && tipSeen() && <NotificationsPrompt state={pushStatus} />}
 
         {threadMissing ? (
           <div className="grid flex-1 place-items-center p-8 text-center">
@@ -696,6 +720,7 @@ export function ChatPage() {
         )}
       </section>
 
+      <NotificationsDialog open={notifyOpen} onOpenChange={setNotifyOpen} state={pushStatus} />
       <ThreadDialog
         open={dialog?.kind === 'new' || dialog?.kind === 'rename'}
         onOpenChange={(open) => !open && setDialog(null)}

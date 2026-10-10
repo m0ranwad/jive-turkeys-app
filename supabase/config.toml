@@ -4,3 +4,8 @@ project_id = "jive-turkeys"
 [functions.invite-user]
 # The function checks the caller's login itself.
 verify_jwt = false
+
+[functions.notify-chat]
+# Called by the database (with only a message id) and by the site for its public
+# key and "Send a test", which checks the caller's login itself.
+verify_jwt = false

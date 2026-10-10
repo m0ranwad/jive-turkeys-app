@@ -11,15 +11,18 @@ import {
   Menu,
   MessageSquare,
   SlidersHorizontal,
+  Smartphone,
   User,
   Users,
   X,
 } from 'lucide-react';
 import { isDemo } from '@/api';
+import { InstallCard, InstallGuide, useInstall } from '@/components/InstallApp';
 import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
+import { resyncPush } from '@/lib/push';
 import { STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -64,7 +67,10 @@ export function Layout() {
   const { user, profile, isCaptain, loading, reload } = useTeam();
   const [menuOpen, setMenuOpen] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
-  const onChat = useLocation().pathname === CHAT_PATH;
+  const [installOpen, setInstallOpen] = useState(false);
+  const { offer: offerInstall } = useInstall();
+  const { pathname } = useLocation();
+  const onChat = pathname === CHAT_PATH;
   const chatUnread = useChatUnread(!!user);
   // No badge while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread : 0);
@@ -73,6 +79,18 @@ export function Layout() {
     if (!user) return;
     if (!profile || !hasSeenWalkthrough(user.id)) setWalkthroughOpen(true);
   }, [user, profile]);
+
+  // This device's notifications follow whoever is signed in on it.
+  useEffect(() => {
+    if (user) resyncPush().catch(() => {});
+  }, [user?.id]);
+
+  // Other screens (the chat's notification settings) can open the Home Screen guide.
+  useEffect(() => {
+    const open = () => setInstallOpen(true);
+    window.addEventListener('jt:show-install', open);
+    return () => window.removeEventListener('jt:show-install', open);
+  }, []);
 
   const closeWalkthrough = (markSeen) => {
     if (user && markSeen !== false) {
@@ -151,6 +169,7 @@ export function Layout() {
 
       {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
       <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
+        {pathname === '/' && <InstallCard onShowHow={() => setInstallOpen(true)} />}
         <Outlet />
       </main>
 
@@ -244,6 +263,18 @@ export function Layout() {
                 <CircleHelp className="h-4 w-4 text-lime-400" />
                 How to Use
               </button>
+              {offerInstall && (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setInstallOpen(true);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold transition hover:bg-white/5"
+                >
+                  <Smartphone className="h-4 w-4 text-lime-400" />
+                  Add to Home Screen
+                </button>
+              )}
             </div>
             <button
               onClick={signOut}
@@ -259,6 +290,7 @@ export function Layout() {
       {!loading && user && (
         <Walkthrough open={walkthroughOpen} needsProfile={!profile} profile={profile} onClose={closeWalkthrough} />
       )}
+      {offerInstall && <InstallGuide open={installOpen} onOpenChange={setInstallOpen} />}
     </div>
   );
 }
