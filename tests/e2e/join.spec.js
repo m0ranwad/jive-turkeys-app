@@ -49,7 +49,10 @@ test('a new player picks their name on the roster, and their spot and dues come 
   await page.getByRole('button', { name: 'Mike Russo' }).click();
   await expect(page.getByText("You're joining as Mike Russo.")).toBeVisible();
   await expect(page.getByLabel('Display name')).toHaveValue('Mike Russo');
+  // Finishing the profile reloads the page; wait for that before moving on.
+  const reloaded = page.waitForEvent('load');
   await page.getByRole('button', { name: 'Start using the app' }).click();
+  await reloaded;
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 
   // On the roster as a joined player, no longer a grey card.
@@ -75,7 +78,10 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   await page.getByRole('button', { name: 'Create account' }).click();
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Dana Wells' }).click();
+  // Finishing the profile reloads the page; wait for that before using the menu.
+  const reloaded = page.waitForEvent('load');
   await page.getByRole('button', { name: 'Start using the app' }).click();
+  await reloaded;
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Menu' }).click();
