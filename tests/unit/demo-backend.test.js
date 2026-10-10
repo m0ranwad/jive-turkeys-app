@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v3';
+const DB_KEY = 'jt_demo_db_v5';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -184,5 +184,57 @@ describe('persistence', () => {
     expect((await upgraded.chat.history(null)).at(-1).body).toBe('Before the upgrade');
     await upgraded.chat.markRead(null, new Date().toISOString());
     expect(await upgraded.entities.ChatRead.list()).toHaveLength(1);
+  });
+});
+
+describe('dues', () => {
+  it('has sample dues: $595 + 7 × $18 for two sessions, half paid this session, and a couple who pay together', async () => {
+    const { api } = await signedIn();
+    const dues = await api.entities.SessionDues.list();
+    expect(dues.map((d) => [d.session, d.league_fee, d.ref_fee, d.game_count, d.total_fee]).sort()).toEqual([
+      [1, 595, 18, 7, 721],
+      [2, 595, 18, 7, 721],
+    ]);
+    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(5);
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
+    expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
+    const [settings] = await api.entities.TeamSettings.list();
+    expect(settings.pay_venmo).toBeTruthy();
+  });
+
+  it('lets any player mark players paid, recording who did it, without touching custom amounts', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const jordan = await api.auth.me();
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.entities.DuesPayment.create({ season_year: year, session: 2, user_id: kelly.user_id, override_amount: 40, paid: false });
+
+    await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id, kelly.user_id], paid: true, paidDate: '2026-10-09' });
+    const rows = await api.entities.DuesPayment.filter({ session: 2, user_id: [alex.user_id, kelly.user_id] });
+    expect(rows.map((r) => [r.paid, r.paid_date, r.paid_by])).toEqual([
+      [true, '2026-10-09', jordan.id],
+      [true, '2026-10-09', jordan.id],
+    ]);
+    expect(rows.find((r) => r.user_id === kelly.user_id).override_amount).toBe(40);
+
+    await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id], paid: false, paidDate: '2026-10-09' });
+    const [again] = await api.entities.DuesPayment.filter({ session: 2, user_id: alex.user_id });
+    expect([again.paid, again.paid_date, again.paid_by]).toEqual([false, null, null]);
+  });
+
+  it('links a couple both ways, moves a relinked player, and unlinks both', async () => {
+    const { api } = await signedIn();
+    const id = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].user_id;
+    const partner = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].pays_with ?? null;
+    const [alex, riley, sam] = [await id('Alex Chen'), await id('Riley Novak'), await id('Sam Okafor')];
+
+    await api.dues.setPartner(sam, riley);
+    expect([await partner('Sam Okafor'), await partner('Riley Novak'), await partner('Alex Chen')]).toEqual([riley, sam, null]);
+    await api.dues.setPartner(riley, null);
+    expect([await partner('Sam Okafor'), await partner('Riley Novak')]).toEqual([null, null]);
+    expect(alex).toBeTruthy();
   });
 });

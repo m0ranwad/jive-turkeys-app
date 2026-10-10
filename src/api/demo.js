@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v3';
+const DB_KEY = 'jt_demo_db_v5';
 const SESSION_KEY = 'jt_demo_session';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 
@@ -178,6 +178,25 @@ function seed() {
   say(jerseys, me, 'Order placed, thanks all. Closing this one.', 7000);
   readUpTo(jerseys, 7000);
 
+  // Dues: last session all paid; this session half paid, the captain included
+  // among those still to pay, so the pay buttons show on "My dues". Alex and
+  // Riley are a couple who pay together.
+  profiles[4].pays_with = profiles[7].user_id;
+  profiles[7].pays_with = profiles[4].user_id;
+  const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
+  const sessionDues = [1, 2].map((session) => ({ id: uid(), season_year: year, session, ...fee, created_date: now(), updated_date: now() }));
+  const duesPayments = profiles
+    .map((p, i) => [p, i])
+    .filter(([p]) => p.status === 'active')
+    .flatMap(([p, i]) => [
+      { session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD'), paid_by: captainId },
+      ...([1, 2, 3, 5, 6].includes(i)
+        ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'), paid_by: i === 3 ? captainId : p.user_id }]
+        : []),
+    ].map((row) => ({
+      id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
+    })));
+
   return {
     users,
     player_profiles: profiles,
@@ -234,12 +253,16 @@ function seed() {
           'Women take all kicks.',
         ],
         rules_footer: 'Final decisions regarding all rules and interpretations are made by the owners of North Coast Premier Soccer Complex.',
+        pay_venmo: 'Casey-Captain-Demo',
+        pay_cashapp: 'CaseyCaptainDemo',
+        pay_zelle: 'captain@demo.test',
+        pay_note: 'Cash to Casey at the field works too.',
         created_date: now(),
         updated_date: now(),
       },
     ],
-    session_dues: [],
-    dues_payments: [],
+    session_dues: sessionDues,
+    dues_payments: duesPayments,
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -492,6 +515,36 @@ export function createDemoBackend() {
     },
   };
 
+  // Same as the database functions mark_dues_paid() and set_dues_partner().
+  const dues = {
+    async markPaid({ year, session, userIds, paid, paidDate }) {
+      requireUser();
+      const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? currentUser().id : null, updated_date: now() };
+      for (const userId of userIds) {
+        const row = db.dues_payments.find((p) => p.season_year === Number(year) && p.session === Number(session) && p.user_id === userId);
+        if (row) Object.assign(row, patch);
+        else db.dues_payments.push({ id: uid(), season_year: Number(year), session: Number(session), user_id: userId, override_amount: null, created_date: now(), ...patch });
+      }
+      save(db);
+      return delay(null);
+    },
+    async setPartner(userId, partnerId) {
+      requireUser();
+      const ids = [userId, partnerId];
+      db.player_profiles.forEach((p) => {
+        if (ids.includes(p.user_id) || ids.includes(p.pays_with)) p.pays_with = null;
+      });
+      if (partnerId && partnerId !== userId) {
+        db.player_profiles.forEach((p) => {
+          if (p.user_id === userId) p.pays_with = partnerId;
+          if (p.user_id === partnerId) p.pays_with = userId;
+        });
+      }
+      save(db);
+      return delay(null);
+    },
+  };
+
   // Previews can't receive real notifications (there's no sender); lib/push.js
   // shows a local sample instead, so the flow can still be tried.
   const push = {
@@ -511,6 +564,7 @@ export function createDemoBackend() {
     entities,
     users,
     chat,
+    dues,
     push,
     resetDemo() {
       db = seed();

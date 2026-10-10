@@ -163,6 +163,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
   features show up there.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, and `src/hooks/useChatUnread.js`
   (the Chat tab badge). `docs/chat.md` is the expected behavior.
+- Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
+  can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); only
+  captains set fees, custom amounts and payment details.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
