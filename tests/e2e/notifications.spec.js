@@ -133,14 +133,27 @@ test.describe('the background helper', () => {
     const [worker] = context.serviceWorkers();
     expect(worker, 'service worker running').toBeTruthy();
 
-    await worker.evaluate(async () => {
+    // Events made by a script can't use the real waitUntil, and without it the browser
+    // may drop the work they start. So collect what the handler passes to waitUntil and
+    // wait for it, as the browser does for a real push or tap.
+    await worker.evaluate(() => {
+      self.fire = async (event) => {
+        const work = [];
+        event.waitUntil = (promise) => work.push(promise);
+        self.dispatchEvent(event);
+        if (!work.length) throw new Error(`the ${event.type} handler didn't call waitUntil`);
+        await Promise.all(work);
+      };
+    });
+
+    await worker.evaluate(() => {
       const data = JSON.stringify({
         title: '⚽ Sunday pickup?',
         body: 'Sam O.: Field 3 at 10?',
         url: '/banter?thread=abc',
         tag: 'chat-abc',
       });
-      self.dispatchEvent(new PushEvent('push', { data }));
+      return self.fire(new PushEvent('push', { data }));
     });
     await expect
       .poll(() =>
@@ -152,7 +165,7 @@ test.describe('the background helper', () => {
 
     await worker.evaluate(async () => {
       const [notification] = await self.registration.getNotifications();
-      self.dispatchEvent(new NotificationEvent('notificationclick', { notification }));
+      await self.fire(new NotificationEvent('notificationclick', { notification }));
     });
     await expect(page).toHaveURL(/\/banter\?thread=abc$/);
   });
