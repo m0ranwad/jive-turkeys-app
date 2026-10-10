@@ -1,4 +1,4 @@
-"""The original Jive Turkeys turkey (traced from public/logo.jpg), now with an Afro, round 70s shades
+"""The original Jive Turkeys turkey (traced from original-logo.jpg), now with an Afro, round 70s shades
 and an Afro pick, on 70s and soccer backgrounds.
 
     python3 docs/design/jive-turkey/classic.py [output folder]

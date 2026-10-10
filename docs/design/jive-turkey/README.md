@@ -1,15 +1,18 @@
 # The Jive Turkey: icon concepts
 
 Ideas for a new logo and app icon for the team: a turkey with a big Afro, round 70s shades and an Afro
-pick, in the site's greens on black, with soccer worked in. Saved so they aren't lost. None of them is on
-the site yet (it still uses `public/logo.jpg` and the icons made from it).
+pick, in the site's greens on black, with soccer worked in. Saved so they aren't lost.
 
-## The favorite direction: today's turkey with an Afro
+**On the site now: 6, Just the Ball** ([c6-just-the-ball.svg](c6-just-the-ball.svg)). `public/logo.jpg`
+and every icon in `public/` are made from it by `node scripts/make-icons.mjs`. The logo it replaced is
+kept here as [original-logo.jpg](original-logo.jpg).
 
-The turkey from `public/logo.jpg`, traced into shapes, with the Afro, shades and pick added. Options 1 to 3
-came first; 4 to 6 add soccer.
+## The original turkey with an Afro (the chosen direction)
 
-![Today's turkey with an Afro](classic-concepts.png)
+The original turkey ([original-logo.jpg](original-logo.jpg)), traced into shapes, with the Afro, shades and
+pick added. Options 1 to 3 came first; 4 to 6 add soccer.
+
+![The original turkey with an Afro](classic-concepts.png)
 
 | | Design | What it is |
 |---|---|---|
@@ -50,11 +53,12 @@ Cup:
 Each set of SVGs is drawn by a script next to it, using only the Python standard library:
 
 ```bash
-python3 docs/design/jive-turkey/classic.py   # today's turkey with an Afro (c1 to c6)
+python3 docs/design/jive-turkey/classic.py   # the original turkey with an Afro (c1 to c6)
 python3 docs/design/jive-turkey/draw.py      # the front-facing turkey (1a to 2b)
 python3 docs/design/jive-turkey/soccer.py    # the front-facing soccer versions (s1 to s4)
 ```
 
 Each rewrites its SVGs. Change the shapes or colors in the scripts rather than editing the SVGs by hand.
+After changing the one on the site, run `node scripts/make-icons.mjs` to remake the icons.
 The colors are the site's: `#3EC63A` green, `#8FD33E` lime, `#C9E64A` yellow-green and `#1E7A2A` dark
 green, on black. The ball is drawn in `soccer.py`; `classic.py` reuses it.
