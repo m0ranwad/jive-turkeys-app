@@ -84,8 +84,36 @@ function ShareCard({ mine }) {
   );
 }
 
+/** How the whole team is doing, so everyone sees it, with a way to the full list. */
+function TeamProgress({ team, onShowTeam }) {
+  const pct = team.active.length ? (team.paidCount / team.active.length) * 100 : 0;
+  return (
+    <section className={CARD} data-testid="team-progress">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className={HEADING}>
+          Team · {team.paidCount} of {team.active.length} paid
+        </h3>
+        <span className="text-xs font-semibold text-zinc-500">
+          {dollars(team.collected)} of {dollars(team.owed)} in
+        </span>
+      </div>
+      <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-zinc-100" aria-hidden>
+        <div className="h-full rounded-full bg-lime-400" style={{ width: `${pct}%` }} />
+      </div>
+      <button
+        type="button"
+        onClick={onShowTeam}
+        className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-zinc-600 underline-offset-2 hover:underline"
+      >
+        See who has and hasn't paid
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </section>
+  );
+}
+
 /** The signed-in player's dues for the chosen session, ways to pay, and their other sessions. */
-export function MyDues({ data, period, user, settings, onChanged, onPickSession }) {
+export function MyDues({ data, period, user, settings, onChanged, onPickSession, onShowTeam }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -199,6 +227,8 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession 
           </button>
         </section>
       )}
+
+      <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 
       {/* One entry just repeats the paid card above. */}
       {mine.history.length > 1 && (

@@ -50,6 +50,15 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
   await expect(paypal).toContainText('Enter $146');
   await expect(page.getByText('Cash at the field works too.')).toBeVisible();
   await expect(page.getByText('Other sessions')).toBeVisible();
+
+  // Everyone sees how the team is doing, and who has and hasn't paid.
+  const progress = page.getByTestId('team-progress');
+  await expect(progress).toContainText('Team · 5 of 10 paid');
+  await expect(progress).toContainText('$365 of $730 in');
+  await progress.getByRole('button', { name: "See who has and hasn't paid" }).click();
+  await expect(page.getByRole('tab', { name: 'Team dues' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Alex Chen');
+  await expect(page.getByTestId('dues-paid')).toContainText('Jordan Rivera');
 });
 
 test('marking yourself paid is one tap; marking not paid asks first and stays in your history', async ({ page }) => {

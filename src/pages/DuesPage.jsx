@@ -77,7 +77,7 @@ export function DuesPage() {
           }}
         />
       ) : (
-        <MyDues {...shared} onPickSession={setPeriod} />
+        <MyDues {...shared} onPickSession={setPeriod} onShowTeam={() => setPicked('team')} />
       )}
     </div>
   );
