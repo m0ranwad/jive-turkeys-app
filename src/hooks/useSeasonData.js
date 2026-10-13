@@ -22,6 +22,7 @@ export function useSeasonData() {
       profiles: team.profiles || [],
       settings: team.settings,
       settingsRecord: team.settingsRecord,
+      roster: team.roster,
       games,
       rsvps,
       stats,

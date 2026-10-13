@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v9';
+const DB_KEY = 'jt_demo_db_v10';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -349,6 +349,8 @@ describe('dues', () => {
     const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
     const year = (await api.entities.SessionDues.list())[0].season_year;
     const row = (session, who, extra) => api.entities.DuesPayment.create({ season_year: year, session, user_id: null, guest_id: null, paid: false, override_amount: null, ...who, ...extra });
+    // Session 1: Mike paid under his roster name (sample data) and Chris under his account.
+    await row(1, { user_id: chris.user_id }, { paid: true, paid_date: '2026-09-01' });
     // Session 3: paid under the roster name only. Session 4: a custom amount under the roster name only.
     await row(3, { guest_id: mike.id }, { paid: true, paid_date: '2026-10-01' });
     await row(4, { guest_id: mike.id }, { override_amount: 25 });

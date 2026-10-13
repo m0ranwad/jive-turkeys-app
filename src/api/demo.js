@@ -2,9 +2,11 @@
 // in this browser's localStorage. Used when no Supabase keys are configured,
 // so the app can be tried (and developed) before the real backend exists.
 import dayjs from 'dayjs';
+import { currentSession } from '@/lib/dues';
+import { today } from '@/lib/format';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v9';
+const DB_KEY = 'jt_demo_db_v10';
 const SESSION_KEY = 'jt_demo_session';
 // Set when someone signs out of the demo, so it stops signing them back in.
 const SIGNED_OUT_KEY = 'jt_demo_signed_out';
@@ -184,16 +186,17 @@ function seed() {
 
   // Dues: last session all paid; this session half paid, the captain included
   // among those still to pay, so the pay buttons show on "My dues". Alex and
-  // Riley are a couple who pay together.
+  // Riley are a couple who pay together. Drew was in the sub pool last session
+  // and Chris only joined this one, so neither paid for session 1.
   profiles[4].pays_with = profiles[7].user_id;
   profiles[7].pays_with = profiles[4].user_id;
   const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
   const sessionDues = [1, 2].map((session) => ({ id: uid(), season_year: year, session, ...fee, created_date: now(), updated_date: now() }));
+  const activeInSession1 = (i) => i !== 8 && i !== 10;
   const duesPayments = profiles
     .map((p, i) => [p, i])
-    .filter(([p]) => p.status === 'active')
     .flatMap(([p, i]) => [
-      { session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD'), paid_by: captainId },
+      ...(activeInSession1(i) ? [{ session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD'), paid_by: captainId }] : []),
       ...([1, 2, 3, 5, 6].includes(i)
         ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'), paid_by: i === 3 ? captainId : p.user_id }]
         : []),
@@ -224,6 +227,23 @@ function seed() {
     { id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: true, paid_date: yesterday, changed_by: captainId, created_date: at(yesterday, 21) },
   );
   Object.assign(taylor, { paid_date: yesterday, paid_by: captainId });
+
+  // Who was on each session. Session 1 is over: Jamie played it and is sitting
+  // out session 2, and Chris joined in session 2. Session 2 starts with the next
+  // game, and only some have answered "Playing session 2?" (not the captain yet).
+  const entry = (session, who, status, answered) => ({
+    id: uid(), season_year: year, session, user_id: who.user_id ?? null, guest_id: who.guest_id ?? null, status,
+    answered_at: answered ? dayjs().subtract(session === 1 ? 50 : 3, 'day').toISOString() : null,
+    changed_by: answered ? (who.user_id ?? captainId) : null, created_date: now(), updated_date: now(),
+  });
+  const answeredSession2 = [1, 3, 4, 6, 8, 9, 10];
+  const sessionRoster = [
+    ...profiles.flatMap((p, i) => (i === 10 ? [] : [entry(1, p, i === 8 ? 'sub_pool' : 'active', true)])),
+    ...teamGuests.map((g) => entry(1, { guest_id: g.id }, 'active', true)),
+    ...profiles.map((p, i) => entry(2, p, p.status, answeredSession2.includes(i))),
+    entry(2, { guest_id: teamGuests[0].id }, 'active', false),
+    entry(2, { guest_id: teamGuests[1].id }, 'active', true),
+  ];
 
   return {
     users,
@@ -295,6 +315,7 @@ function seed() {
     dues_payments: duesPayments,
     dues_history: duesHistory,
     team_guests: teamGuests,
+    session_roster: sessionRoster,
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -395,6 +416,45 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     });
   };
 
+  // Same as the database's roster_start_session(): a session's list starts as a
+  // copy of everyone's status, unless it already has one.
+  const sessionOf = (row) => `${row.season_year}-${row.session}`;
+  const startSession = ({ year, session }) => {
+    if (db.session_roster.some((r) => sessionOf(r) === `${year}-${session}`)) return;
+    const entry = (who, status) => ({
+      id: uid(), season_year: Number(year), session: Number(session), user_id: null, guest_id: null, ...who, status,
+      answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
+    });
+    db.session_roster.push(
+      ...db.player_profiles.map((p) => entry({ user_id: p.user_id }, p.status)),
+      ...db.team_guests.filter((g) => !g.removed && !g.linked_user_id).map((g) => entry({ guest_id: g.id }, g.status)),
+    );
+  };
+  const current = () => currentSession(db.games, today());
+
+  // Same as the database's roster_follow_profile() and roster_follow_guest(): a
+  // status set while a session is current counts for that session, as an answer.
+  const followStatus = (table, record) => {
+    if (table === 'team_guests' && record.linked_user_id) return;
+    const period = current();
+    startSession(period);
+    const who = table === 'player_profiles' ? { user_id: record.user_id } : { guest_id: record.id };
+    const status = table === 'team_guests' && record.removed ? 'off' : record.status;
+    const mine = (r) =>
+      sessionOf(r) === `${period.year}-${period.session}` && (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id);
+    const patch = { status, answered_at: now(), changed_by: currentUser()?.id ?? null, updated_date: now() };
+    const row = db.session_roster.find(mine);
+    if (row) Object.assign(row, patch);
+    else {
+      db.session_roster.push({
+        id: uid(), season_year: Number(period.year), session: Number(period.session), user_id: null, guest_id: null, ...who,
+        created_date: now(), ...patch,
+      });
+    }
+  };
+  const follows = (table, fields) =>
+    (table === 'player_profiles' && 'status' in fields) || (table === 'team_guests' && ('status' in fields || 'removed' in fields));
+
   function entity(table) {
     const write = () => save(db);
     return {
@@ -412,6 +472,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         requireUser();
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
         db[table].push(record);
+        if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
         write();
         notify(table, 'onInsert', record);
         return delay(record);
@@ -426,6 +487,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const record = db[table].find((r) => r.id === id);
         if (!record) throw new Error('Not found');
         Object.assign(record, patch, { updated_date: now() });
+        if (follows(table, patch)) followStatus(table, record);
         write();
         notify(table, 'onUpdate', record);
         return delay(record);
@@ -528,6 +590,12 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       }
     }
     db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
+    // Sessions the roster name was on and the account wasn't move over; where both were, the account's entry counts.
+    for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
+      if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) {
+        Object.assign(row, { user_id: userId, guest_id: null });
+      }
+    }
     db.player_profiles
       .filter((p) => p.user_id === userId)
       .forEach((p) => Object.assign(p, { gender: p.gender || guest.gender, position: p.position || guest.position }));
@@ -544,7 +612,12 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const guest = db.team_guests.find((g) => g.id === guestId && !g.removed);
       if (!guest) throw new Error('That name is no longer on the roster');
       await moveGuest(guestId, currentUser().id);
-      db.player_profiles.filter((p) => p.user_id === currentUser().id).forEach((p) => (p.status = guest.status));
+      db.player_profiles
+        .filter((p) => p.user_id === currentUser().id)
+        .forEach((p) => {
+          p.status = guest.status;
+          followStatus('player_profiles', p);
+        });
       save(db);
       return delay(null);
     },
@@ -656,6 +729,17 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
   };
 
+  // Same as the database's roster_start_current().
+  const roster = {
+    async start() {
+      requireUser();
+      const period = current();
+      startSession(period);
+      save(db);
+      return delay({ season_year: Number(period.year), session: Number(period.session) });
+    },
+  };
+
   // Previews can't receive real notifications (there's no sender); lib/push.js
   // shows a local sample instead, so the flow can still be tried.
   const push = {
@@ -676,6 +760,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     users,
     chat,
     dues,
+    roster,
     push,
     resetDemo() {
       db = seed();

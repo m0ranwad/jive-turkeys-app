@@ -201,3 +201,16 @@ describe('roster names', () => {
     await expect(api.users.linkGuest('g1', 'u1')).rejects.toThrow('already been picked');
   });
 });
+
+describe('session lists', () => {
+  it("starts the current session's list through the database function", async () => {
+    result = { data: { season_year: 2026, session: 2 }, error: null };
+    expect(await api.roster.start()).toEqual({ season_year: 2026, session: 2 });
+    expect(calls).toEqual([['rpc', 'roster_start_current', undefined]]);
+  });
+
+  it('reports database errors (the site then uses today\'s statuses)', async () => {
+    result = { data: null, error: { message: 'function roster_start_current() does not exist' } };
+    await expect(api.roster.start()).rejects.toThrow('does not exist');
+  });
+});

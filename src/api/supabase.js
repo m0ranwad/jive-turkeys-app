@@ -258,6 +258,15 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
+  const roster = {
+    /** Starts the current session's list if it hasn't been yet. Resolves to { season_year, session }. */
+    async start() {
+      const { data, error } = await supabase.rpc('roster_start_current');
+      if (error) fail(error);
+      return data;
+    },
+  };
+
   const notifyChat = async (action) => {
     const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action } });
     if (error) throw new Error("Notifications aren't ready yet. Try again in a few minutes.");
@@ -288,5 +297,5 @@ export function createSupabaseBackend(url, key) {
     test: () => notifyChat('test'),
   };
 
-  return { mode: 'supabase', auth, entities, users, chat, dues, push };
+  return { mode: 'supabase', auth, entities, users, chat, dues, roster, push };
 }
