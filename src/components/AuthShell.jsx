@@ -1,5 +1,37 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
-import { isDemo, DEMO_LOGIN } from '@/api';
+import { api, isDemo, DEMO_LOGIN, DEMO_PLAYER_LOGIN } from '@/api';
+
+/** Demo mode only: sign in as a sample captain or player with one tap. */
+function DemoSignIn() {
+  const [error, setError] = useState('');
+  const signInAs = async ({ email, password }) => {
+    setError('');
+    try {
+      await api.auth.signIn(email, password);
+      window.location.href = safeReturnTo();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const button = 'h-10 flex-1 rounded-full bg-amber-900 px-4 text-xs font-bold text-amber-50 transition hover:bg-amber-950';
+
+  return (
+    <div className="mb-6 rounded-2xl bg-amber-100 px-4 py-3 text-center text-xs font-semibold text-amber-900">
+      <p>Demo mode with pretend players. Sign in with one tap:</p>
+      <div className="mt-3 flex gap-2">
+        <button type="button" className={button} onClick={() => signInAs(DEMO_LOGIN)}>
+          Sign in as the captain
+        </button>
+        <button type="button" className={button} onClick={() => signInAs(DEMO_PLAYER_LOGIN)}>
+          Sign in as a player
+        </button>
+      </div>
+      {error && <p className="mt-2 text-destructive">{error}</p>}
+      <p className="mt-3 font-normal">Or create any account to try it as a new player.</p>
+    </div>
+  );
+}
 
 export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
   return (
@@ -12,6 +44,7 @@ export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
           {subtitle && <p className="mt-2 text-muted-foreground">{subtitle}</p>}
         </div>
+        {isDemo && <DemoSignIn />}
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">{children}</div>
         {footer && <p className="mt-6 text-center text-sm text-muted-foreground">{footer}</p>}
         <p className="mt-4 text-center text-xs text-muted-foreground">
@@ -23,11 +56,6 @@ export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
             Terms
           </Link>
         </p>
-        {isDemo && (
-          <p className="mt-6 rounded-2xl bg-amber-100 px-4 py-3 text-center text-xs font-semibold text-amber-900">
-            Demo mode — sign in as captain with {DEMO_LOGIN.email} / {DEMO_LOGIN.password}, or create any account.
-          </p>
-        )}
       </div>
     </div>
   );

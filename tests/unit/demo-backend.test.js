@@ -2,7 +2,7 @@
 // the real database for chat (the rules themselves are tested in
 // supabase/tests/chat.test.sql), and its chats must persist in the browser.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
+import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
 const DB_KEY = 'jt_demo_db_v9';
 
@@ -16,6 +16,40 @@ async function signedIn() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => localStorage.clear());
+
+describe('signing in automatically', () => {
+  it('starts a new visitor as the captain, without announcing a sign-in', async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const events = [];
+    api.auth.onChange((event) => events.push(event));
+    expect(await api.auth.me()).toMatchObject({ email: DEMO_LOGIN.email, role: 'admin' });
+    await flush();
+    expect(events).toEqual([]);
+  });
+
+  it('keeps whoever is already signed in', async () => {
+    await createDemoBackend().auth.signIn(DEMO_PLAYER_LOGIN.email, DEMO_PLAYER_LOGIN.password);
+    const api = createDemoBackend({ autoSignIn: true });
+    expect(await api.auth.me()).toMatchObject({ email: DEMO_PLAYER_LOGIN.email, role: 'user' });
+  });
+
+  it('stays signed out after signing out, until someone signs in again', async () => {
+    await createDemoBackend({ autoSignIn: true }).auth.signOut();
+    const api = createDemoBackend({ autoSignIn: true });
+    expect(await api.auth.me()).toBeNull();
+
+    await api.auth.signIn(DEMO_PLAYER_LOGIN.email, DEMO_PLAYER_LOGIN.password);
+    await api.auth.signOut();
+    expect(await createDemoBackend({ autoSignIn: true }).auth.me()).toBeNull();
+
+    await createDemoBackend().auth.signUp('newbie@demo.test', 'demo1234');
+    expect(await createDemoBackend({ autoSignIn: true }).auth.me()).toMatchObject({ email: 'newbie@demo.test' });
+  });
+
+  it('is off unless asked for', async () => {
+    expect(await createDemoBackend().auth.me()).toBeNull();
+  });
+});
 
 describe('sample chat data', () => {
   it('has a Team Chat, open threads with unread, a never-opened thread and a closed one', async () => {
