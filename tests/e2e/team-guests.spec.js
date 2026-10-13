@@ -34,6 +34,12 @@ test('everyone sees players who have not joined yet as grey cards, in the counts
 
   const notJoined = page.getByTestId('not-joined');
   await expect(notJoined).toContainText("2 haven't joined yet");
+  // Players on the site come first; everyone still to join is listed under the invite.
+  await expect(page.getByText('On the site · 12')).toBeVisible();
+  const top = async (locator) => (await locator.boundingBox()).y;
+  expect(await top(card(page, 'Kelly Moss'))).toBeLessThan(await top(notJoined));
+  expect(await top(card(page, 'Dana Wells'))).toBeGreaterThan(await top(notJoined));
+  expect(await top(card(page, 'Mike Russo'))).toBeGreaterThan(await top(notJoined));
   await notJoined.getByRole('button', { name: 'Copy invite' }).click();
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
@@ -53,6 +59,8 @@ test('a captain adds several players at once, and they split the dues', async ({
   await expect(page.getByText('2 players added to the roster')).toBeVisible();
   await expect(page.getByText('14 active · 2 subs (incl. on break) · 4 not joined yet')).toBeVisible();
   await expect(card(page, 'Pat Lee')).toContainText('Not joined yet');
+  // They haven't picked a position, so they aren't listed as floaters on the field (Riley and Chris are).
+  await expect(page.getByText('Floaters · none chosen · 2')).toBeVisible();
 
   // Man / woman and position can be set with Edit (or by them when they join).
   await page.getByRole('button', { name: 'Edit Pat Lee' }).click();
