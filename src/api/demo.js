@@ -6,7 +6,11 @@ import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v9';
 const SESSION_KEY = 'jt_demo_session';
+// Set when someone signs out of the demo, so it stops signing them back in.
+const SIGNED_OUT_KEY = 'jt_demo_signed_out';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
+// Jordan Rivera, a regular player in the sample data.
+export const DEMO_PLAYER_LOGIN = { email: 'jordan@demo.test', password: 'demo1234' };
 
 const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -327,7 +331,11 @@ function save(db) {
 
 const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), 120));
 
-export function createDemoBackend() {
+/**
+ * With autoSignIn, a visitor who isn't signed in starts as the sample captain, so
+ * previews open straight into the site; after signing out they stay signed out.
+ */
+export function createDemoBackend({ autoSignIn = false } = {}) {
   let db = load();
   const listeners = {};
   const authListeners = new Set();
@@ -339,16 +347,35 @@ export function createDemoBackend() {
       return null;
     }
   };
-  const setSession = (id) => {
+  const storeSession = (id) => {
     try {
-      if (id) localStorage.setItem(SESSION_KEY, id);
-      else localStorage.removeItem(SESSION_KEY);
+      if (id) {
+        localStorage.setItem(SESSION_KEY, id);
+        localStorage.removeItem(SIGNED_OUT_KEY);
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.setItem(SIGNED_OUT_KEY, '1');
+      }
     } catch {
       // ignore
     }
+  };
+  const setSession = (id) => {
+    storeSession(id);
     authListeners.forEach((cb) => setTimeout(() => cb(id ? 'SIGNED_IN' : 'SIGNED_OUT'), 0));
   };
   const currentUser = () => db.users.find((u) => u.id === sessionUserId()) || null;
+  const signedOutOnPurpose = () => {
+    try {
+      return localStorage.getItem(SIGNED_OUT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  };
+  if (autoSignIn && !currentUser() && !signedOutOnPurpose()) {
+    const captain = db.users.find((u) => u.email === DEMO_LOGIN.email) || db.users.find((u) => u.role === 'admin');
+    if (captain) storeSession(captain.id);
+  }
   const requireUser = () => {
     if (!currentUser()) throw new Error('Not signed in');
   };

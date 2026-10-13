@@ -21,7 +21,8 @@ requests or merges.
    the Cloudflare preview link (about a minute after the push). In the Claude desktop app's Local mode,
    the site also runs live beside the chat (see [CLAUDE.md](CLAUDE.md)). Previews run in **demo mode
    with sample players and games** (see [vite.config.js](vite.config.js)), so trying something out
-   can't touch real team data. Sign in to a preview as `captain@demo.test` / `demo1234`.
+   can't touch real team data. A preview opens already signed in as the sample captain; after
+   signing out, one tap signs back in as the captain or a player.
 3. **Publish:** on "publish", Claude merges to `main`. Cloudflare puts it live within about two minutes.
 4. **Undo:** on "undo that", Claude reverts the change on `main`.
 
@@ -103,7 +104,7 @@ npm run dev
 ```
 
 With no Supabase settings, the app runs in **demo mode** with sample data stored in your browser.
-Sign in as `captain@demo.test` / `demo1234`. To use the real database, put `VITE_SUPABASE_URL` and
+It opens signed in as the sample captain (`captain@demo.test` / `demo1234`). To use the real database, put `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (see [.env.example](.env.example)).
 
 ## Setting it up from scratch

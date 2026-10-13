@@ -63,10 +63,10 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
      also comments the link on the pull request, but the comment lags the build by several minutes,
      so don't wait for it.
    - Cloud sessions can't open `workers.dev` or `jiveturkeys.app`, so don't try to load the preview.
-   - Give him the preview link with a short "try this" list, and tell him: the preview opens on a
-     sign-in screen, and he signs in with email `captain@demo.test` and password `demo1234`
-     (**Continue with Google** doesn't work on previews). It has pretend players and games, nothing he
-     does there touches the real site, and nothing is live yet.
+   - Give him the preview link with a short "try this" list, and tell him: the preview opens already
+     signed in as the pretend captain, Casey Captain. To see it as a regular player, he signs out from
+     his profile and taps **Sign in as a player** (or **Sign in as the captain** to come back). It has
+     pretend players and games, nothing he does there touches the real site, and nothing is live yet.
    - Share only the preview link itself, never a link to a specific page. Previews show "Not found" for
      any address other than the home page (a Cloudflare preview limitation). If he sees "Not found"
      after refreshing, he opens the link again. He stays signed in.
@@ -127,7 +127,7 @@ can't do this and use preview links.
   ask him to quit and reopen Claude and come back to this chat. Sign the GitHub CLI in; he approves it
   in his browser, so tell him exactly what he'll see. Clone
   `https://github.com/m0ranwad/jive-turkeys-app.git` into the folder, read this file, run `npm install`,
-  then open the preview and tell him to sign in with `captain@demo.test` / `demo1234`. End with
+  then open the preview and tell him it opens signed in as the pretend captain. End with
   "You're all set."
 - `.claude/launch.json` starts the preview with the Supabase settings blanked, so it always runs in
   demo mode with pretend players, even on a computer that has `.env.local`.
@@ -160,7 +160,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Match the existing look: Tailwind, lime/zinc palette, `font-display` uppercase headings, the `CARD`
   style from `src/lib/constants.js`, and mobile-first layouts (most players use phones).
 - Previews of non-main branches run in **demo mode with sample data** (`vite.config.js`). Make new
-  features show up there.
+  features show up there. Demo mode signs visitors in as the sample captain (`autoSignIn` in
+  `src/api/demo.js`) until they sign out; the sign-in screens then offer one-tap captain and player
+  buttons (`src/components/AuthShell.jsx`). The demo password for every sample account is `demo1234`.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, and `src/hooks/useChatUnread.js`
   (the Chat tab badge). `docs/chat.md` is the expected behavior.
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
