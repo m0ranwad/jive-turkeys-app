@@ -56,7 +56,8 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
    `npm test` must pass. Check it in demo mode (`npm run dev` with no `.env.local`) when you can. If you
    touched the chat or the database, also run `npm run test:e2e` and `npm run test:db` (see
    [Tests](#tests)). If you change how the chat works on purpose, update `docs/chat.md` and its tests in
-   the same change.
+   the same change; the same goes for game day (RSVPs, results, stats, Player of the Match) and
+   `docs/games.md`.
 2. **Preview.** Push the branch and open a pull request yourself, with a plain-English title and summary.
    Use your GitHub tools or `gh api` (REST). `gh pr` doesn't work in cloud sessions.
    - Cloudflare builds the preview in about a minute. Poll the `Workers Builds: jive-turkeys-app` check
