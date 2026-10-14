@@ -105,7 +105,7 @@ export function GameDetailPage() {
     navigate('/');
   };
 
-  const saveResult = async ({ score_us, score_them, rows }) => {
+  const saveResult = async ({ score_us, score_them, rows, fillIns }) => {
     await api.entities.Game.update(game.id, { score_us, score_them, has_result: true });
     const existing = data.stats.filter((s) => s.game_id === game.id);
     const updates = [];
@@ -133,6 +133,22 @@ export function GameDetailPage() {
     if (updates.length) await api.entities.GameStat.bulkUpdate(updates);
     if (creates.length) await api.entities.GameStat.bulkCreate(creates);
     for (const statId of removals) await api.entities.GameStat.delete(statId);
+
+    // Fill-ins: people from outside the team who played this game for us.
+    const savedFillIns = (data.fillIns || []).filter((f) => f.game_id === game.id);
+    const fillInLine = (f) => ({
+      display_name: f.display_name.trim() || null,
+      gender: f.gender,
+      goals: f.goals || 0,
+      assists: f.assists || 0,
+    });
+    const fillInUpdates = fillIns.filter((f) => f.id).map((f) => ({ id: f.id, ...fillInLine(f) }));
+    const fillInCreates = fillIns.filter((f) => !f.id).map((f) => ({ game_id: game.id, ...fillInLine(f) }));
+    if (fillInUpdates.length) await api.entities.GameFillIn.bulkUpdate(fillInUpdates);
+    if (fillInCreates.length) await api.entities.GameFillIn.bulkCreate(fillInCreates);
+    for (const gone of savedFillIns.filter((s) => !fillIns.some((f) => f.id === s.id))) {
+      await api.entities.GameFillIn.delete(gone.id);
+    }
     await data.reload();
     toast({ title: 'Result saved' });
   };
@@ -258,7 +274,7 @@ export function GameDetailPage() {
 
       {game.has_result && (
         <>
-          <ResultCard game={game} stats={statsWithNames} />
+          <ResultCard game={game} stats={statsWithNames} fillIns={data.fillIns} />
           <PotmVoting
             game={game}
             profiles={data.players}
@@ -286,6 +302,7 @@ export function GameDetailPage() {
         profiles={resultProfiles}
         rsvps={data.rsvps}
         stats={data.stats}
+        fillIns={data.fillIns}
         onSave={saveResult}
       />
       <GameFormDialog

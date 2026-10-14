@@ -2,10 +2,20 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { MAX_GOALS_MAN, atGoalLimit, goalsTotal, listedRows, resultRows, scoreFollowsGoals } from '@/lib/results';
+import {
+  MAX_GOALS_MAN,
+  atGoalLimit,
+  fillInLabel,
+  gameFillIns,
+  goalsTotal,
+  listedRows,
+  resultRows,
+  scoreFollowsGoals,
+} from '@/lib/results';
 import { cn } from '@/lib/utils';
 
 const TEAM = 'Jive Turkeys';
+let nextFillInKey = 0;
 const EYEBROW = 'text-[10px] font-black uppercase tracking-[0.14em]';
 const SMALL_BUTTON =
   'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition';
@@ -89,11 +99,41 @@ function ScoreBox({ team, value, onChange, dim = false }) {
   );
 }
 
+const genderLetter = (gender) => (gender === 'F' ? 'W' : gender === 'M' ? 'M' : '');
+const META = 'mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-400';
+const LimitTag = () => <span className="rounded-full bg-amber-300 px-1.5 py-px text-black">{MAX_GOALS_MAN}-goal limit</span>;
+
+/** Goals (men stop at two) and assists, for a teammate or a fill-in. */
+function GoalsAndAssists({ name, gender, goals, assists, onChange }) {
+  return (
+    <div className="mt-2.5 grid grid-cols-2 gap-2">
+      <Stepper
+        label="Goals"
+        value={goals}
+        onChange={(value) => onChange({ goals: Math.max(0, value) })}
+        canAdd={!atGoalLimit(gender, goals)}
+        strong
+        addLabel={`Add a goal for ${name}`}
+        removeLabel={`Take away a goal from ${name}`}
+        valueLabel={`${name} goals`}
+      />
+      <Stepper
+        label="Assists"
+        value={assists}
+        onChange={(value) => onChange({ assists: Math.max(0, value) })}
+        addLabel={`Add an assist for ${name}`}
+        removeLabel={`Take away an assist from ${name}`}
+        valueLabel={`${name} assists`}
+      />
+    </div>
+  );
+}
+
 function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
   const name = row.profile.display_name;
-  const gender = row.profile.gender === 'F' ? 'W' : row.profile.gender === 'M' ? 'M' : '';
-  const meta = [gender, row.profile.guest && 'Not joined', !row.played && "Didn't play"].filter(Boolean).join(' · ');
-  const limit = atGoalLimit(row);
+  const meta = [genderLetter(row.profile.gender), row.profile.guest && 'Not joined', !row.played && "Didn't play"]
+    .filter(Boolean)
+    .join(' · ');
   const showCards = cardsOpen || (!row.played && row.blue_cards + row.red_cards > 0);
   const set = (key) => (value) => onChange({ [key]: Math.max(0, value) });
 
@@ -105,9 +145,9 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
       <div className="flex items-start gap-1.5">
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="truncate text-sm font-semibold">{name}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-400">
+          <div className={META}>
             {meta && <span>{meta}</span>}
-            {limit && row.played && <span className="rounded-full bg-amber-300 px-1.5 py-px text-black">{MAX_GOALS_MAN}-goal limit</span>}
+            {row.played && atGoalLimit(row.profile.gender, row.goals) && <LimitTag />}
             {row.blue_cards > 0 && <span className="rounded-full bg-sky-100 px-1.5 py-px text-sky-700">{row.blue_cards} blue</span>}
             {row.red_cards > 0 && <span className="rounded-full bg-red-100 px-1.5 py-px text-red-700">{row.red_cards} red</span>}
           </div>
@@ -148,26 +188,7 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
       </div>
 
       {(row.played || row.goals + row.assists > 0) && (
-        <div className="mt-2.5 grid grid-cols-2 gap-2">
-          <Stepper
-            label="Goals"
-            value={row.goals}
-            onChange={set('goals')}
-            canAdd={!limit}
-            strong
-            addLabel={`Add a goal for ${name}`}
-            removeLabel={`Take away a goal from ${name}`}
-            valueLabel={`${name} goals`}
-          />
-          <Stepper
-            label="Assists"
-            value={row.assists}
-            onChange={set('assists')}
-            addLabel={`Add an assist for ${name}`}
-            removeLabel={`Take away an assist from ${name}`}
-            valueLabel={`${name} assists`}
-          />
-        </div>
+        <GoalsAndAssists name={name} gender={row.profile.gender} goals={row.goals} assists={row.assists} onChange={onChange} />
       )}
 
       {showCards && (
@@ -196,12 +217,50 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
   );
 }
 
+/** Someone from outside the team who played for us: name if anyone caught it, goals and assists. */
+function FillInRow({ fillIn, label, number, onChange, onRemove }) {
+  return (
+    <div data-fill-in={label} className="rounded-2xl border border-dashed border-lime-500 bg-lime-50/50 p-3">
+      <div className="flex items-start gap-1.5">
+        <div className="min-w-0 flex-1">
+          <input
+            type="text"
+            maxLength={60}
+            aria-label={`Name of fill-in ${number}`}
+            placeholder="Name, if you know it"
+            value={fillIn.display_name}
+            onChange={(e) => onChange({ display_name: e.target.value })}
+            className="h-9 w-full min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-zinc-400 focus:border-zinc-900"
+          />
+          <div className={META}>
+            <span>{[genderLetter(fillIn.gender), 'Fill-in, not on the team'].filter(Boolean).join(' · ')}</span>
+            {atGoalLimit(fillIn.gender, fillIn.goals) && <LimitTag />}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label={`Remove ${label}`}
+          onClick={onRemove}
+          className={cn(SMALL_BUTTON, 'text-zinc-400 hover:text-zinc-900')}
+        >
+          <X className="h-3.5 w-3.5" />
+          <span className="hidden min-[360px]:inline">Remove</span>
+        </button>
+      </div>
+      <GoalsAndAssists name={label} gender={fillIn.gender} goals={fillIn.goals} assists={fillIn.assists} onChange={onChange} />
+    </div>
+  );
+}
+
 /**
- * Captain enters the score and the line for each player who played. Full
- * screen on phones, with the score on top and Save always in reach.
+ * Captain enters the score and the line for each player who played, plus any
+ * fill-ins from outside the team. Full screen on phones, with the score on top
+ * and Save always in reach.
  */
-export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats, onSave }) {
+export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats, fillIns: savedFillIns = [], onSave }) {
   const [rows, setRows] = useState([]);
+  // People from outside the team who played: { key, id (once saved), display_name, gender, goals, assists }.
+  const [fillIns, setFillIns] = useState([]);
   // null: our score follows the players' goals; a number once a captain changes it.
   const [ourScore, setOurScore] = useState(null);
   const [scoreThem, setScoreThem] = useState(0);
@@ -212,8 +271,17 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
   useEffect(() => {
     if (!open || !game) return;
     const initial = resultRows({ game, profiles, rsvps, stats });
+    const initialFillIns = gameFillIns(game, savedFillIns).map((f) => ({
+      key: f.id,
+      id: f.id,
+      display_name: f.display_name || '',
+      gender: f.gender,
+      goals: f.goals || 0,
+      assists: f.assists || 0,
+    }));
     setRows(initial);
-    setOurScore(scoreFollowsGoals(game, initial) ? null : (game.score_us ?? 0));
+    setFillIns(initialFillIns);
+    setOurScore(scoreFollowsGoals(game, initial, initialFillIns) ? null : (game.score_us ?? 0));
     setScoreThem(game.score_them ?? 0);
     setCardsOpen([]);
     setAdding(false);
@@ -222,21 +290,28 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
 
   if (!open || !game) return null;
 
-  const goals = goalsTotal(rows);
+  const goals = goalsTotal(rows, fillIns);
   const scoreUs = ourScore ?? goals;
   const listed = listedRows(rows);
   const others = rows.filter((row) => !listed.includes(row));
-  const playedCount = rows.filter((row) => row.played).length;
+  const playedCount = rows.filter((row) => row.played).length + fillIns.length;
 
   const updateRow = (userId, patch) =>
     setRows((list) => list.map((r) => (r.profile.user_id === userId ? { ...r, ...patch } : r)));
+  const addFillIn = (gender) => {
+    nextFillInKey += 1;
+    const key = `new-${nextFillInKey}`;
+    setFillIns((list) => [...list, { key, display_name: '', gender, goals: 0, assists: 0 }]);
+  };
+  const updateFillIn = (key, patch) => setFillIns((list) => list.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+  const removeFillIn = (key) => setFillIns((list) => list.filter((f) => f.key !== key));
   const toggleCards = (userId) =>
     setCardsOpen((open) => (open.includes(userId) ? open.filter((id) => id !== userId) : [...open, userId]));
 
   const save = async () => {
     setBusy(true);
     try {
-      await onSave({ score_us: Number(scoreUs) || 0, score_them: Number(scoreThem) || 0, rows });
+      await onSave({ score_us: Number(scoreUs) || 0, score_them: Number(scoreThem) || 0, rows, fillIns });
       onOpenChange(false);
     } finally {
       setBusy(false);
@@ -289,6 +364,16 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
                 onChange={(patch) => updateRow(row.profile.user_id, patch)}
               />
             ))}
+            {fillIns.map((fillIn, i) => (
+              <FillInRow
+                key={fillIn.key}
+                fillIn={fillIn}
+                label={fillInLabel(fillIn, i, fillIns.length)}
+                number={i + 1}
+                onChange={(patch) => updateFillIn(fillIn.key, patch)}
+                onRemove={() => removeFillIn(fillIn.key)}
+              />
+            ))}
           </div>
 
           {adding ? (
@@ -334,6 +419,28 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
               <UserPlus className="h-4 w-4" /> Add a player
             </button>
           )}
+
+          {/* Someone from outside the team, maybe without a name: their goals count for the score. */}
+          <div className="mt-2 flex items-center gap-1.5 rounded-2xl border-2 border-dashed border-zinc-200 py-1.5 pl-4 pr-1.5">
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">Add a fill-in</div>
+              <div className="text-[11px] text-zinc-400">Not on the team</div>
+            </div>
+            {[
+              ['M', 'Man'],
+              ['F', 'Woman'],
+            ].map(([gender, label]) => (
+              <button
+                key={gender}
+                type="button"
+                aria-label={`Add a fill-in ${label.toLowerCase()}`}
+                onClick={() => addFillIn(gender)}
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-700 transition active:bg-zinc-100"
+              >
+                <Plus className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex shrink-0 gap-2 border-t border-zinc-100 bg-white px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-5">

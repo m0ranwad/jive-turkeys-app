@@ -2,7 +2,7 @@
 // for men, and our score following the players' goals.
 import { describe, expect, it } from 'vitest';
 import { guestAsPlayer } from '@/lib/dues';
-import { atGoalLimit, goalLimit, goalsTotal, listedRows, resultRows, scoreFollowsGoals } from '@/lib/results';
+import { atGoalLimit, fillInLabel, gameFillIns, goalLimit, goalsTotal, listedRows, resultRows, scoreFollowsGoals } from '@/lib/results';
 
 const game = { id: 'g1', has_result: false, score_us: null, score_them: null };
 const kim = { user_id: 'kim', display_name: 'Kim', gender: 'F', status: 'active' };
@@ -63,14 +63,39 @@ describe('result rows', () => {
 });
 
 describe('two-goal limit', () => {
-  it('applies to men only', () => {
-    expect(goalLimit(pat)).toBe(2);
-    expect(goalLimit(mike)).toBe(2);
-    expect(goalLimit(kim)).toBeNull();
-    expect(atGoalLimit({ profile: pat, goals: 1 })).toBe(false);
-    expect(atGoalLimit({ profile: pat, goals: 2 })).toBe(true);
-    expect(atGoalLimit({ profile: pat, goals: 3 })).toBe(true);
-    expect(atGoalLimit({ profile: kim, goals: 5 })).toBe(false);
+  it('applies to men only, fill-ins included', () => {
+    expect(goalLimit(pat.gender)).toBe(2);
+    expect(goalLimit(mike.gender)).toBe(2);
+    expect(goalLimit(kim.gender)).toBeNull();
+    expect(goalLimit(null)).toBeNull();
+    expect(atGoalLimit('M', 1)).toBe(false);
+    expect(atGoalLimit('M', 2)).toBe(true);
+    expect(atGoalLimit('M', 3)).toBe(true);
+    expect(atGoalLimit('F', 5)).toBe(false);
+  });
+});
+
+describe('fill-ins', () => {
+  const dave = { id: 'f1', game_id: 'g1', display_name: 'Dave', gender: 'M', goals: 1, created_date: '2026-10-14T19:05:00Z' };
+  const unknown = { id: 'f2', game_id: 'g1', display_name: null, gender: 'F', goals: 2, created_date: '2026-10-14T19:01:00Z' };
+  const otherGame = { id: 'f3', game_id: 'g9', display_name: 'Lou', gender: 'M', goals: 1, created_date: '2026-10-14T19:00:00Z' };
+
+  it("are only this game's, oldest first", () => {
+    expect(gameFillIns(game, [dave, otherGame, unknown]).map((f) => f.id)).toEqual(['f2', 'f1']);
+  });
+
+  it('go by their name, or "Fill-in" when nobody caught it', () => {
+    expect(fillInLabel(dave, 0, 1)).toBe('Dave');
+    expect(fillInLabel(unknown, 0, 1)).toBe('Fill-in');
+    expect(fillInLabel(unknown, 1, 2)).toBe('Fill-in 2');
+    expect(fillInLabel({ display_name: '  ' }, 0, 1)).toBe('Fill-in');
+  });
+
+  it('count toward our score', () => {
+    const rows = [{ profile: kim, goals: 2 }];
+    expect(goalsTotal(rows, [dave, unknown])).toBe(5);
+    expect(scoreFollowsGoals({ ...game, has_result: true, score_us: 5 }, rows, [dave, unknown])).toBe(true);
+    expect(scoreFollowsGoals({ ...game, has_result: true, score_us: 2 }, rows, [dave, unknown])).toBe(false);
   });
 });
 

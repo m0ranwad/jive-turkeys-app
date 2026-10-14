@@ -7,7 +7,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v12';
+const DB_KEY = 'jt_demo_db_v13';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -229,6 +229,10 @@ function seed() {
   );
   const lastWeek = games.filter((g) => g.has_result).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
   stats.push(forGuest(teamGuests[0], { game_id: lastWeek.id, played: true, goals: 0, assists: 1, blue_cards: 0, red_cards: 0 }));
+  // Someone from outside the team filled in last week; nobody caught his name.
+  const fillIns = [
+    { id: uid(), game_id: lastWeek.id, display_name: null, gender: 'M', goals: 0, assists: 1, created_date: now(), updated_date: now() },
+  ];
   const at = (date, hour) => dayjs(date).hour(hour).toISOString();
   const duesHistory = duesPayments.map((p) => ({
     id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, guest_id: p.guest_id ?? null, paid: true,
@@ -266,6 +270,7 @@ function seed() {
     games,
     rsvps,
     game_stats: stats,
+    game_fill_ins: fillIns,
     potm_votes: votes,
     team_settings: [
       {
@@ -518,7 +523,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         requireUser();
         db[table] = db[table].filter((r) => r.id !== id);
         if (table === 'games') {
-          for (const child of ['rsvps', 'game_stats', 'potm_votes']) db[child] = db[child].filter((r) => r.game_id !== id);
+          for (const child of ['rsvps', 'game_stats', 'game_fill_ins', 'potm_votes']) db[child] = db[child].filter((r) => r.game_id !== id);
         }
         // Mirrors the foreign keys: a thread takes its messages and read markers
         // with it, a message its reactions; replies to it lose the link.

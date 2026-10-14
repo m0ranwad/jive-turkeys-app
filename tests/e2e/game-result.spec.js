@@ -1,5 +1,6 @@
 // Captains enter a game's result: it fits a phone, goals go in with + and −,
-// our score adds itself up, and men stop at two goals (coed rule).
+// our score adds itself up, men stop at two goals (coed rule), and fill-ins
+// from outside the team can score for us.
 // In the sample data, Alex Chen, Jordan Rivera, Mike Russo (hasn't joined),
 // Riley Novak, Sam Okafor and Taylor Brooks said IN for the next game.
 import { expect, isPhone, signIn, test } from './helpers';
@@ -143,4 +144,58 @@ test("take off a no-show, add someone who came anyway, and Edit result opens as 
   await result.getByRole('button', { name: 'Cancel' }).click();
   await expect(resultCard(page)).toContainText('2–0');
   await expect(resultCard(page)).toContainText('Kelly Moss1G');
+});
+
+test('fill-ins from outside the team: a name if anyone caught it, and their goals count', async ({ page }) => {
+  let result = await openResult(page);
+  const ourScore = result.getByLabel('Jive Turkeys score');
+
+  await result.getByRole('button', { name: 'Add a fill-in man' }).click();
+  await expect(result.locator('[data-fill-in]')).toHaveCount(1);
+  await expect(result.locator('[data-fill-in="Fill-in"]')).toContainText('M · Fill-in, not on the team');
+  await result.getByRole('button', { name: 'Add a goal for Fill-in' }).click();
+  await result.getByRole('button', { name: 'Add a goal for Fill-in' }).click();
+  // Men stop at two, fill-ins too.
+  await expect(result.getByRole('button', { name: 'Add a goal for Fill-in' })).toBeDisabled();
+  await expect(ourScore).toHaveValue('2');
+  await expect(result).toContainText('Who played · 7');
+
+  // A second one is numbered until someone types a name.
+  await result.getByRole('button', { name: 'Add a fill-in woman' }).click();
+  await result.getByRole('button', { name: 'Add a goal for Fill-in 2' }).click();
+  await result.getByLabel('Name of fill-in 2').fill('Lena');
+  await result.getByRole('button', { name: 'Add a goal for Lena' }).click();
+  await expect(result.getByRole('button', { name: 'Add a goal for Lena' })).toBeEnabled();
+  await expect(ourScore).toHaveValue('4');
+  // A teammate who set one up still gets the assist.
+  await result.getByRole('button', { name: 'Add an assist for Jordan Rivera' }).click();
+
+  await result.getByRole('button', { name: 'Save result' }).click();
+  await expect(page.getByText('Result saved')).toBeVisible();
+  const card = resultCard(page);
+  await expect(card).toContainText('4–0');
+  await expect(card).toContainText('Fill-in 12G');
+  await expect(card).toContainText('Lenafill-in2G');
+  await expect(card).toContainText('Jordan Rivera1A');
+
+  // They're only on that game, so the leaderboards never show them.
+  await page.locator('a[href="/stats"]:visible').first().click();
+  await page.getByRole('tab', { name: 'Players' }).click();
+  await expect(page.getByText('Jordan Rivera').first()).toBeVisible();
+  await expect(page.getByText('Lena')).toHaveCount(0);
+
+  // Edit result brings them back; taking one off takes their goals off the score.
+  await page.goBack();
+  await page.goBack();
+  result = await openResult(page);
+  await expect(result.getByLabel('Name of fill-in 2')).toHaveValue('Lena');
+  await expect(result.getByLabel('Fill-in 1 goals')).toHaveText('2');
+  await expect(result.getByLabel('Jive Turkeys score')).toHaveValue('4');
+  await result.getByRole('button', { name: 'Remove Fill-in 1' }).click();
+  await expect(result.getByLabel('Jive Turkeys score')).toHaveValue('2');
+  await result.getByRole('button', { name: 'Save result' }).click();
+  await expect(page.getByText('Result saved')).toBeVisible();
+  await expect(resultCard(page)).toContainText('2–0');
+  await expect(resultCard(page)).not.toContainText('Fill-in');
+  await expect(resultCard(page)).toContainText('Lenafill-in2G');
 });

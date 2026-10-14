@@ -46,7 +46,7 @@ declare
   seen text[] := '{}';
 begin
   foreach t in array array[
-    'player_profiles', 'team_settings', 'games', 'rsvps', 'game_stats', 'potm_votes', 'session_dues',
+    'player_profiles', 'team_settings', 'games', 'rsvps', 'game_stats', 'game_fill_ins', 'potm_votes', 'session_dues',
     'dues_payments', 'dues_history', 'team_guests', 'session_roster', 'messages', 'chat_threads',
     'message_reactions', 'announcements', 'team_join_code'
   ] loop
@@ -114,6 +114,7 @@ insert into public.player_profiles (user_id, display_name, gender, status) value
 insert into public.games (id, season_year, session, date, opponent)
   values ('00000000-0000-4000-8000-00000000f0a1', 2026, 1, current_date + 3, 'Net Ninjas');
 insert into public.rsvps (game_id, user_id, status) values ('00000000-0000-4000-8000-00000000f0a1', join_test.id('ann'), 'in');
+insert into public.game_fill_ins (game_id, gender, goals) values ('00000000-0000-4000-8000-00000000f0a1', 'M', 1);
 insert into public.team_guests (id, display_name, status) values ('00000000-0000-4000-8000-00000000f0b1', 'Gus', 'active');
 insert into public.session_dues (season_year, session, total_fee) values (2026, 1, 700);
 insert into public.messages (user_id, author_name, body) values (join_test.id('ann'), 'Ann', 'Ann''s number is in the roster');

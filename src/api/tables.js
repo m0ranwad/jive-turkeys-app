@@ -3,6 +3,7 @@ export const TABLES = {
   Game: 'games',
   Rsvp: 'rsvps',
   GameStat: 'game_stats',
+  GameFillIn: 'game_fill_ins',
   PotmVote: 'potm_votes',
   PlayerProfile: 'player_profiles',
   TeamSettings: 'team_settings',

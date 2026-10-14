@@ -154,6 +154,40 @@ select games_test.refused(
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Fill-ins from outside the team: captains record them on a game's result,
+-- teammates see them, and nobody else changes them.
+-- ---------------------------------------------------------------------------
+
+select games_test.sign_in('kim');
+select games_test.touches(
+  $$insert into public.game_fill_ins (game_id, gender, goals) values (games_test.id('g1'), 'M', 1)$$, 1,
+  'a captain records a fill-in nobody caught the name of');
+select games_test.touches(
+  $$insert into public.game_fill_ins (game_id, display_name, gender, assists) values (games_test.id('g1'), 'Dave', 'M', 1)$$, 1,
+  'and one with a name');
+select games_test.touches($$update public.game_fill_ins set goals = 2 where display_name = 'Dave'$$, 1,
+  'a captain changes a fill-in''s goals');
+select games_test.refused(
+  $$insert into public.game_fill_ins (game_id, gender, goals) values (games_test.id('g1'), 'M', -1)$$,
+  'goals can''t go below zero');
+select games_test.refused(
+  $$insert into public.game_fill_ins (game_id, display_name) values (games_test.id('g1'), '   ')$$,
+  'a fill-in''s name is a name or left blank');
+select games_test.refused(
+  $$insert into public.game_fill_ins (gender, goals) values ('F', 1)$$,
+  'a fill-in belongs to a game');
+reset role;
+
+select games_test.sign_in('pat');
+select games_test.ok((select count(*) = 2 from public.game_fill_ins), 'teammates see the fill-ins');
+select games_test.refused(
+  $$insert into public.game_fill_ins (game_id, gender, goals) values (games_test.id('g1'), 'F', 1)$$,
+  'players cannot add fill-ins');
+select games_test.touches($$update public.game_fill_ins set goals = 5$$, 0, 'or change them');
+select games_test.touches($$delete from public.game_fill_ins$$, 0, 'or remove them');
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Mo joins: he already said OUT for Thursday himself, then picks Mike's name.
 -- ---------------------------------------------------------------------------
 
@@ -177,5 +211,9 @@ select games_test.ok(
 select games_test.ok(
   (select voted_for_id = games_test.id('mo') and voted_for_guest_id is null from public.potm_votes where voter_id = games_test.id('pat')),
   'and so do votes for it');
+
+-- Deleting a game takes its fill-ins with it.
+delete from public.games where id = games_test.id('g1');
+select games_test.ok(not exists (select 1 from public.game_fill_ins), 'a deleted game''s fill-ins go with it');
 
 rollback;

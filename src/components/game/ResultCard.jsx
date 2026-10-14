@@ -1,13 +1,15 @@
 import { ResultBadge } from '@/components/schedule/GameCard';
 import { CARD } from '@/lib/constants';
+import { fillInLabel, gameFillIns } from '@/lib/results';
 import { resultOf } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
-/** Final score plus who scored, assisted, and got carded. */
-export function ResultCard({ game, stats }) {
-  const rows = stats
-    .filter((s) => s.game_id === game.id && s.played)
-    .sort((a, b) => (b.goals || 0) - (a.goals || 0) || (b.assists || 0) - (a.assists || 0));
+/** Final score plus who scored, assisted, and got carded, and any fill-ins from outside the team. */
+export function ResultCard({ game, stats, fillIns = [] }) {
+  const byGoals = (a, b) => (b.goals || 0) - (a.goals || 0) || (b.assists || 0) - (a.assists || 0);
+  const rows = stats.filter((s) => s.game_id === game.id && s.played).sort(byGoals);
+  const ours = gameFillIns(game, fillIns);
+  const fillInRows = ours.map((f, i) => ({ ...f, fillIn: true, player_name: fillInLabel(f, i, ours.length) })).sort(byGoals);
   const result = resultOf(game);
 
   return (
@@ -23,11 +25,16 @@ export function ResultCard({ game, stats }) {
         <span className="ml-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">vs {game.opponent}</span>
       </div>
       <div className="mt-4 space-y-2">
-        {rows.length === 0 && <p className="text-sm text-zinc-400">No player stats recorded.</p>}
-        {rows.map((row) => (
+        {rows.length + fillInRows.length === 0 && <p className="text-sm text-zinc-400">No player stats recorded.</p>}
+        {[...rows, ...fillInRows].map((row) => (
           <div key={row.id} className="flex items-center gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
             <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', row.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
-            <span className="flex-1 truncate text-sm font-semibold">{row.player_name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+              {row.player_name}
+              {row.fillIn && row.display_name?.trim() && (
+                <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-400">fill-in</span>
+              )}
+            </span>
             <div className="flex items-center gap-2 text-[11px] font-bold">
               {(row.goals || 0) > 0 && <span className="rounded-full bg-lime-100 px-2 py-0.5 text-lime-800">{row.goals}G</span>}
               {(row.assists || 0) > 0 && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600">{row.assists}A</span>}

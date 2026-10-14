@@ -16,10 +16,11 @@ export function useSeasonData() {
 
   const load = useCallback(async () => {
     const team = await loadTeam();
-    const [games, rsvps, stats, votes, guests] = await Promise.all([
+    const [games, rsvps, stats, fillIns, votes, guests] = await Promise.all([
       api.entities.Game.list('-date'),
       api.entities.Rsvp.list(),
       api.entities.GameStat.list(),
+      api.entities.GameFillIn.list().catch(() => []),
       api.entities.PotmVote.list(),
       api.entities.TeamGuest.list('display_name').catch(() => []),
     ]);
@@ -38,6 +39,8 @@ export function useSeasonData() {
       games,
       rsvps: rsvps.map(keyedRow),
       stats: stats.map(keyedRow),
+      // People from outside the team who played a game for us; only on that game's result.
+      fillIns,
       votes: votes.map(keyedVote),
     });
   }, []);

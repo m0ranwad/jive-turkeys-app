@@ -200,8 +200,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Game results: captains enter them in `src/components/game/ResultDialog.jsx` (full screen on phones, + and − buttons,
   no typing needed), saved by `saveResult` in `src/pages/GameDetailPage.jsx`. It lists who played (RSVP'd IN until the
   result is first saved, then the saved lines), our score adds up the players' goals until a captain changes it, and men
-  stop at two goals (coed rule). The logic is in `src/lib/results.js`; tests in `tests/unit/results.test.js` and
-  `tests/e2e/game-result.spec.js`.
+  stop at two goals (coed rule). **Fill-ins** are people from outside the team who play a game for us, often nameless:
+  captains add them on the result screen (name optional, man or woman, goals and assists). They're `game_fill_ins` rows
+  for that one game, count toward our score, show on that game's Result card, and nowhere else (no Team page, dues,
+  headcounts, leaderboards or Player of the Match). The logic is in `src/lib/results.js`; tests in
+  `tests/unit/results.test.js`, `tests/e2e/game-result.spec.js` and `supabase/tests/games.test.sql`.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
