@@ -278,5 +278,7 @@ the behavior changed on purpose, update the test and `docs/chat.md` together.
   Keep the empty `previews` block in `wrangler.jsonc`: Cloudflare's preview builds fail without it.
 - Edit `supabase/migrations/20261008000000_init.sql`. It's already applied to the live database, so
   changes to it never take effect.
+- Touch the backup key. `.github/workflows/backup.yml` encrypts each nightly backup to the
+  `BACKUP_AGE_RECIPIENT` variable; the private key stays with the owners. Never print, store or ask for it.
 - Update `vendor/xlsx-*.tgz` from the network. It's vendored because cloud sessions can't reach
   cdn.sheetjs.com.
