@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Bell, BellOff, BellRing, X } from 'lucide-react';
-import { isDemo } from '@/api';
+import { api, isDemo } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
+import { useTeam } from '@/hooks/useTeam';
 import { phoneKind } from '@/lib/install';
 import { pushState, sendTestPush, turnOffPush, turnOnPush } from '@/lib/push';
 import { cn } from '@/lib/utils';
@@ -41,7 +42,8 @@ function useTurnOn() {
     setBusy(true);
     try {
       const next = await turnOnPush();
-      if (next === 'on') toast({ title: 'Notifications are on', description: 'For new chat messages, on this device.' });
+      if (next === 'on')
+        toast({ title: 'Notifications are on', description: 'For chat messages and game alerts, on this device.' });
       if (next === 'blocked')
         toast({ title: 'Notifications are blocked', description: 'Allow them in your settings, then try again.' });
     } catch (err) {
@@ -79,8 +81,12 @@ function readDismissed() {
   }
 }
 
-/** A one-time card in the chat offering notifications (or, on iPhone, the Home Screen first). */
-export function NotificationsPrompt({ state }) {
+/**
+ * A one-time offer to turn notifications on (or, on iPhone, to add the site to
+ * the Home Screen first): a card at the top of Schedule, or a bar in the chat.
+ * "Not now" in either hides both for good.
+ */
+export function NotificationsPrompt({ state, variant = 'bar' }) {
   const [dismissed, setDismissed] = useState(readDismissed);
   const { busy, turnOn } = useTurnOn();
   if (dismissed || (state !== 'off' && state !== 'needs-install')) return null;
@@ -93,17 +99,21 @@ export function NotificationsPrompt({ state }) {
     }
     setDismissed(true);
   };
+  const card = variant === 'card';
 
   return (
     <section
-      aria-label="Chat notifications"
-      className="flex items-center gap-3 border-b border-black/5 bg-zinc-950 px-4 py-2.5 text-white"
+      aria-label="Turn on notifications"
+      className={cn(
+        'flex items-center gap-3 bg-zinc-950 text-white',
+        card ? 'rounded-3xl p-4' : 'border-b border-black/5 px-4 py-2.5',
+      )}
     >
       <BellRing className="h-5 w-5 shrink-0 text-lime-400" />
       <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/80">
         {state === 'needs-install'
           ? 'Want notifications? On iPhone, add Jive Turkeys to your Home Screen first.'
-          : 'Get a notification when someone posts.'}
+          : 'Get notifications for team chat and game alerts, like Player of the Match voting.'}
       </p>
       {state === 'needs-install' ? (
         <button
@@ -132,6 +142,69 @@ export function NotificationsPrompt({ state }) {
   );
 }
 
+const CHOICES = [
+  { key: 'notify_chat', label: 'Chat messages', hint: 'New Team Chat messages, and threads you started or opened.' },
+  { key: 'notify_games', label: 'Game alerts', hint: 'When Player of the Match voting opens, and a reminder before it closes.' },
+];
+
+/** Which notifications you get: chat messages, game alerts, or both. Saved to your profile, so it covers every device. */
+export function NotificationChoices() {
+  const { profile, reload } = useTeam();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(null);
+  if (!profile) return null;
+
+  const flip = async ({ key, label }) => {
+    const on = profile[key] === false;
+    setSaving(key);
+    try {
+      await api.entities.PlayerProfile.update(profile.id, { [key]: on });
+      await reload();
+      toast({ title: `${label}: ${on ? 'on' : 'off'}` });
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2" role="group" aria-label="What to notify you about">
+      {CHOICES.map((choice) => {
+        const on = profile[choice.key] !== false;
+        return (
+          <div key={choice.key} className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-3.5 py-3">
+            <div className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-zinc-900">{choice.label}</span>
+              <span className="block text-[11px] font-medium leading-snug text-zinc-500">{choice.hint}</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={on}
+              aria-label={choice.label}
+              disabled={saving === choice.key}
+              onClick={() => flip(choice)}
+              className={cn(
+                'relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-60',
+                on ? 'bg-lime-400' : 'bg-zinc-300',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all',
+                  on ? 'left-6' : 'left-1',
+                )}
+              />
+            </button>
+          </div>
+        );
+      })}
+      <p className="text-[11px] font-medium text-zinc-500">These apply to every phone and computer you've turned notifications on.</p>
+    </div>
+  );
+}
+
 const BLOCKED_HELP = {
   ios: 'On your iPhone, open Settings → Notifications → Jive Turkeys, and turn on Allow Notifications. Then come back here.',
   android:
@@ -139,8 +212,11 @@ const BLOCKED_HELP = {
   other: "Click the icon next to the site's address and allow notifications. Then come back here.",
 };
 
-/** Settings for this device: turn on or off, send a test, or what to do when blocked. */
-export function NotificationsDialog({ open, onOpenChange, state }) {
+/**
+ * Notifications on this device (turn on or off, send a test, or what to do when
+ * blocked) and which kinds you get. Under the bell in Chat, and on My Profile.
+ */
+export function NotificationSettings({ state, onShowInstall }) {
   const { toast } = useToast();
   const { busy, turnOn } = useTurnOn();
   const [working, setWorking] = useState(false);
@@ -176,66 +252,73 @@ export function NotificationsDialog({ open, onOpenChange, state }) {
     });
 
   return (
+    <div className="space-y-4 text-sm leading-relaxed text-zinc-600">
+      {state === 'on' && (
+        <>
+          <p>
+            <b className="text-zinc-900">On for this device.</b> Not for your own messages, and not for the chat room you're
+            looking at.
+          </p>
+          <NotificationChoices />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button onClick={test} disabled={working} className="flex-1">
+              Send a test
+            </Button>
+            <Button variant="outline" onClick={turnOff} disabled={working} className="flex-1">
+              Turn off
+            </Button>
+          </div>
+        </>
+      )}
+      {state === 'off' && (
+        <>
+          <p>
+            Get a notification for team chat messages and game alerts, like Player of the Match voting. Turn it on on each phone
+            or computer you use; you can pick which kinds once it's on.
+          </p>
+          <Button onClick={turnOn} disabled={busy} className="w-full">
+            <BellRing /> Turn on notifications
+          </Button>
+        </>
+      )}
+      {state === 'needs-install' && (
+        <>
+          <p>
+            On iPhone, notifications work once Jive Turkeys is on your Home Screen. Open it from there, then turn them on here.
+          </p>
+          <Button
+            onClick={() => {
+              onShowInstall?.();
+              showInstallGuide();
+            }}
+            className="w-full"
+          >
+            Show me how
+          </Button>
+        </>
+      )}
+      {state === 'blocked' && <p>Notifications are blocked for Jive Turkeys. {BLOCKED_HELP[phoneKind() || 'other']}</p>}
+      {state === 'unsupported' && (
+        <p>This browser can't show notifications. On a phone, use Safari (iPhone) or Chrome (Android).</p>
+      )}
+      {isDemo && (
+        <p className="rounded-2xl bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+          This is a preview with pretend players, so it shows a sample notification instead of real ones.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The bell's settings, in a dialog. */
+export function NotificationsDialog({ open, onOpenChange, state }) {
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Notifications</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 text-sm leading-relaxed text-zinc-600">
-          {state === 'on' && (
-            <>
-              <p>
-                <b className="text-zinc-900">On for this device.</b> You'll get new Team Chat messages, and messages in threads
-                you started or opened. Not your own, and not for the room you're looking at.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={test} disabled={working} className="flex-1">
-                  Send a test
-                </Button>
-                <Button variant="outline" onClick={turnOff} disabled={working} className="flex-1">
-                  Turn off
-                </Button>
-              </div>
-            </>
-          )}
-          {state === 'off' && (
-            <>
-              <p>
-                Get a notification for new Team Chat messages, and for threads you started or opened. Not your own, and not for
-                the room you're looking at. Turn it on on each phone or computer you use.
-              </p>
-              <Button onClick={turnOn} disabled={busy} className="w-full">
-                <BellRing /> Turn on notifications
-              </Button>
-            </>
-          )}
-          {state === 'needs-install' && (
-            <>
-              <p>
-                On iPhone, notifications work once Jive Turkeys is on your Home Screen. Open it from there, then turn them on
-                here.
-              </p>
-              <Button
-                onClick={() => {
-                  onOpenChange(false);
-                  showInstallGuide();
-                }}
-                className="w-full"
-              >
-                Show me how
-              </Button>
-            </>
-          )}
-          {state === 'blocked' && <p>Notifications are blocked for Jive Turkeys. {BLOCKED_HELP[phoneKind() || 'other']}</p>}
-          {state === 'unsupported' && (
-            <p>This browser can't show notifications. On a phone, use Safari (iPhone) or Chrome (Android).</p>
-          )}
-          {isDemo && (
-            <p className="rounded-2xl bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
-              This is a preview with pretend players, so it shows a sample notification instead of real ones.
-            </p>
-          )}
-        </div>
+        <NotificationSettings state={state} onShowInstall={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );

@@ -26,7 +26,7 @@ export function chatNotification({ thread_id, thread_title, author_name, body })
 
 export const TEST_NOTIFICATION = {
   title: 'Notifications are on 🦃',
-  body: "You'll hear about new chat messages on this device.",
+  body: "You'll get chat messages and game alerts on this device.",
   url: '/banter',
   tag: 'test',
 };

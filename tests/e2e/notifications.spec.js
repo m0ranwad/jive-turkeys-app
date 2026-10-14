@@ -1,5 +1,6 @@
-// Chat notifications on this device: the bell, the one-time card, the settings,
-// and the background helper that shows notifications and opens the chat.
+// Notifications on this device: the bell, the one-time offer (Schedule and chat),
+// the settings (with chat messages and game alerts switched separately), and the
+// background helper that shows notifications and opens the chat.
 // Previews have no sender, so turning on shows a local sample instead; the
 // sender itself is tested in tests/unit/notify.test.js and the database rules
 // in supabase/tests/chat.test.sql.
@@ -10,7 +11,8 @@ const IPHONE_UA =
 
 const bell = (page) => page.getByRole('button', { name: /^Notifications:/ });
 const dialog = (page) => page.getByRole('dialog', { name: 'Notifications' });
-const card = (page) => page.getByRole('region', { name: 'Chat notifications' });
+const card = (page) => page.getByRole('region', { name: 'Turn on notifications' });
+const choice = (scope, name) => scope.getByRole('switch', { name });
 
 const shownNotifications = (page) =>
   page.evaluate(async () =>
@@ -27,7 +29,7 @@ test.describe('turning notifications on and off', () => {
   test('the bell starts off; turning on shows a sample and the bell lights up', async ({ page }) => {
     await expect(bell(page)).toHaveAccessibleName('Notifications: off');
     await bell(page).click();
-    await expect(dialog(page)).toContainText('Get a notification for new Team Chat messages');
+    await expect(dialog(page)).toContainText('Get a notification for team chat messages and game alerts');
     await expect(dialog(page)).toContainText('preview with pretend players');
     await dialog(page).getByRole('button', { name: 'Turn on notifications' }).click();
 
@@ -35,7 +37,7 @@ test.describe('turning notifications on and off', () => {
     await expect(dialog(page)).toContainText('On for this device.');
     await expect
       .poll(() => shownNotifications(page))
-      .toContainEqual({ title: 'Notifications are on 🦃', body: expect.stringContaining('new chat messages') });
+      .toContainEqual({ title: 'Notifications are on 🦃', body: expect.stringContaining('chat messages and game alerts') });
     // The open dialog hides the page behind it, so close it to check the bell.
     await page.keyboard.press('Escape');
     await expect(bell(page)).toHaveAccessibleName('Notifications: on');
@@ -84,7 +86,7 @@ test('the chat offers notifications once; Not now hides the card for good', asyn
   await context.grantPermissions(['notifications']);
   await signIn(page, undefined, { pushPrompt: true });
   await openChat(page);
-  await expect(card(page)).toContainText('Get a notification when someone posts.');
+  await expect(card(page)).toContainText('Get notifications for team chat and game alerts');
   await card(page).getByRole('button', { name: 'Not now' }).click();
   await expect(card(page)).toHaveCount(0);
   await page.reload();
@@ -99,6 +101,51 @@ test('Turn on from the card works too, and the card goes away', async ({ context
   await card(page).getByRole('button', { name: 'Turn on' }).click();
   await expect(bell(page)).toHaveAccessibleName('Notifications: on');
   await expect(card(page)).toHaveCount(0);
+});
+
+test('Schedule offers notifications too, and Not now there hides it in the chat as well', async ({ context, page }) => {
+  await context.grantPermissions(['notifications']);
+  await signIn(page, undefined, { pushPrompt: true });
+  await expect(card(page)).toContainText('Get notifications for team chat and game alerts, like Player of the Match voting.');
+  await card(page).getByRole('button', { name: 'Not now' }).click();
+  await expect(card(page)).toHaveCount(0);
+  await openChat(page);
+  await expect(card(page)).toHaveCount(0);
+});
+
+test('Turn on from Schedule works', async ({ context, page }) => {
+  await context.grantPermissions(['notifications']);
+  await signIn(page, undefined, { pushPrompt: true });
+  await card(page).getByRole('button', { name: 'Turn on' }).click();
+  await expect(page.getByText('Notifications are on', { exact: true })).toBeVisible();
+  await expect(card(page)).toHaveCount(0);
+});
+
+test('chat messages and game alerts are both on, and each can be turned off, from the bell or My Profile', async ({ context, page }) => {
+  await context.grantPermissions(['notifications']);
+  await signIn(page);
+  await openChat(page);
+  await bell(page).click();
+  await dialog(page).getByRole('button', { name: 'Turn on notifications' }).click();
+  await expect(choice(dialog(page), 'Chat messages')).toHaveAttribute('aria-checked', 'true');
+  await expect(choice(dialog(page), 'Game alerts')).toHaveAttribute('aria-checked', 'true');
+  await choice(dialog(page), 'Chat messages').click();
+  await expect(page.getByText('Chat messages: off')).toBeVisible();
+  await expect(choice(dialog(page), 'Chat messages')).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('Escape');
+
+  // The same choices on My Profile, saved.
+  await page.goto('/profile');
+  const settings = page.getByRole('region', { name: 'Notifications' });
+  await expect(settings).toContainText('On for this device.');
+  await expect(choice(settings, 'Chat messages')).toHaveAttribute('aria-checked', 'false');
+  await expect(choice(settings, 'Game alerts')).toHaveAttribute('aria-checked', 'true');
+  await choice(settings, 'Game alerts').click();
+  await expect(page.getByText('Game alerts: off')).toBeVisible();
+  await page.reload();
+  await expect(choice(settings, 'Game alerts')).toHaveAttribute('aria-checked', 'false');
+  await choice(settings, 'Chat messages').click();
+  await expect(choice(settings, 'Chat messages')).toHaveAttribute('aria-checked', 'true');
 });
 
 test('when notifications are blocked, it explains how to allow them', async ({ page }) => {

@@ -100,8 +100,10 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 
 ## 7. Phone notifications
 
-Players turn them on with the bell in the chat header (or the "Get a notification when someone posts" card,
-shown once). They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so
+Players turn them on with the bell in the chat header, on My Profile, or from the one-time offer at the top of
+Schedule (also shown in the chat until it's answered or dismissed). Once on, players choose **Chat messages** and
+**Game alerts** separately (both on unless turned off; `player_profiles.notify_chat` / `notify_games`), and the
+choice covers all their devices. They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so
 the bell walks iPhone players through that first. No email.
 
 How a message becomes a notification: posting a message fires a database trigger (`messages_push`) that calls
@@ -114,6 +116,7 @@ everything, so the function can't be made to send anything else.
 | Team Chat messages notify everyone who turned notifications on, except the author. | `[db]` |
 | Thread messages notify only the thread's starter and players who have opened the thread. | `[db]` |
 | Only players on the team get notifications: a player a captain removed gets none until they're added back. | `[db]` |
+| A player who turned **Chat messages** off gets no chat notifications; **Game alerts** off, no Player of the Match ones. Both start on, and only the player can change theirs. | `[db]` `[browser]` |
 | Nobody gets buzzed for the room they're looking at right now (the chat page checks in every 15 seconds while it's on screen; on any of their devices). | `[db]` `[browser]` |
 | Each message is sent out once, and messages older than 10 minutes never are. | `[db]` |
 | The notification shows the room (Team Chat or the thread's title) and "Name: message", one line, cut at 160 characters. Tapping it opens that room. | `[unit]` `[browser]` |
