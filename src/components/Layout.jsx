@@ -23,7 +23,7 @@ import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
 import { resyncPush } from '@/lib/push';
-import { STATUS_LABEL } from '@/lib/constants';
+import { DEFAULT_SETTINGS, STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -64,7 +64,7 @@ function hasSeenWalkthrough(userId) {
 }
 
 export function Layout() {
-  const { user, profile, isCaptain, loading, reload } = useTeam();
+  const { user, profile, isCaptain, loading, reload, settings } = useTeam();
   const [menuOpen, setMenuOpen] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
@@ -132,7 +132,7 @@ export function Layout() {
                 Jive Turkeys
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.2em] text-lime-400">
-                Season 12 · Indoor Coed
+                {settings?.season_label || DEFAULT_SETTINGS.season_label}
               </span>
             </span>
           </Link>
