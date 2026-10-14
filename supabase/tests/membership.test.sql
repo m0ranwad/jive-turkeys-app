@@ -73,6 +73,22 @@ $$;
 -- just signed up.
 -- ---------------------------------------------------------------------------
 
+-- chat.test.sql runs first and leaves its team (and its last signed-in player)
+-- behind: start signed out, with an empty team (all rolled back at the end),
+-- so Cap really is the first account.
+reset role;
+select set_config('request.jwt.claim.sub', '', false);
+delete from public.dues_history;
+delete from public.dues_payments;
+delete from public.session_roster;
+delete from public.team_guests;
+delete from public.session_dues;
+delete from public.games;
+delete from public.messages;
+delete from public.chat_threads;
+delete from public.announcements;
+delete from auth.users;
+
 insert into join_test.people values
   ('cap', '00000000-0000-4000-8000-0000000000f1'),
   ('ann', '00000000-0000-4000-8000-0000000000f2'),
