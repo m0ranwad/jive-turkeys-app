@@ -1,4 +1,4 @@
-// Chat notifications on this device: checking, turning on and off, and testing.
+// Notifications on this device (chat messages and game alerts): checking, turning on and off, and testing.
 // Each phone or computer is signed up separately.
 import { api } from '@/api';
 import { isInstalled, phoneKind } from '@/lib/install';
@@ -7,7 +7,7 @@ const DEMO_KEY = 'jt_demo_push_on';
 
 export const SAMPLE_NOTIFICATION = {
   title: 'Notifications are on 🦃',
-  body: "You'll hear about new chat messages on this device.",
+  body: "You'll get chat messages and game alerts on this device.",
 };
 
 const demo = () => api.mode === 'demo';

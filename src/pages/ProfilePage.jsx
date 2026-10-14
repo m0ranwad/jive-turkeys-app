@@ -4,6 +4,7 @@ import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
 import { ProfileForm } from '@/components/ProfileForm';
 import { Walkthrough } from '@/components/Walkthrough';
+import { NotificationSettings, usePush } from '@/components/chat/Notifications';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
@@ -19,6 +20,7 @@ export function ProfilePage() {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+  const pushStatus = usePush();
 
   if (loading) return <PageSpinner />;
 
@@ -84,6 +86,13 @@ export function ProfilePage() {
         <p className="mb-4 mt-1 text-xs font-medium text-zinc-500">Your phone number is visible only to logged-in teammates.</p>
         <ProfileForm key={profile?.id || 'new'} initial={profile} onSubmit={saveProfile} busy={busy} />
       </section>
+
+      {pushStatus && (
+        <section className={CARD} aria-label="Notifications">
+          <h2 className="mb-3 font-display text-sm font-extrabold uppercase tracking-[0.12em]">Notifications</h2>
+          <NotificationSettings state={pushStatus} />
+        </section>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <button onClick={() => setWalkthroughOpen(true)} className={cn(softButton, 'text-zinc-700')}>

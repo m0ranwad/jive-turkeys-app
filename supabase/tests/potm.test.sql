@@ -264,6 +264,39 @@ select potm_test.ok(
   (select count(*) = 0 from public.potm_push_targets('00000000-0000-4000-8000-0000000000d3', 'open')),
   'nothing is sent for a game whose voting has closed');
 
+-- ---------------------------------------------------------------------------
+-- Players choose which notifications they get. Pat turns game alerts off and
+-- Kim turns chat messages off; everyone else keeps both (the default).
+-- ---------------------------------------------------------------------------
+
+select potm_test.ok(
+  (select bool_and(notify_chat and notify_games) from public.player_profiles where user_id in (select id from potm_test.people)),
+  'both kinds of notifications are on unless a player turns one off');
+select potm_test.sign_in('pat');
+select potm_test.touches($$update public.player_profiles set notify_games = false where user_id = auth.uid()$$, 1,
+  'a player turns game alerts off for themselves');
+select potm_test.touches($$update public.player_profiles set notify_chat = false where user_id = potm_test.id('ann')$$, 0,
+  'but not for anyone else');
+reset role;
+select potm_test.sign_in('kim');
+update public.player_profiles set notify_chat = false where user_id = auth.uid();
+reset role;
+
+update public.team_settings set potm_notify = true;
+insert into public.games (id, season_year, session, date, opponent) values
+  ('00000000-0000-4000-8000-0000000000d4', 2026, 1, current_date, 'FC Lightning');
+update public.games set has_result = true, score_us = 2, score_them = 0 where id = '00000000-0000-4000-8000-0000000000d4';
+select potm_test.ok(
+  potm_test.names(array(select subscription_id from public.potm_push_targets('00000000-0000-4000-8000-0000000000d4', 'open')))
+    = '{ann,kim,lee}',
+  'game alerts skip players who turned them off');
+insert into public.messages (id, user_id, author_name, body)
+  values ('00000000-0000-4000-8000-0000000000e1', potm_test.id('ann'), 'Ann', 'Nice win');
+select potm_test.ok(
+  potm_test.names(array(select subscription_id from public.chat_push_targets('00000000-0000-4000-8000-0000000000e1')))
+    = '{lee,pat}',
+  'chat notifications skip players who turned them off (and the author)');
+
 -- Players can't change the settings or send notifications themselves.
 select potm_test.sign_in('pat');
 select potm_test.touches($$update public.team_settings set potm_window_hours = 100$$, 0, 'players cannot change the voting settings');

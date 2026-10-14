@@ -4,6 +4,7 @@ import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
+import { NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
@@ -16,6 +17,7 @@ import { headcount } from '@/lib/team-logic';
 
 export function SchedulePage() {
   const data = useSeasonData();
+  const pushStatus = usePush();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -76,6 +78,7 @@ export function SchedulePage() {
 
       <PotmPrompt data={data} />
       <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
+      <NotificationsPrompt state={pushStatus} variant="card" />
 
       {sessions.length === 0 && (
         <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">
