@@ -12,6 +12,7 @@ import { CallForSubsButton, CopyReminderButton } from '@/components/game/ShareBu
 import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
+import { AddToCalendar } from '@/components/game/AddToCalendar';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
@@ -227,6 +228,7 @@ export function GameDetailPage() {
                   </button>
                 ))}
               </div>
+              <AddToCalendar game={game} settings={data.settings} />
             </div>
           )}
           {game.notes && <p className="mt-3 rounded-2xl bg-white/5 px-3.5 py-2.5 text-xs text-white/70">{game.notes}</p>}
