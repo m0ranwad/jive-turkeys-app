@@ -7,7 +7,44 @@ import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { CARD, DEFAULT_SETTINGS } from '@/lib/constants';
 import { saveTeamSettings } from '@/lib/actions';
+import { hoursLabel } from '@/lib/potm';
 import { cn } from '@/lib/utils';
+
+const WINDOW_HOURS = [6, 12, 24, 48];
+const REMINDER_HOURS = [0, 1, 2, 3, 6, 12];
+
+/** A setting picked from a row of buttons, like the Player of the Match award choice. */
+function Choice({ label, hint, options, value, onPick }) {
+  return (
+    <div className="space-y-2" role="group" aria-label={label}>
+      <div>
+        <Label>{label}</Label>
+        {hint && <p className="mt-0.5 text-[11px] font-medium text-zinc-500">{hint}</p>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={String(opt.v)}
+            type="button"
+            aria-pressed={value === opt.v}
+            onClick={() => onPick(opt.v)}
+            className={cn(
+              'rounded-2xl border-2 px-3 py-2 text-xs font-bold uppercase tracking-[0.06em] transition',
+              value === opt.v ? 'border-black bg-lime-400 text-black' : 'border-zinc-200 text-zinc-500 hover:border-zinc-300',
+            )}
+          >
+            {opt.l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ON_OFF = [
+  { v: true, l: 'On' },
+  { v: false, l: 'Off' },
+];
 
 export function SettingsPage() {
   const { user, settings, isCaptain, loading, reload, roster } = useTeam();
@@ -35,6 +72,10 @@ export function SettingsPage() {
         min_players: Number(form.min_players) || 0,
         min_women: Number(form.min_women) || 0,
         potm_mode: form.potm_mode,
+        potm_window_hours: Number(form.potm_window_hours),
+        potm_notify: !!form.potm_notify,
+        potm_reminder_hours: Number(form.potm_reminder_hours),
+        potm_announce: !!form.potm_announce,
       });
       await reload();
       toast({ title: 'Team settings saved' });
@@ -87,6 +128,51 @@ export function SettingsPage() {
             ))}
           </div>
         </div>
+        <section className="space-y-4 rounded-2xl bg-zinc-50 p-3.5" aria-label="Player of the Match voting">
+          <div>
+            <span className="block text-sm font-bold">Player of the Match voting</span>
+            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
+              Voting opens when a captain posts the result. Players who played can vote until it closes. Notifications
+              reach players who turned them on with the bell in the chat.
+            </span>
+          </div>
+          <Choice
+            label="Voting stays open for"
+            options={WINDOW_HOURS.map((h) => ({ v: h, l: hoursLabel(h) }))}
+            value={Number(form.potm_window_hours)}
+            onPick={(h) =>
+              // A reminder needs to come before voting closes.
+              set({
+                potm_window_hours: h,
+                potm_reminder_hours: Number(form.potm_reminder_hours) < h ? form.potm_reminder_hours : Math.max(...REMINDER_HOURS.filter((r) => r < h)),
+              })
+            }
+          />
+          <Choice
+            label="Tell the team when voting opens"
+            hint="A notification with the score and when voting closes."
+            options={ON_OFF}
+            value={!!form.potm_notify}
+            onPick={(v) => set({ potm_notify: v })}
+          />
+          <Choice
+            label="Remind players who haven't voted"
+            hint="Only players who played and haven't voted yet. Says how long is left."
+            options={REMINDER_HOURS.filter((h) => h < Number(form.potm_window_hours)).map((h) => ({
+              v: h,
+              l: h === 0 ? 'Off' : `${hoursLabel(h)} before`,
+            }))}
+            value={Number(form.potm_reminder_hours)}
+            onPick={(h) => set({ potm_reminder_hours: h })}
+          />
+          <Choice
+            label="Post the winners in Team Chat"
+            hint="When voting closes, with the vote counts. Everyone with chat notifications on hears about it."
+            options={ON_OFF}
+            value={!!form.potm_announce}
+            onPick={(v) => set({ potm_announce: v })}
+          />
+        </section>
         <div className="rounded-2xl bg-zinc-50 p-3.5">
           <span className="block text-sm font-bold">RSVP reminders</span>
           <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">

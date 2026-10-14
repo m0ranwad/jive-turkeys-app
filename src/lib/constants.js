@@ -24,6 +24,13 @@ export const DEFAULT_SETTINGS = {
   min_players: 8,
   min_women: 3,
   potm_mode: 'separate',
+  // Player of the Match voting: open this many hours after a result is posted,
+  // a notification when it opens, a reminder this many hours before it closes
+  // (0 is off), and the winners posted in Team Chat when it closes.
+  potm_window_hours: 12,
+  potm_notify: true,
+  potm_reminder_hours: 3,
+  potm_announce: true,
   email_reminders: false,
   rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
   quick_hits: [],

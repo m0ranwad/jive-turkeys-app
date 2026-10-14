@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
+import { PotmPrompt } from '@/components/PotmPrompt';
 import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
@@ -73,6 +74,7 @@ export function SchedulePage() {
         )}
       </PageHeader>
 
+      <PotmPrompt data={data} />
       <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
 
       {sessions.length === 0 && (
