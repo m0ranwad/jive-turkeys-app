@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/api';
-import { duesMembers } from '@/lib/dues';
+import { duesMembers, profileAsPlayer } from '@/lib/dues';
 import { hasSessionList, membersForSession } from '@/lib/roster';
 
 /** Everything the Dues page shows, for every session, loaded together. */
@@ -20,7 +20,7 @@ export function useDues() {
         api.entities.SessionRoster.list().catch(() => null),
       ]);
       // `profiles` is everyone who splits the dues: app players and guests alike.
-      const members = duesMembers({ profiles, guests, payments, history });
+      const members = duesMembers({ profiles: profiles.map(profileAsPlayer), guests, payments, history });
       setState({
         loading: false,
         failed: false,

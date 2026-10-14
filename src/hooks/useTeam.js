@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/api';
 import { DEFAULT_SETTINGS } from '@/lib/constants';
+import { profileAsPlayer } from '@/lib/dues';
 
 // Signed-in user, roster and team settings are needed on almost every page,
 // so they're cached for a short time and shared between pages.
@@ -28,12 +29,14 @@ export function loadTeam() {
   if (cache.promise) return cache.promise;
 
   cache.promise = (async () => {
-    const [user, profiles, settingsRows, roster] = await Promise.all([
+    const [user, allProfiles, settingsRows, roster] = await Promise.all([
       api.auth.me(),
       api.entities.PlayerProfile.list(),
       api.entities.TeamSettings.list(),
       loadRoster(),
     ]);
+    // Removed players stay in the list (past stats and dues keep their names) but are off the roster.
+    const profiles = allProfiles.map(profileAsPlayer);
     const data = {
       user,
       profiles,

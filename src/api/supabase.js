@@ -203,6 +203,12 @@ export function createSupabaseBackend(url, key) {
       if (error) fail(error);
     },
 
+    /** Captains: take a signed-up player off the team (they lose access), or add them back. */
+    async setRemoved(userId, removed) {
+      const { error } = await supabase.rpc('set_team_member_removed', { p_user_id: userId, p_removed: removed });
+      if (error) fail(error);
+    },
+
     async setRole(userId, role) {
       const { error } = await supabase.from('users').update({ role }).eq('id', userId).select().single();
       if (error) fail(error);

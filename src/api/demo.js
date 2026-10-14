@@ -445,7 +445,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
     });
     db.session_roster.push(
-      ...db.player_profiles.map((p) => entry({ user_id: p.user_id }, p.status)),
+      ...db.player_profiles.filter((p) => !p.removed).map((p) => entry({ user_id: p.user_id }, p.status)),
       ...db.team_guests.filter((g) => !g.removed && !g.linked_user_id).map((g) => entry({ guest_id: g.id }, g.status)),
     );
   };
@@ -458,7 +458,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     const period = current();
     startSession(period);
     const who = table === 'player_profiles' ? { user_id: record.user_id } : { guest_id: record.id };
-    const status = table === 'team_guests' && record.removed ? 'off' : record.status;
+    const status = record.removed ? 'off' : record.status;
     const mine = (r) =>
       sessionOf(r) === `${period.year}-${period.session}` && (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id);
     const patch = { status, answered_at: now(), changed_by: currentUser()?.id ?? null, updated_date: now() };
@@ -472,7 +472,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     }
   };
   const follows = (table, fields) =>
-    (table === 'player_profiles' && 'status' in fields) || (table === 'team_guests' && ('status' in fields || 'removed' in fields));
+    (table === 'player_profiles' || table === 'team_guests') && ('status' in fields || 'removed' in fields);
 
   function entity(table) {
     const write = () => save(db);
@@ -641,6 +641,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     async joinTeam(code) {
       requireUser();
       const user = currentUser();
+      if (user.removed_at) throw new Error(JOIN_ERRORS.removed);
       if (user.joined_team_at) return delay(null);
       if (user.join_blocked_until && user.join_blocked_until > now()) throw new Error(JOIN_ERRORS.blocked);
       const right = (db.team_join_code[0]?.code || '').trim().toLowerCase();
@@ -674,6 +675,24 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       requireUser();
       if (currentUser().role !== 'admin') throw new Error('Only captains can link a player');
       await moveGuest(guestId, userId);
+      return delay(null);
+    },
+    // Same as the database's set_team_member_removed().
+    async setRemoved(userId, removed) {
+      requireUser();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can remove a player');
+      if (userId === currentUser().id) throw new Error("You can't remove yourself");
+      const user = db.users.find((u) => u.id === userId);
+      if (!user) throw new Error("That player isn't on the site");
+      if (removed) Object.assign(user, { removed_at: now(), joined_team_at: null, role: 'user' });
+      else Object.assign(user, { removed_at: null, joined_team_at: now() });
+      db.player_profiles
+        .filter((p) => p.user_id === userId)
+        .forEach((p) => {
+          Object.assign(p, removed ? { removed: true, is_captain: false } : { removed: false, status: 'active' });
+          followStatus('player_profiles', p);
+        });
+      save(db);
       return delay(null);
     },
     async setRole(userId, role) {

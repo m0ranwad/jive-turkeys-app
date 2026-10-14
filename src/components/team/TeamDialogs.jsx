@@ -137,3 +137,51 @@ export function InviteDialog({ open, onOpenChange, isCaptain }) {
     </Dialog>
   );
 }
+
+/** Captains: take a signed-up player off the team, after saying what that means. */
+export function RemovePlayerDialog({ player, onOpenChange, onRemoved }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const first = player?.display_name.split(' ')[0] || '';
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.users.setRemoved(player.user_id, true);
+      toast({ title: `${player.display_name} removed from the team` });
+      onOpenChange(false);
+      await onRemoved?.();
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!player} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">
+            Remove {player?.display_name}?
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 rounded-2xl bg-red-50 p-4 text-sm text-red-900" role="alert">
+          <p>
+            {first} comes off the roster and out of the dues split, so everyone else's share goes up. {first} can't see
+            the team site or the chat anymore, and the team code won't let them back in.
+          </p>
+          <p>Their past stats, dues payments and chat messages stay. You can add them back from the bottom of this page.</p>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={remove} disabled={busy}>
+            {busy ? 'Removing…' : 'Remove'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
