@@ -198,7 +198,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   players plus roster names) and keys those rows like everyone else's (`keyedRow()`, `keyedVote()` in
   `src/lib/team-logic.js`); new rows use `playerKey()`. Picking your name moves them to your account.
 - Game results: captains enter them in `src/components/game/ResultDialog.jsx` (full screen on phones, + and − buttons,
-  no typing needed), saved by `saveResult` in `src/pages/GameDetailPage.jsx`. It lists who played (RSVP'd IN until the
+  no typing needed), saved by `saveResult` in `src/pages/GameDetailPage.jsx` in one step (`api.games.saveResult`, the
+  database function `save_game_result()`: the score, stat lines and fill-ins together or not at all). It lists who played (RSVP'd IN until the
   result is first saved, then the saved lines), our score adds up the players' goals until a captain changes it, and men
   stop at two goals (coed rule). **Fill-ins** are people from outside the team who play a game for us, often nameless:
   captains add them on the result screen (name optional, man or woman, goals and assists). They're `game_fill_ins` rows
@@ -215,6 +216,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
   `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
+- When a save fails, say so with `saveFailedToast()` (`src/lib/errors.js`: "That didn't save" and the reason in plain
+  words) and keep what was entered on screen. Browser tests act out no signal with `localStorage.jt_demo_offline`.
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
   and `scripts/db-rehearsal.sh`.
 

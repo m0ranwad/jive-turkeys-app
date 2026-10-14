@@ -212,6 +212,72 @@ select games_test.ok(
   (select voted_for_id = games_test.id('mo') and voted_for_guest_id is null from public.potm_votes where voter_id = games_test.id('pat')),
   'and so do votes for it');
 
+-- ---------------------------------------------------------------------------
+-- A result saves in one step: the score, stat lines and fill-ins together, or
+-- nothing at all.
+-- ---------------------------------------------------------------------------
+
+select games_test.sign_in('pat');
+select games_test.refused(
+  $$select public.save_game_result(games_test.id('g2'), 9, 0, '[]'::jsonb, '[]'::jsonb)$$,
+  'players cannot save a result');
+reset role;
+
+select games_test.sign_in('kim');
+select public.save_game_result(
+  games_test.id('g2'), 3, 1,
+  jsonb_build_array(
+    jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 1),
+    jsonb_build_object('user_id', games_test.id('pat'), 'played', true, 'assists', 1),
+    jsonb_build_object('guest_id', games_test.id('dana'), 'played', true, 'goals', 1)
+  ),
+  jsonb_build_array(jsonb_build_object('display_name', ' Sub Steve ', 'gender', 'M', 'goals', 1))
+);
+reset role;
+select games_test.ok(
+  (select has_result and score_us = 3 and score_them = 1 from public.games where id = games_test.id('g2')),
+  'a captain saves the score');
+select games_test.ok(
+  (select count(*) = 3 from public.game_stats where game_id = games_test.id('g2') and played),
+  'with each player''s stat line, roster names included');
+select games_test.ok(
+  (select display_name = 'Sub Steve' from public.game_fill_ins where game_id = games_test.id('g2')),
+  'and the fill-ins');
+
+-- Pat didn't play after all, and the fill-in's goal was Kim's.
+select games_test.sign_in('kim');
+select public.save_game_result(
+  games_test.id('g2'), 3, 1,
+  jsonb_build_array(
+    jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 2),
+    jsonb_build_object('user_id', games_test.id('pat'), 'played', false)
+  ),
+  '[]'::jsonb
+);
+reset role;
+select games_test.ok(
+  (select goals = 2 from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim')),
+  'editing a result changes the lines');
+select games_test.ok(
+  not exists (select 1 from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('pat')),
+  'removes a line for someone who didn''t play');
+select games_test.ok(
+  exists (select 1 from public.game_stats where game_id = games_test.id('g2') and guest_id = games_test.id('dana')),
+  'keeps lines for players not on the screen');
+select games_test.ok(not exists (select 1 from public.game_fill_ins where game_id = games_test.id('g2')), 'and removes fill-ins taken off');
+
+select games_test.sign_in('kim');
+select games_test.refused(
+  $$select public.save_game_result(games_test.id('g2'), 7, 7,
+      jsonb_build_array(jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 0)),
+      jsonb_build_array(jsonb_build_object('gender', 'M', 'goals', -1)))$$,
+  'a save that fails partway');
+reset role;
+select games_test.ok(
+  (select score_us = 3 and score_them = 1 from public.games where id = games_test.id('g2'))
+  and (select goals = 2 from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim')),
+  'changes nothing at all');
+
 -- Deleting a game takes its fill-ins with it.
 delete from public.games where id = games_test.id('g1');
 select games_test.ok(not exists (select 1 from public.game_fill_ins), 'a deleted game''s fill-ins go with it');
