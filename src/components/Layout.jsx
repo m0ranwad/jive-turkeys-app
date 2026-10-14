@@ -20,6 +20,7 @@ import { isDemo } from '@/api';
 import { InstallCard, InstallGuide, useInstall } from '@/components/InstallApp';
 import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
+import { setHomeScreenBadge } from '@/lib/badge';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
 import { resyncPush } from '@/lib/push';
@@ -72,6 +73,10 @@ export function Layout() {
   const { pathname } = useLocation();
   const onChat = pathname === CHAT_PATH;
   const chatUnread = useChatUnread(!!user);
+  // The number on the Home Screen icon follows unread chat messages while the site is open.
+  useEffect(() => {
+    if (user) setHomeScreenBadge(chatUnread);
+  }, [user, chatUnread]);
   // No badge while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread : 0);
   const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';

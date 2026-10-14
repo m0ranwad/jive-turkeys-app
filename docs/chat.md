@@ -123,6 +123,7 @@ everything, so the function can't be made to send anything else.
 | If notifications can't be sent (the sender is down, not set up yet), messages still post normally. | `[db]` |
 | A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
 | Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
+| The Home Screen icon shows a number: the notifications waiting while the site is closed, and the unread chat count while it's open, going down as you read. iPhone (Home Screen app, iOS 16.4+) and installed apps on computers show the number; most Android phones show a dot on their own while a notification is waiting. | `[browser]` |
 | The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
 | Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |

@@ -172,6 +172,22 @@ test.describe('on an iPhone that has not added the site to its Home Screen', () 
   });
 });
 
+test('the Home Screen icon shows the unread chat count while the site is open, and goes down as you read', async ({ page }) => {
+  // Browsers only show the number for an installed app, so record what the site asks for.
+  await page.addInitScript(() => {
+    window.badgeCalls = [];
+    navigator.setAppBadge = async (n) => window.badgeCalls.push(n);
+    navigator.clearAppBadge = async () => window.badgeCalls.push(0);
+  });
+  await signIn(page);
+  const unread = Number(await page.locator('a[href="/banter"]:visible').first().locator('[aria-label$="unread"]').textContent());
+  expect(unread).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => window.badgeCalls.at(-1))).toBe(unread);
+  // Reading Team Chat leaves only the threads' unread messages.
+  await openChat(page);
+  await expect.poll(() => page.evaluate(() => window.badgeCalls.at(-1))).toBeLessThan(unread);
+});
+
 test.describe('the background helper', () => {
   test('shows a pushed chat notification, and tapping it opens that room', async ({ context, page }) => {
     await context.grantPermissions(['notifications']);
@@ -193,6 +209,13 @@ test.describe('the background helper', () => {
       };
     });
 
+    // Record the Home Screen icon number the helper sets (browsers only show it for installed apps).
+    await worker.evaluate(() => {
+      self.badgeCalls = [];
+      Object.defineProperty(WorkerNavigator.prototype, 'setAppBadge', { value: async (n) => self.badgeCalls.push(n), configurable: true });
+      Object.defineProperty(WorkerNavigator.prototype, 'clearAppBadge', { value: async () => self.badgeCalls.push(0), configurable: true });
+    });
+
     await worker.evaluate(() => {
       const data = JSON.stringify({
         title: '⚽ Sunday pickup?',
@@ -209,11 +232,15 @@ test.describe('the background helper', () => {
         ),
       )
       .toEqual([['⚽ Sunday pickup?', 'Sam O.: Field 3 at 10?', 'chat-abc', '/banter?thread=abc']]);
+    // One notification waiting: 1 on the icon.
+    await expect.poll(() => worker.evaluate(() => self.badgeCalls.at(-1))).toBe(1);
 
     await worker.evaluate(async () => {
       const [notification] = await self.registration.getNotifications();
       await self.fire(new NotificationEvent('notificationclick', { notification }));
     });
     await expect(page).toHaveURL(/\/banter\?thread=abc$/);
+    // Tapped, so none waiting.
+    await expect.poll(() => worker.evaluate(() => self.badgeCalls.at(-1))).toBe(0);
   });
 });
