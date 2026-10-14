@@ -18,7 +18,9 @@ export default defineConfig({
     alias: { '@': path.resolve(import.meta.dirname, 'src') },
   },
   build: {
-    // The spreadsheet reader is split into its own lazily loaded chunk.
+    // Screens load as they're opened (App.jsx). What every visit downloads
+    // (React, the router, Supabase and Schedule) is about 670 kB, so a warning
+    // here means it grew. Raise it only on purpose.
     chunkSizeWarningLimit: 700,
   },
 });

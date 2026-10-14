@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import {
   BookOpen,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { isDemo } from '@/api';
 import { InstallCard, InstallGuide, useInstall } from '@/components/InstallApp';
+import { PageSpinner } from '@/components/PageSpinner';
 import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
@@ -188,7 +189,10 @@ export function Layout() {
       {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
       <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
         {pathname === '/' && <InstallCard onShowHow={() => setInstallOpen(true)} />}
-        <Outlet />
+        {/* Keeps the header and tabs up while a screen downloads the first time. */}
+        <Suspense fallback={<PageSpinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <nav
