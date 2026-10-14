@@ -7,16 +7,20 @@ import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
+import { AnswerButtons, NextGameCard } from '@/components/schedule/NextGame';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { ImportScheduleDialog } from '@/components/schedule/ImportScheduleDialog';
 import { useToast } from '@/components/ui/toast';
+import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
-import { headcount } from '@/lib/team-logic';
+import { headcount, isRosterStatus, suspendedIds } from '@/lib/team-logic';
 
 export function SchedulePage() {
   const data = useSeasonData();
+  const rsvp = useRsvp(data);
+  const [showPast, setShowPast] = useState(false);
   const pushStatus = usePush();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
@@ -51,6 +55,56 @@ export function SchedulePage() {
 
   if (data.loading) return <PageSpinner />;
 
+  // The soonest game without a result, and the session it's in (or the latest one).
+  const nextGame = (data.games || [])
+    .filter((g) => !g.has_result && g.date >= todayIso)
+    .sort((a, b) => (a.date === b.date ? (a.time || '').localeCompare(b.time || '') : a.date < b.date ? -1 : 1))[0];
+  const currentKey = nextGame ? `${nextGame.season_year}-${nextGame.session}` : sessions[0] && `${sessions[0].year}-${sessions[0].session}`;
+  // The current session and the one before it stay open (last week's results, Player of the Match); older ones fold away.
+  const currentIndex = Math.max(0, sessions.findIndex((s) => `${s.year}-${s.session}` === currentKey));
+  const currentSessions = sessions.slice(0, currentIndex + 2);
+  const pastSessions = sessions.slice(currentIndex + 2);
+  const onRoster = isRosterStatus(data.profile);
+
+  const sessionBlock = (s) => (
+    <section key={`${s.year}-${s.session}`} className="space-y-3">
+      <div className="flex items-center gap-3">
+        <h2 className="font-display text-lg font-extrabold uppercase tracking-[0.08em]">{seasonLabel(s.year, s.session)}</h2>
+        <span className="h-px flex-1 bg-zinc-200" />
+        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+          {s.games.length} game{s.games.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      {s.upcoming.length > 0 && (
+        <div className="space-y-2.5">
+          {s.upcoming.map((g) => (
+            <div key={g.id} className="space-y-1.5">
+              <GameCard game={g} headcount={counts[g.id]} settings={data.settings} />
+              {/* Answer from the list (the next game's buttons are on its card above). */}
+              {onRoster && !g.has_result && g.id !== nextGame?.id && (
+                <AnswerButtons
+                  compact
+                  game={g}
+                  status={rsvp.mine(g)?.status}
+                  onSet={(status) => rsvp.setStatus(g, status)}
+                  busy={rsvp.busy === g.id}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {s.past.length > 0 && (
+        <div className="space-y-2.5 pt-1">
+          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">Played</span>
+          {s.past.map((g) => (
+            <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+
   const defaultSession = sessions[0]
     ? { year: sessions[0].year, session: sessions[0].session }
     : { year: dayjs().year(), session: 1 };
@@ -76,6 +130,18 @@ export function SchedulePage() {
         )}
       </PageHeader>
 
+      {nextGame && (
+        <NextGameCard
+          game={nextGame}
+          headcount={counts[nextGame.id]}
+          settings={data.settings}
+          rsvp={rsvp.mine(nextGame)}
+          onRoster={onRoster}
+          suspended={suspendedIds(nextGame, data.games, data.stats).includes(data.user?.id)}
+          onSet={(status) => rsvp.setStatus(nextGame, status)}
+          busy={rsvp.busy === nextGame.id}
+        />
+      )}
       <PotmPrompt data={data} />
       <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
       <NotificationsPrompt state={pushStatus} variant="card" />
@@ -91,32 +157,23 @@ export function SchedulePage() {
         </div>
       )}
 
-      {sessions.map((s) => (
-        <section key={`${s.year}-${s.session}`} className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h2 className="font-display text-lg font-extrabold uppercase tracking-[0.08em]">{seasonLabel(s.year, s.session)}</h2>
-            <span className="h-px flex-1 bg-zinc-200" />
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
-              {s.games.length} game{s.games.length === 1 ? '' : 's'}
-            </span>
-          </div>
-          {s.upcoming.length > 0 && (
-            <div className="space-y-2.5">
-              {s.upcoming.map((g) => (
-                <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
-              ))}
-            </div>
-          )}
-          {s.past.length > 0 && (
-            <div className="space-y-2.5 pt-1">
-              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">Played</span>
-              {s.past.map((g) => (
-                <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
-              ))}
-            </div>
-          )}
-        </section>
-      ))}
+      {currentSessions.map(sessionBlock)}
+
+      {/* Earlier sessions fold away, so the list doesn't keep growing season after season. */}
+      {pastSessions.length > 0 && (
+        <div className="space-y-6">
+          <button
+            type="button"
+            aria-expanded={showPast}
+            onClick={() => setShowPast((open) => !open)}
+            className="flex w-full items-center justify-between rounded-3xl border border-dashed border-zinc-300 bg-white px-4 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
+          >
+            <span>Past sessions · {pastSessions.length}</span>
+            <span>{showPast ? 'Hide' : 'Show'}</span>
+          </button>
+          {showPast && pastSessions.map(sessionBlock)}
+        </div>
+      )}
 
       <GameFormDialog
         open={formOpen}
