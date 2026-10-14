@@ -192,7 +192,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   `src/lib/team-logic.js`) are caught when captains paste names, when a new player types a name instead of picking
   theirs ("Is that you?"), and on grey cards for captains ("Joined as …?"). In dues they split, pay and pair like
   everyone else (payments and history rows have `guest_id` instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds).
-  Game sign-ups and stats don't include them.
+  Games include them too: captains set their RSVPs (tap a name in a game's Headcount, `RsvpForDialog.jsx`) and enter
+  their stat lines, and teammates can vote for them for Player of the Match (they can't vote). `rsvps`, `game_stats`
+  and `potm_votes` rows have `guest_id` / `voted_for_guest_id` for them; `useSeasonData()` returns `players` (app
+  players plus roster names) and keys those rows like everyone else's (`keyedRow()`, `keyedVote()` in
+  `src/lib/team-logic.js`); new rows use `playerKey()`. Picking your name moves them to your account.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`

@@ -3,37 +3,50 @@ import { CARD } from '@/lib/constants';
 import { fmtDateShort, fmtTime, jerseyText, mapsUrl } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-function Group({ label, entries, suspendedIds, tone }) {
+function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   return (
-    <div>
+    <div data-group={label}>
       <div className="flex items-center gap-2">
         <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em]', tone)}>
           {label} · {entries.length}
         </span>
+        {note && <span className="text-[11px] font-medium text-zinc-400">{note}</span>}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {entries.length === 0 && <span className="text-xs font-medium text-zinc-400">Nobody yet</span>}
-        {entries.map((entry) => (
-          <span
-            key={entry.profile.user_id}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
-              entry.profile.gender === 'F' ? 'border-lime-300 bg-lime-50 text-lime-900' : 'border-zinc-200 bg-white text-zinc-700',
-            )}
-          >
-            {entry.profile.display_name}
-            {entry.playing_gk && <span className="text-[9px] font-black uppercase text-zinc-500">GK</span>}
-            {suspendedIds.includes(entry.profile.user_id) && (
-              <span className="text-[9px] font-black uppercase text-red-600">Susp</span>
-            )}
-          </span>
-        ))}
+        {entries.map((entry) => {
+          const Chip = onPick ? 'button' : 'span';
+          return (
+            <Chip
+              key={entry.profile.user_id}
+              data-player={entry.profile.display_name}
+              {...(onPick && { type: 'button', onClick: () => onPick(entry.profile), 'aria-label': `RSVP for ${entry.profile.display_name}` })}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
+                // Not joined the site yet: grey and dashed, like their card on the Team page.
+                entry.profile.guest
+                  ? 'border-dashed border-zinc-300 bg-zinc-50 text-zinc-500'
+                  : entry.profile.gender === 'F'
+                    ? 'border-lime-300 bg-lime-50 text-lime-900'
+                    : 'border-zinc-200 bg-white text-zinc-700',
+                onPick && 'transition hover:border-zinc-900',
+              )}
+            >
+              {entry.profile.display_name}
+              {entry.playing_gk && <span className="text-[9px] font-black uppercase text-zinc-500">GK</span>}
+              {suspendedIds.includes(entry.profile.user_id) && (
+                <span className="text-[9px] font-black uppercase text-red-600">Susp</span>
+              )}
+            </Chip>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-export function HeadcountPanel({ game, headcount, suspendedIds = [], settings }) {
+/** `onPick` (captains): tap a name to set that player's RSVP. */
+export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
     { label: 'Women field', value: `${headcount.womenFieldIn}/${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
@@ -71,11 +84,26 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings })
           Short on {shortParts.join(' and ')} (min {headcount.minPlayers} players, {headcount.minWomen} women on the field).
         </p>
       )}
+      {onPick && (
+        <p className="mt-3 text-xs font-medium text-zinc-500">
+          Tap a name to set their RSVP, for teammates who told you another way or haven't joined the site (grey).
+        </p>
+      )}
       <div className="mt-4 space-y-4">
-        <Group label="IN" entries={headcount.groups.in} suspendedIds={suspendedIds} tone="bg-lime-400 text-black" />
-        <Group label="MAYBE" entries={headcount.groups.maybe} suspendedIds={suspendedIds} tone="bg-amber-300 text-black" />
-        <Group label="OUT" entries={headcount.groups.out} suspendedIds={suspendedIds} tone="bg-zinc-200 text-zinc-600" />
-        <Group label="No reply" entries={headcount.groups.none} suspendedIds={suspendedIds} tone="bg-zinc-900 text-white" />
+        <Group label="IN" entries={headcount.groups.in} suspendedIds={suspendedIds} tone="bg-lime-400 text-black" onPick={onPick} />
+        <Group label="MAYBE" entries={headcount.groups.maybe} suspendedIds={suspendedIds} tone="bg-amber-300 text-black" onPick={onPick} />
+        <Group label="OUT" entries={headcount.groups.out} suspendedIds={suspendedIds} tone="bg-zinc-200 text-zinc-600" onPick={onPick} />
+        <Group label="No reply" entries={headcount.groups.none} suspendedIds={suspendedIds} tone="bg-zinc-900 text-white" onPick={onPick} />
+        {headcount.groups.subs.length > 0 && (
+          <Group
+            label="Subs"
+            note="Sub Pool and On Break, no reply"
+            entries={headcount.groups.subs}
+            suspendedIds={suspendedIds}
+            tone="bg-zinc-100 text-zinc-500"
+            onPick={onPick}
+          />
+        )}
       </div>
       {game.location && (
         <a

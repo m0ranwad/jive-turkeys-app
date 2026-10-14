@@ -146,6 +146,11 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
             <span className="flex min-w-0 items-center gap-2">
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', r.profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
               <span className="truncate text-sm font-semibold">{r.profile.display_name}</span>
+              {r.profile.guest && (
+                <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-zinc-500">
+                  Not joined
+                </span>
+              )}
             </span>
             <span className="w-8 text-center text-sm font-bold">{r.games}</span>
             <span className="w-8 text-center text-sm font-bold">{r.goals}</span>
@@ -276,6 +281,11 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                     <span className="truncate font-display text-base font-extrabold uppercase tracking-tight">
                       {c.profile.display_name}
                     </span>
+                    {c.profile.guest && (
+                      <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-zinc-500">
+                        Not joined
+                      </span>
+                    )}
                     {c.profile.year_joined && (
                       <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-lime-800">
                         Since {c.profile.year_joined}

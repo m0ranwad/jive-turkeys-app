@@ -21,7 +21,8 @@ export function StatsPage() {
 
   const year = yearFilter === 'all' ? 'all' : Number(yearFilter);
   const session = sessionFilter === 'all' ? 'all' : Number(sessionFilter);
-  const shared = { games: data.games || [], stats: data.stats || [], profiles: data.profiles || [], votes: data.votes || [] };
+  // Roster names who haven't joined the site count too (data.players).
+  const shared = { games: data.games || [], stats: data.stats || [], profiles: data.players || [], votes: data.votes || [] };
 
   return (
     <div className="space-y-5">

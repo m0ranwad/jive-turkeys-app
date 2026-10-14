@@ -15,19 +15,37 @@ export const rosterProfiles = (profiles = []) => profiles.filter(isRosterStatus)
 export const sumField = (rows, key) => rows.reduce((total, row) => total + (row[key] || 0), 0);
 
 /**
+ * A sign-up or stat line keyed like everyone else: a roster name's row (someone
+ * who hasn't joined the site) has its guest id as `user_id`, the way roster
+ * names themselves are keyed (guestAsPlayer() in dues.js).
+ */
+export const keyedRow = (row) => (row.user_id ? row : { ...row, user_id: row.guest_id });
+
+/** A Player of the Match vote keyed the same way. */
+export const keyedVote = (vote) => (vote.voted_for_id ? vote : { ...vote, voted_for_id: vote.voted_for_guest_id });
+
+/** Who a new row is for: an app player's user_id, or a roster name's guest_id. */
+export const playerKey = (player) =>
+  player.guest ? { user_id: null, guest_id: player.user_id } : { user_id: player.user_id, guest_id: null };
+
+/**
  * RSVP headcount for one game. Women playing GK don't count toward the
- * women-on-the-field minimum.
+ * women-on-the-field minimum. Active players who haven't answered are "No
+ * reply"; Sub Pool and On Break players who haven't are "Subs", so reminders
+ * don't nag them. `profiles` can include roster names, and `rsvps` must be
+ * keyed with keyedRow().
  */
 export function headcount({ game, rsvps, profiles, settings }) {
   const roster = rosterProfiles(profiles);
   const byUser = {};
   (rsvps || []).filter((r) => r.game_id === game?.id).forEach((r) => (byUser[r.user_id] = r));
 
-  const groups = { in: [], out: [], maybe: [], none: [] };
+  const groups = { in: [], out: [], maybe: [], none: [], subs: [] };
   roster.forEach((profile) => {
     const rsvp = byUser[profile.user_id];
     const entry = { profile, playing_gk: !!rsvp?.playing_gk };
-    (groups[rsvp ? rsvp.status : 'none'] || groups.none).push(entry);
+    if (rsvp) (groups[rsvp.status] || groups.none).push(entry);
+    else ((profile.status || 'active') === 'active' ? groups.none : groups.subs).push(entry);
   });
 
   const womenIn = groups.in.filter((e) => e.profile.gender === 'F');
