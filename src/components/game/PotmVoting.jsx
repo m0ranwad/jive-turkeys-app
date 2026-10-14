@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import { api } from '@/api';
 import { useToast } from '@/components/ui/toast';
@@ -17,6 +17,14 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(null);
+  // Redraws when voting closes, so the vote buttons go away without a reload.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const left = game.potm_closes_at ? new Date(game.potm_closes_at).getTime() - Date.now() : -1;
+    if (left < 0 || left > 2 ** 31 - 1) return undefined;
+    const timer = setTimeout(() => setTick((n) => n + 1), left + 500);
+    return () => clearTimeout(timer);
+  }, [game.potm_closes_at]);
 
   if (!game.has_result) return null;
 
@@ -37,6 +45,11 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
   const myVote = (award) => votes.find((v) => v.game_id === game.id && v.voter_id === user.id && v.award === award);
 
   const castVote = async (award, player) => {
+    if (!votingOpen(game)) {
+      toast({ title: 'Voting has closed', description: `It closed ${closesLabel(game.potm_closes_at)}.` });
+      setChanging(null);
+      return;
+    }
     setBusy(true);
     try {
       const existing = myVote(award);
@@ -48,7 +61,14 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
       toast({ title: 'Vote counted' });
       onChanged();
     } catch (err) {
-      toast({ title: "Vote didn't go through", description: err.message });
+      // The deadline passed between loading the page and tapping (the database refuses it).
+      const closed = !votingOpen(game) || /row-level security|Voting has closed/i.test(err.message);
+      toast(
+        closed
+          ? { title: 'Voting has closed', description: 'Votes are locked for this game.' }
+          : { title: "Vote didn't go through", description: err.message },
+      );
+      if (closed) onChanged();
     } finally {
       setBusy(false);
     }
