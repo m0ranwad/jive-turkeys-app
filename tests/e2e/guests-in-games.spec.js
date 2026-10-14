@@ -70,8 +70,8 @@ test('a teammate who has not joined gets a stat line, shows in the stats, and ca
   await openNextGame(page);
   await page.getByRole('button', { name: 'Enter result' }).click();
   const result = page.getByRole('dialog', { name: 'Game result' });
-  await expect(result).toContainText('Mike RussoM · not joined');
-  await result.getByLabel('Mike Russo goals').fill('1');
+  await expect(result.locator('[data-player="Mike Russo"]')).toContainText('M · Not joined');
+  await result.getByRole('button', { name: 'Add a goal for Mike Russo' }).click();
   await result.getByRole('button', { name: 'Save result' }).click();
   await expect(page.getByText('Result saved')).toBeVisible();
 
