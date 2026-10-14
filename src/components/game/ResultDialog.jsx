@@ -109,7 +109,8 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
                     <div className="truncate text-sm font-semibold">
                       {row.profile.display_name}
                       <span className="ml-1.5 text-[10px] font-bold uppercase text-zinc-400">
-                        {row.profile.gender === 'F' ? 'W' : 'M'}
+                        {row.profile.gender === 'F' ? 'W' : row.profile.gender === 'M' ? 'M' : ''}
+                        {row.profile.guest && ' · not joined'}
                       </span>
                     </div>
                     {row.profile.gender === 'M' && row.goals >= 2 && (

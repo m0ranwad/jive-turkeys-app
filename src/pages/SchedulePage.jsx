@@ -40,11 +40,11 @@ export function SchedulePage() {
     const byGame = {};
     (data.games || []).forEach((game) => {
       // Who was on the team in the game's session.
-      const profiles = membersForSession(data.profiles || [], data.roster?.rows, { year: game.season_year, session: game.session });
+      const profiles = membersForSession(data.players || [], data.roster?.rows, { year: game.season_year, session: game.session });
       byGame[game.id] = headcount({ game, rsvps: data.rsvps, profiles, settings: data.settings });
     });
     return byGame;
-  }, [data.games, data.rsvps, data.profiles, data.roster, data.settings]);
+  }, [data.games, data.rsvps, data.players, data.roster, data.settings]);
 
   if (data.loading) return <PageSpinner />;
 

@@ -3,9 +3,14 @@ import { Trophy } from 'lucide-react';
 import { api } from '@/api';
 import { useToast } from '@/components/ui/toast';
 import { AWARD_LABEL, CARD } from '@/lib/constants';
+import { playerKey } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
-/** Player of the Match: anyone who played can vote for a teammate who played. */
+/**
+ * Player of the Match: anyone who played can vote for a teammate who played,
+ * including one who hasn't joined the site (they can't vote themselves).
+ * `profiles` includes roster names and `votes` are keyed with keyedVote().
+ */
 export function PotmVoting({ game, profiles, stats, votes, user, settings, onChanged }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -28,12 +33,14 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
   };
   const myVote = (award) => votes.find((v) => v.game_id === game.id && v.voter_id === user.id && v.award === award);
 
-  const castVote = async (award, votedForId) => {
+  const castVote = async (award, player) => {
     setBusy(true);
     try {
       const existing = myVote(award);
-      if (existing) await api.entities.PotmVote.update(existing.id, { voted_for_id: votedForId });
-      else await api.entities.PotmVote.create({ game_id: game.id, voter_id: user.id, award, voted_for_id: votedForId });
+      const { user_id, guest_id } = playerKey(player);
+      const choice = { voted_for_id: user_id, voted_for_guest_id: guest_id };
+      if (existing) await api.entities.PotmVote.update(existing.id, choice);
+      else await api.entities.PotmVote.create({ game_id: game.id, voter_id: user.id, award, ...choice });
       setChanging(null);
       toast({ title: 'Vote counted' });
       onChanged();
@@ -105,12 +112,14 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                         <button
                           key={p.user_id}
                           disabled={busy}
-                          onClick={() => castVote(award, p.user_id)}
+                          onClick={() => castVote(award, p)}
                           className={cn(
                             'rounded-full border-2 px-3 py-1.5 text-xs font-bold transition disabled:opacity-50',
                             mine?.voted_for_id === p.user_id
                               ? 'border-black bg-lime-400 text-black'
-                              : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400',
+                              : p.guest
+                                ? 'border-dashed border-zinc-300 bg-zinc-50 text-zinc-500 hover:border-zinc-400'
+                                : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400',
                           )}
                         >
                           {p.display_name}

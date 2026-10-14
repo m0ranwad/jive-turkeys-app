@@ -7,6 +7,7 @@ import { PotmVoting } from '@/components/game/PotmVoting';
 import { ResultCard } from '@/components/game/ResultCard';
 import { ResultDialog } from '@/components/game/ResultDialog';
 import { RsvpCard } from '@/components/game/RsvpCard';
+import { RsvpForDialog } from '@/components/game/RsvpForDialog';
 import { CallForSubsButton, CopyReminderButton } from '@/components/game/ShareButtons';
 import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
@@ -14,7 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
-import { headcount as computeHeadcount, isRosterStatus, resultOf, suspendedIds } from '@/lib/team-logic';
+import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const pill = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] transition';
@@ -27,12 +28,14 @@ export function GameDetailPage() {
   const [resultOpen, setResultOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Captains: the player whose RSVP they're setting (someone who texted, or hasn't joined the site).
+  const [rsvpFor, setRsvpFor] = useState(null);
 
   const game = (data.games || []).find((g) => g.id === id);
-  // Who was on the team in the game's session.
+  // Who was on the team in the game's session, including roster names who haven't joined the site.
   const sessionProfiles = useMemo(
-    () => (game ? membersForSession(data.profiles || [], data.roster?.rows, { year: game.season_year, session: game.session }) : []),
-    [game, data.profiles, data.roster],
+    () => (game ? membersForSession(data.players || [], data.roster?.rows, { year: game.season_year, session: game.session }) : []),
+    [game, data.players, data.roster],
   );
   const counts = useMemo(
     () => (game ? computeHeadcount({ game, rsvps: data.rsvps, profiles: sessionProfiles, settings: data.settings }) : null),
@@ -78,6 +81,20 @@ export function GameDetailPage() {
 
   const toggleGk = () => myRsvp && run(() => api.entities.Rsvp.update(myRsvp.id, { playing_gk: !myRsvp.playing_gk }));
 
+  // Captains set anyone's RSVP; null clears it back to no reply.
+  const rsvpOf = (player) => (data.rsvps || []).find((r) => r.game_id === game.id && r.user_id === player.user_id) || null;
+  const setRsvpForPlayer = (player, status) =>
+    run(() => {
+      const current = rsvpOf(player);
+      if (!status) return current ? api.entities.Rsvp.delete(current.id) : null;
+      if (current) return api.entities.Rsvp.update(current.id, { status, playing_gk: status === 'in' && !!current.playing_gk });
+      return api.entities.Rsvp.create({ game_id: game.id, ...playerKey(player), status, playing_gk: false });
+    });
+  const toggleGkFor = (player) => {
+    const current = rsvpOf(player);
+    if (current) run(() => api.entities.Rsvp.update(current.id, { playing_gk: !current.playing_gk }));
+  };
+
   const setJersey = (jersey) => jersey !== game.jersey && run(() => api.entities.Game.update(game.id, { jersey }));
 
   const deleteGame = async () => {
@@ -98,7 +115,7 @@ export function GameDetailPage() {
       const current = existing.find((s) => s.user_id === row.profile.user_id);
       const line = {
         game_id: game.id,
-        user_id: row.profile.user_id,
+        ...playerKey(row.profile),
         played: !!row.played,
         goals: row.goals || 0,
         assists: row.assists || 0,
@@ -123,7 +140,7 @@ export function GameDetailPage() {
   // The result lists that session's team, plus anyone who already has a line for this game.
   const resultProfiles = [
     ...sessionProfiles,
-    ...data.profiles.filter(
+    ...data.players.filter(
       (p) => !sessionProfiles.some((s) => s.user_id === p.user_id) && data.stats.some((s) => s.game_id === game.id && s.user_id === p.user_id),
     ),
   ];
@@ -131,7 +148,7 @@ export function GameDetailPage() {
   const statsWithNames = data.stats
     .filter((s) => s.game_id === game.id)
     .map((s) => {
-      const p = data.profiles.find((x) => x.user_id === s.user_id);
+      const p = data.players.find((x) => x.user_id === s.user_id);
       return { ...s, player_name: p?.display_name || 'Unknown', gender: p?.gender };
     });
 
@@ -229,14 +246,22 @@ export function GameDetailPage() {
         />
       )}
 
-      {counts && <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} settings={data.settings} />}
+      {counts && (
+        <HeadcountPanel
+          game={game}
+          headcount={counts}
+          suspendedIds={suspended}
+          settings={data.settings}
+          onPick={data.isCaptain && !game.has_result ? setRsvpFor : null}
+        />
+      )}
 
       {game.has_result && (
         <>
           <ResultCard game={game} stats={statsWithNames} />
           <PotmVoting
             game={game}
-            profiles={data.profiles}
+            profiles={data.players}
             stats={data.stats}
             votes={data.votes}
             user={data.user}
@@ -246,6 +271,14 @@ export function GameDetailPage() {
         </>
       )}
 
+      <RsvpForDialog
+        player={rsvpFor}
+        rsvp={rsvpFor ? rsvpOf(rsvpFor) : null}
+        busy={busy}
+        onSet={(status) => setRsvpForPlayer(rsvpFor, status)}
+        onToggleGk={() => toggleGkFor(rsvpFor)}
+        onClose={() => setRsvpFor(null)}
+      />
       <ResultDialog
         open={resultOpen}
         onOpenChange={setResultOpen}

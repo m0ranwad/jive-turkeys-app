@@ -7,7 +7,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v11';
+const DB_KEY = 'jt_demo_db_v12';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -220,6 +220,15 @@ function seed() {
     paid_date: dayjs().subtract(daysAgo, 'day').format('YYYY-MM-DD'), paid_by: captainId, created_date: now(), updated_date: now(),
   });
   duesPayments.push(guestPaid(teamGuests[0], 1, 45), guestPaid(teamGuests[1], 1, 44), guestPaid(teamGuests[1], 2, 3));
+
+  // A captain put Mike IN and Dana MAYBE for the next game, and Mike set up a goal last week.
+  const forGuest = (g, row) => ({ id: uid(), user_id: null, guest_id: g.id, created_date: now(), updated_date: now(), ...row });
+  rsvps.push(
+    forGuest(teamGuests[0], { game_id: next.id, status: 'in', playing_gk: false }),
+    forGuest(teamGuests[1], { game_id: next.id, status: 'maybe', playing_gk: false }),
+  );
+  const lastWeek = games.filter((g) => g.has_result).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  stats.push(forGuest(teamGuests[0], { game_id: lastWeek.id, played: true, goals: 0, assists: 1, blue_cards: 0, red_cards: 0 }));
   const at = (date, hour) => dayjs(date).hour(hour).toISOString();
   const duesHistory = duesPayments.map((p) => ({
     id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, guest_id: p.guest_id ?? null, paid: true,
@@ -602,6 +611,16 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       }
     }
     db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
+    // Game sign-ups and stat lines: where both have one for a game, the account's own counts.
+    for (const table of ['rsvps', 'game_stats']) {
+      for (const row of db[table].filter((r) => r.guest_id === guestId)) {
+        if (!db[table].some((r) => r.user_id === userId && r.game_id === row.game_id)) Object.assign(row, { user_id: userId, guest_id: null });
+      }
+    }
+    // Votes for the roster name, except any the player cast for it themselves.
+    db.potm_votes
+      .filter((v) => v.voted_for_guest_id === guestId && v.voter_id !== userId)
+      .forEach((v) => Object.assign(v, { voted_for_id: userId, voted_for_guest_id: null }));
     // Sessions the roster name was on and the account wasn't move over; where both were, the account's entry counts.
     for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
       if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) {

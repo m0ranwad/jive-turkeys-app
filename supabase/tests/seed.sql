@@ -126,3 +126,22 @@ begin
   end if;
 end;
 $$;
+
+-- A roster name's RSVP, stat line and a vote for them (once those exist).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'rsvps' and column_name = 'guest_id'
+  ) then
+    execute $sql$
+      insert into public.rsvps (game_id, guest_id, status, playing_gk) values
+        ('b2222222-2222-4222-8222-222222222222', 'f1111111-1111-4111-8111-111111111111', 'in', false);
+      insert into public.game_stats (game_id, guest_id, played, goals, assists) values
+        ('b1111111-1111-4111-8111-111111111111', 'f1111111-1111-4111-8111-111111111111', true, 0, 1);
+      insert into public.potm_votes (game_id, voter_id, voted_for_guest_id, award) values
+        ('b1111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', 'f1111111-1111-4111-8111-111111111111', 'man');
+    $sql$;
+  end if;
+end;
+$$;
