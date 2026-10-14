@@ -145,3 +145,13 @@ begin
   end if;
 end;
 $$;
+
+-- A fill-in from outside the team on last game's result (once those exist).
+do $$
+begin
+  if to_regclass('public.game_fill_ins') is not null then
+    insert into public.game_fill_ins (game_id, display_name, gender, goals, assists) values
+      ('b1111111-1111-4111-8111-111111111111', null, 'M', 0, 1);
+  end if;
+end;
+$$;
