@@ -215,6 +215,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
   `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
+  The app icon shows the Chat tab's unread number: each chat notification carries it (`chat_push_unread()`), and
+  the open site keeps it in step (`setIconBadge()` in `src/lib/push.js`, called from `Layout.jsx`).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
   and `scripts/db-rehearsal.sh`.
 

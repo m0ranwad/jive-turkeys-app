@@ -22,7 +22,7 @@ import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
-import { resyncPush } from '@/lib/push';
+import { resyncPush, setIconBadge } from '@/lib/push';
 import { STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -85,6 +85,13 @@ export function Layout() {
   useEffect(() => {
     if (user) resyncPush().catch(() => {});
   }, [user?.id]);
+
+  // The number on the app icon follows the Chat tab, for players who get chat notifications (they keep
+  // it up to date while the app is closed).
+  const chatIconOn = !!user && profile?.notify_chat !== false;
+  useEffect(() => {
+    setIconBadge(chatIconOn ? chatUnread : 0);
+  }, [chatIconOn, chatUnread]);
 
   // Other screens (the chat's notification settings) can open the Home Screen guide.
   useEffect(() => {

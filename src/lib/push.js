@@ -86,8 +86,22 @@ export async function turnOnPush() {
   return 'on';
 }
 
+/**
+ * The number on the app icon (on an iPhone, the Home Screen app): the unread chat count, the same as the
+ * Chat tab. 0 clears it. Chat notifications also set it while the app is closed (public/sw.js).
+ */
+export function setIconBadge(count) {
+  if (typeof navigator === 'undefined' || !('setAppBadge' in navigator)) return;
+  try {
+    (count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge()).catch(() => {});
+  } catch {
+    // Not allowed here (no notification permission, not installed): nothing to show.
+  }
+}
+
 /** Stops notifications on this device. */
 export async function turnOffPush() {
+  setIconBadge(0);
   if (demo()) {
     demoOn(false);
     return 'off';
