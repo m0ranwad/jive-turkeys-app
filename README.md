@@ -80,7 +80,8 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
   - [x] Turn on Settings → General → **Automatically delete head branches** (cloud sessions can't
         delete branches)
   - [ ] He connects at claude.ai/code (Claude Pro or higher) and runs the setup check from the walkthrough
-  - [ ] After he signs up on the site, make him a captain from the Team page
+  - [ ] After he signs up on the site (he'll need the team code from Team Settings), make him a captain from
+        the Team page
   - [ ] Optional: add him to the Cloudflare account and the Supabase organization so he co-owns those
         too (Claude doesn't need this)
 - [ ] Switch over: share the link with the team and have the Base44 app deleted (its API exposes player
@@ -161,8 +162,9 @@ game; captains see who hasn't answered on the Team page. A past session can be c
 
 ## Differences from the Base44 version
 
-- Every page requires a login, except `/privacy` and `/terms`. The Base44 app returned player emails and
-  phone numbers to anyone who asked its API, without signing in.
+- Every page requires a login, except `/privacy` and `/terms`, and a new account also has to enter the team
+  code (Team Settings) before it sees anything. The Base44 app returned player emails and phone numbers to
+  anyone who asked its API, without signing in.
 - Schedule import reads `.xlsx`/`.csv` directly in the browser instead of through Base44's AI. It finds
   date, time, field and opponent columns by name. For league-wide sheets with Home/Away columns, it keeps
   only Jive Turkeys games.

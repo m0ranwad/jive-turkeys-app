@@ -1,4 +1,4 @@
-import { expect, test } from './helpers';
+import { enterTeamCode, expect, test } from './helpers';
 
 test('a new player has to set up their profile, which puts them on the team', async ({ page }) => {
   await page.goto('/register');
@@ -6,6 +6,7 @@ test('a new player has to set up their profile, which puts them on the team', as
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
 
   // Skip jumps past the slides to the profile, which can't be skipped.
   await page.getByRole('button', { name: 'Skip' }).click();
@@ -30,6 +31,7 @@ test('a new player can sign out instead of setting up a profile', async ({ page 
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
 
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
@@ -43,6 +45,7 @@ test('a new player picks their name on the roster, and their spot and dues come 
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
   await page.getByRole('button', { name: 'Skip' }).click();
 
   await expect(page.getByText('Find your name.')).toBeVisible();
@@ -76,6 +79,7 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Dana Wells' }).click();
   // Finishing the profile reloads the page; wait for that before using the menu.
@@ -93,6 +97,7 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
   await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('button', { name: 'Mike Russo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dana Wells' })).toHaveCount(0);
@@ -104,6 +109,7 @@ async function register(page, email) {
   await page.locator('#password').fill('demo1234');
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
   await page.getByRole('button', { name: 'Skip' }).click();
 }
 

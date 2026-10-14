@@ -100,6 +100,8 @@ insert into auth.users (id, email)
   select id, name || '@roster.test' from roster_test.people where name in ('kim', 'pat', 'lee', 'neo', 'vic');
 update public.users set role = case when id = roster_test.id('kim') then 'admin' else 'user' end
   where id in (select id from roster_test.people);
+-- Everyone here has joined the team with its code (membership.test.sql covers who hasn't).
+update public.users set joined_team_at = now();
 
 insert into public.games (season_year, session, date, opponent)
   values (roster_test.year(), 1, roster_test.today() - 20, 'Net Ninjas');

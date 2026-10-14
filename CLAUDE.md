@@ -10,9 +10,15 @@ README.md has the service inventory and the current setup status.
 - Sign-in is **Continue with Google**, or email + password with a 6-digit email code. `/privacy` and
   `/terms` (`src/pages/LegalPages.jsx`) exist because Google requires them. Keep them public and linked
   from the sign-in screens.
+- Only teammates get in: a new account enters the **team code** before it sees anything
+  (`src/pages/auth/JoinTeamPage.jsx`, database function `join_team()`; ten wrong tries block it for an hour).
+  Captains see and change the code in Team Settings (`src/components/TeamCodeCard.jsx`), and Copy invite on the
+  Team page includes it. Members are `users.joined_team_at` (captains always count), checked by
+  `public.is_team_member()`. The preview's code is `TURKEY`; `nia@demo.test` is a sample account that hasn't
+  entered it.
 - The **Invite teammate** button on the Team page doesn't work yet: its Supabase function isn't deployed
   ([issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1)). Don't promise invites. New players
-  sign up at https://jiveturkeys.app themselves.
+  sign up at https://jiveturkeys.app themselves and enter the team code.
 - No player data came over from Base44. The field rules are seeded by the setup migration.
 - The logo and app icons are the original turkey with an Afro, round shades, an Afro pick and a soccer ball
   (`docs/design/jive-turkey/c6-just-the-ball.svg`; the other concepts are saved beside it). To change them,
@@ -208,10 +214,12 @@ live database when they reach `main`. So:
   plain words exactly what would be removed, and that it can't be undone. Either co-owner can approve
   it. Only after the person you're talking to clearly says yes, add `-- owner-approved` to the new
   migration file. Never add it on your own judgment.
-- Every new table needs: `alter table ... enable row level security`; policies (players read team data;
-  captains write team data; players write only their own rows); and
+- Every new table needs: `alter table ... enable row level security`; policies (team members read team
+  data, with `using ((select public.is_team_member()))`, never `using (true)`; captains write team data;
+  players write only their own rows, and only as members); and
   `grant select, insert, update, delete on <table> to authenticated, service_role;`. Captain checks use
-  `public.is_captain()`; captains are `users.role = 'admin'`.
+  `public.is_captain()`; captains are `users.role = 'admin'`. A `security definer` function that players call
+  to change team data must also check `public.is_team_member()`, because it skips the policies.
 - **Chat history and team data must survive every change.** Every new migration is rehearsed on a copy of
   the database filled with sample data (`scripts/db-rehearsal.sh`): if any existing row disappears or
   changes, the pull request's `Database rules and rehearsal` check fails, and the Database update workflow

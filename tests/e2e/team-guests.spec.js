@@ -38,7 +38,7 @@ test('everyone sees players who have not joined yet as grey cards, in the counts
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
   expect(invite).toContain("You're on the Jive Turkeys roster!");
-  expect(invite).toContain('pick your name from the list');
+  expect(invite).toContain('enter the team code TURKEY, then pick your name from the list');
   expect(invite).toContain('Still to join: Dana Wells, Mike Russo');
 });
 

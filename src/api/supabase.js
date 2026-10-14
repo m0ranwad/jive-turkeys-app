@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
 const PAGE_SIZE = 1000;
@@ -100,7 +101,10 @@ export function createSupabaseBackend(url, key) {
   const entities = Object.fromEntries(Object.entries(TABLES).map(([name, table]) => [name, entity(table)]));
 
   const auth = {
-    /** The signed-in user ({ id, email, full_name, role }) or null. */
+    /**
+     * The signed-in user ({ id, email, full_name, role, joined }) or null. `joined`: on the
+     * team (entered the team code, or a captain). Before the database has team codes, everyone is.
+     */
     async me() {
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user;
@@ -111,6 +115,7 @@ export function createSupabaseBackend(url, key) {
         email: sessionUser.email,
         full_name: row?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
         role: row?.role || 'user',
+        joined: row ? row.joined_team_at !== null || row.role === 'admin' : true,
       };
     },
 
@@ -181,6 +186,12 @@ export function createSupabaseBackend(url, key) {
   };
 
   const users = {
+    /** Joins the team with the team code. Throws a message for the player if it's wrong or they tried too often. */
+    async joinTeam(code) {
+      const { data, error } = await supabase.rpc('join_team', { p_code: code });
+      if (error) fail(error);
+      if (data !== 'joined') throw new Error(JOIN_ERRORS[data] || JOIN_ERRORS.wrong);
+    },
     /** A new player picks their name on the roster: its status, dues payments and history become theirs. */
     async claimGuest(guestId) {
       const { error } = await supabase.rpc('claim_team_guest', { p_guest_id: guestId });
