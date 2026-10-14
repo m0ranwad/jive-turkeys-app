@@ -33,4 +33,5 @@ export function codeIsStale(codeRow, roster) {
 export const JOIN_ERRORS = {
   wrong: "That code isn't right. Check the invite from your captain.",
   blocked: 'Too many tries. Try again in an hour.',
+  removed: 'A captain took this account off the team. Ask a captain if you should be added back.',
 };

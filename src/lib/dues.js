@@ -77,6 +77,9 @@ export function feeSentence(parts) {
 export const payNote = (year, session, names = []) =>
   [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
 
+/** A signed-up player a captain took off the team: off the roster, like a removed roster name. */
+export const profileAsPlayer = (p) => (p.removed ? { ...p, status: 'inactive' } : p);
+
 /** A roster player who hasn't joined the app yet, shaped like a player profile (`user_id` is their own id). */
 export function guestAsPlayer(g) {
   return {

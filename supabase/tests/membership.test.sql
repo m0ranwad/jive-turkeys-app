@@ -198,6 +198,54 @@ select join_test.sign_in('ann');
 select join_test.ok(join_test.visible() like '%messages:1%', 'players already on the team stay on it after a change');
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Captains take a signed-up player off the team, and add them back.
+-- ---------------------------------------------------------------------------
+
+select join_test.sign_in('ann');
+select join_test.refused($$select public.set_team_member_removed(join_test.id('cap'), true)$$, 'players cannot remove anyone');
+reset role;
+
+select join_test.sign_in('cap');
+select join_test.refused($$select public.set_team_member_removed(join_test.id('cap'), true)$$, 'captains cannot remove themselves');
+select public.push_subscribe('https://push.test/ann', 'k', 'a', 'Phone');
+reset role;
+update public.push_subscriptions set user_id = join_test.id('ann') where endpoint = 'https://push.test/ann';
+select join_test.sign_in('cap');
+select public.set_team_member_removed(join_test.id('ann'), true);
+select join_test.ok(
+  (select status = 'off' from public.session_roster r, public.roster_current_session() c
+    where r.user_id = join_test.id('ann') and r.season_year = c.cur_year and r.session = c.cur_session),
+  'a removed player is off the current session''s list');
+reset role;
+
+select join_test.sign_in('ann');
+select join_test.ok(join_test.visible() = '', 'a removed player sees no team data');
+select join_test.refused($$insert into public.messages (user_id, author_name, body) values (auth.uid(), 'Ann', 'hi')$$,
+  'a removed player cannot post in the chat');
+select join_test.ok(public.join_team('SESSION2') = 'removed', 'the team code does not let a removed player back in');
+reset role;
+select join_test.ok(
+  (select joined_team_at is null and removed_at is not null from public.users where id = join_test.id('ann')),
+  'and they are still off the team');
+select join_test.ok(exists (select 1 from public.messages where user_id = join_test.id('ann')), 'their chat messages stay');
+select join_test.ok(exists (select 1 from public.rsvps where user_id = join_test.id('ann')), 'their sign-ups stay');
+insert into public.messages (id, user_id, author_name, body)
+  values ('00000000-0000-4000-8000-00000000f0c1', join_test.id('cap'), 'Cap', 'After Ann left');
+select join_test.ok(
+  not exists (select 1 from public.chat_push_targets('00000000-0000-4000-8000-00000000f0c1') where endpoint = 'https://push.test/ann'),
+  'a removed player''s phone gets no chat notifications');
+
+select join_test.sign_in('cap');
+select public.set_team_member_removed(join_test.id('ann'), false);
+reset role;
+select join_test.sign_in('ann');
+select join_test.ok(join_test.visible() like '%messages:%', 'added back, they see the team again');
+select join_test.ok(
+  (select status = 'active' and not removed from public.player_profiles where user_id = auth.uid()),
+  'as Active');
+reset role;
+
 set role anon;
 select join_test.refused($$select public.join_team('SESSION2')$$, 'signed-out visitors cannot try a code');
 select join_test.refused($$select count(*) from public.team_join_code$$, 'signed-out visitors cannot see the code');

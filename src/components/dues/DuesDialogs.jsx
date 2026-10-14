@@ -243,7 +243,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
 
   // Anyone to pay with, except guests who no longer count.
   const roster = profiles
-    .filter((p) => p.user_id !== player.user_id && !(p.guest && p.status !== 'active'))
+    .filter((p) => p.user_id !== player.user_id && !p.removed && !(p.guest && p.status !== 'active'))
     .sort((a, b) => a.display_name.localeCompare(b.display_name));
   const events = history.filter((e) => e.user_id === player.user_id);
   const markedBy = payment?.paid_by && payment.paid_by !== player.user_id ? ` by ${nameOf(payment.paid_by).split(' ')[0]}` : '';

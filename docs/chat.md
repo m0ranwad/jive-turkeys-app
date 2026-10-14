@@ -113,6 +113,7 @@ everything, so the function can't be made to send anything else.
 |---|---|
 | Team Chat messages notify everyone who turned notifications on, except the author. | `[db]` |
 | Thread messages notify only the thread's starter and players who have opened the thread. | `[db]` |
+| Only players on the team get notifications: a player a captain removed gets none until they're added back. | `[db]` |
 | Nobody gets buzzed for the room they're looking at right now (the chat page checks in every 15 seconds while it's on screen; on any of their devices). | `[db]` `[browser]` |
 | Each message is sent out once, and messages older than 10 minutes never are. | `[db]` |
 | The notification shows the room (Team Chat or the thread's title) and "Name: message", one line, cut at 160 characters. Tapping it opens that room. | `[unit]` `[browser]` |

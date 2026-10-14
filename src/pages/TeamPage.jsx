@@ -5,7 +5,7 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
-import { InviteDialog, PickPositionCard } from '@/components/team/TeamDialogs';
+import { InviteDialog, PickPositionCard, RemovePlayerDialog } from '@/components/team/TeamDialogs';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
@@ -41,6 +41,8 @@ export function TeamPage() {
   // Teammates who aren't on the app: on the roster like everyone else. `guestDialog` is null, 'new' or a guest.
   const [guests, setGuests] = useState([]);
   const [guestDialog, setGuestDialog] = useState(null);
+  // Captains: the signed-up player being removed.
+  const [removing, setRemoving] = useState(null);
 
   const loadGuests = useCallback(async () => {
     try {
@@ -64,7 +66,8 @@ export function TeamPage() {
 
   const roster = useMemo(
     () =>
-      [...(data.profiles || []), ...guests.map(guestAsPlayer).filter((g) => g.status !== 'inactive')].sort(
+      // Removed players and roster names are off the roster.
+      [...(data.profiles || []), ...guests.map(guestAsPlayer)].filter((p) => p.status !== 'inactive').sort(
         (a, b) =>
           (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3) || a.display_name.localeCompare(b.display_name),
       ),
@@ -84,6 +87,17 @@ export function TeamPage() {
   }, [roster]);
 
   if (data.loading) return <PageSpinner />;
+
+  const removedPlayers = data.isCaptain ? (data.profiles || []).filter((p) => p.removed) : [];
+  const addBack = async (profile) => {
+    try {
+      await api.users.setRemoved(profile.user_id, false);
+      await data.reload();
+      toast({ title: `${profile.display_name} added back`, description: 'They can use the team site again.' });
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+    }
+  };
 
   // Before a new session's first game, captains see who hasn't said if they're playing.
   const current = data.roster?.current;
@@ -313,6 +327,15 @@ export function TeamPage() {
                       {p.is_captain ? 'Captain ✓' : 'Make captain'}
                     </button>
                   )}
+                  {!isMe && !p.guest && data.isCaptain && (
+                    <button
+                      onClick={() => setRemoving(p)}
+                      aria-label={`Remove ${p.display_name}`}
+                      className="rounded-full px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -334,6 +357,26 @@ export function TeamPage() {
         )}
       </div>
 
+      {removedPlayers.length > 0 && (
+        <section className="rounded-3xl border border-black/5 bg-white p-4" data-testid="removed-players">
+          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-zinc-400">Removed from the team</h3>
+          <p className="mt-1 text-xs font-medium text-zinc-500">Only captains see this. They can't use the team site until you add them back.</p>
+          <div className="mt-3 space-y-2">
+            {removedPlayers.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold">{p.display_name}</span>
+                <button
+                  onClick={() => addBack(p)}
+                  className="rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
+                >
+                  Add back
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} isCaptain={data.isCaptain} />
       {data.isCaptain && (
         <GuestDialog
@@ -341,13 +384,16 @@ export function TeamPage() {
           onOpenChange={(open) => !open && setGuestDialog(null)}
           guest={guestDialog === 'new' ? null : guestDialog}
           guests={guests}
-          appPlayers={[...(data.profiles || [])].sort((a, b) => a.display_name.localeCompare(b.display_name))}
+          appPlayers={(data.profiles || []).filter((p) => !p.removed).sort((a, b) => a.display_name.localeCompare(b.display_name))}
           meId={data.user.id}
           onChanged={async () => {
             await loadGuests();
             await data.reload();
           }}
         />
+      )}
+      {data.isCaptain && (
+        <RemovePlayerDialog player={removing} onOpenChange={(open) => !open && setRemoving(null)} onRemoved={data.reload} />
       )}
     </div>
   );
