@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/api';
 import { duesMembers } from '@/lib/dues';
+import { hasSessionList, membersForSession } from '@/lib/roster';
 
 /** Everything the Dues page shows, for every session, loaded together. */
 export function useDues() {
@@ -8,13 +9,15 @@ export function useDues() {
 
   const load = useCallback(async () => {
     try {
-      const [dues, payments, history, profiles, guests, games] = await Promise.all([
+      const [dues, payments, history, profiles, guests, games, roster] = await Promise.all([
         api.entities.SessionDues.list(),
         api.entities.DuesPayment.list(),
         api.entities.DuesHistory.list('-created_date'),
         api.entities.PlayerProfile.list(),
         api.entities.TeamGuest.list('display_name'),
         api.entities.Game.list('-date'),
+        // Who was on each session. Before the database has session lists, today's statuses count for every session.
+        api.entities.SessionRoster.list().catch(() => null),
       ]);
       // `profiles` is everyone who splits the dues: app players and guests alike.
       const members = duesMembers({ profiles, guests, payments, history });
@@ -27,6 +30,7 @@ export function useDues() {
         profiles: members.members,
         guests,
         games,
+        roster,
       });
     } catch {
       setState((s) => ({ ...s, loading: false, failed: true }));
@@ -40,12 +44,19 @@ export function useDues() {
   return { ...state, reload: load };
 }
 
-/** One session's slice: its fee row (or null), payments and history (newest first). */
+/**
+ * One session's slice: its fee row (or null), payments, history (newest first),
+ * and the team as it was that session (`members`, each with that session's
+ * status). `started` is false for a session that has no list of its own yet,
+ * which uses today's statuses.
+ */
 export function sessionSlice(data, { year, session }) {
   const same = (r) => r.season_year === Number(year) && r.session === Number(session);
   return {
     row: data.dues.find(same) || null,
     payments: data.payments.filter(same),
     history: data.history.filter(same),
+    members: membersForSession(data.profiles, data.roster, { year, session }),
+    started: hasSessionList(data.roster, { year, session }),
   };
 }

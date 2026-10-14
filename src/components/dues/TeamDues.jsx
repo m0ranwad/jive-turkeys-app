@@ -9,8 +9,10 @@ import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
 import { DUES_DEFAULTS, cleanPayHandle, dollars, feeParts, feeTotal, reminderText, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
+import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 import { FeeDialog, PaySettingsDialog, PlayerSheet } from './DuesDialogs';
+import { SessionRosterDialog } from './SessionRosterDialog';
 import { Avatar, EYEBROW, HEADING, HistoryList, StatusChip, feeLine } from './DuesParts';
 
 const DARK_BUTTON =
@@ -71,16 +73,20 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
 }
 
 /** The whole team's dues for one session. Anyone can mark players paid; captains also set the fee and amounts. */
-export function TeamDues({ data, period, user, isCaptain, settings, onChanged, onSettingsSaved }) {
+export function TeamDues({ data, period, current, user, isCaptain, settings, onChanged, onSettingsSaved }) {
   const { toast } = useToast();
   const [sheetFor, setSheetFor] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [rosterOpen, setRosterOpen] = useState(false);
 
-  const { row, payments, history } = sessionSlice(data, period);
+  // The team as it was that session, so later status changes don't rewrite it.
+  const { row, payments, history, members, started } = sessionSlice(data, period);
   const total = row ? Number(row.total_fee) || 0 : 0;
-  const team = teamDues(total, data.profiles, payments);
+  const team = teamDues(total, members, payments);
+  const past = !!current && isEarlier(period, current);
+  const notStarted = !started && !!current && isEarlier(current, period);
   const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid);
   const paid = team.active.filter((p) => team.shareOf(p.user_id).paid);
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
@@ -218,7 +224,25 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
         isCaptain={isCaptain}
         onChanged={onChanged}
       />
+      {isCaptain && started && past && (
+        <SessionRosterDialog
+          open={rosterOpen}
+          onOpenChange={setRosterOpen}
+          period={period}
+          members={data.profiles}
+          rows={data.roster}
+          meId={user.id}
+          onSaved={onChanged}
+        />
+      )}
     </>
+  );
+
+  const startsLater = notStarted && (
+    <p className="mb-3 rounded-2xl bg-zinc-50 px-3.5 py-2.5 text-xs font-medium text-zinc-500" data-testid="dues-not-started">
+      Session {period.session} hasn't started, so this uses today's roster. When it starts, everyone's status is kept
+      for it and players can say if they're playing.
+    </p>
   );
 
   if (!row) {
@@ -257,6 +281,7 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
       />
 
       <section className={CARD}>
+        {startsLater}
         {unpaid.length > 0 && (
           <div data-testid="dues-unpaid">
             <h3 className={cn(EYEBROW, 'text-zinc-400')}>Still to pay · {unpaid.length}</h3>
@@ -280,6 +305,16 @@ export function TeamDues({ data, period, user, isCaptain, settings, onChanged, o
             <UserPlus className="h-4 w-4" />
             Add players to the roster on the Team page
           </Link>
+        )}
+        {isCaptain && started && past && (
+          <button
+            type="button"
+            onClick={() => setRosterOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
+          >
+            <Pencil className="h-4 w-4" />
+            Change who was on session {period.session}
+          </button>
         )}
         <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-400">
           Tap a player to see their history, link a couple who pay together, or fix a mistake.

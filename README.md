@@ -155,6 +155,10 @@ statuses. Promote someone from the Team page, or in the SQL editor:
 update public.users set role = 'admin' where email = 'someone@example.com';
 ```
 
+Each session keeps its own roster, so players can come and go without rewriting past sessions' dues. When a new
+session's games come up, everyone's status carries over and players are asked "Playing session N?" until the first
+game; captains see who hasn't answered on the Team page. A past session can be corrected from Team dues.
+
 ## Differences from the Base44 version
 
 - Every page requires a login, except `/privacy` and `/terms`. The Base44 app returned player emails and

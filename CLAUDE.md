@@ -169,6 +169,14 @@ manages the GitHub, Cloudflare and Supabase accounts.
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
   always asks first. Only captains set fees, custom amounts and payment links.
+- Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
+  past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
+  current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status
+  changes made on the Team page or My Profile while it's current (database triggers). `player_profiles.status` and
+  `team_guests.status` stay each player's status right now. Dues and headcounts read the session's list
+  (`membersForSession()`); a session that hasn't started uses today's statuses. Before a new session's first game,
+  players are asked **Playing session N?** on Schedule (`src/components/SessionPrompt.jsx`) and captains see who
+  hasn't answered on Team. Captains correct a past session from Team dues (`SessionRosterDialog.jsx`).
 - Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
   (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts
   and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough

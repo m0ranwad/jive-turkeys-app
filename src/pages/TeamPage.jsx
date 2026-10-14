@@ -10,7 +10,8 @@ import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 import { guestAsPlayer } from '@/lib/dues';
-import { initials } from '@/lib/format';
+import { initials, today } from '@/lib/format';
+import { beforeFirstGame, sessionRows, unanswered } from '@/lib/roster';
 import { sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -74,11 +75,19 @@ export function TeamPage() {
 
   if (data.loading) return <PageSpinner />;
 
+  // Before a new session's first game, captains see who hasn't said if they're playing.
+  const current = data.roster?.current;
+  const asking = !!current && data.isCaptain && beforeFirstGame(data.games, current, today());
+  const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
+  const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
+  const waiting = asking ? onList(unanswered(data.roster.rows, current)) : [];
+
   const setStatus = async (profile, status) => {
     try {
       if (profile.guest) {
         await api.entities.TeamGuest.update(profile.id, { status });
-        await loadGuests();
+        // The session's list changed too (who has answered for this session).
+        await Promise.all([loadGuests(), data.reload()]);
       } else {
         await api.entities.PlayerProfile.update(profile.id, { status });
         await data.reload();
@@ -121,7 +130,7 @@ export function TeamPage() {
     <div className="space-y-5">
       <PageHeader
         title="Team"
-        subtitle={`${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)${
+        subtitle={`${current ? `Session ${current.session} · ` : ''}${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)${
           totals.notJoined ? ` · ${totals.notJoined} not joined yet` : ''
         }`}
       >
@@ -146,6 +155,18 @@ export function TeamPage() {
         ))}
       </div>
 
+      {waiting.length > 0 && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4" data-testid="session-answers">
+          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-amber-950">
+            Playing session {current.session}? · {sessionTeam.length - waiting.length} of {sessionTeam.length} answered
+          </h3>
+          <p className="mt-1 text-xs font-medium text-amber-900">
+            Still to answer: {waiting.map((p) => p.display_name).join(', ')}. If they don't, their status carries over.
+            Tap a status below to answer for someone.
+          </p>
+        </section>
+      )}
+
       {data.profile && <PickPositionCard profile={data.profile} onSaved={data.reload} />}
       <Formation players={roster} />
 
@@ -169,8 +190,9 @@ export function TeamPage() {
       )}
 
       <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
-        Set your own roster status anytime — On Break puts you in the sub pool for call-ups. Captains can adjust anyone's
-        status too, including teammates who haven't joined yet. Active players split the dues.
+        Set your own roster status anytime{current ? ` — it counts for session ${current.session}` : ''}. On Break puts
+        you in the sub pool for call-ups. Captains can adjust anyone's status too, including teammates who haven't joined
+        yet. Active players split the dues.
       </p>
 
       <div className="space-y-2">

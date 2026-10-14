@@ -3,12 +3,14 @@ import dayjs from 'dayjs';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
+import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { ImportScheduleDialog } from '@/components/schedule/ImportScheduleDialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { seasonLabel, today } from '@/lib/format';
+import { membersForSession } from '@/lib/roster';
 import { headcount } from '@/lib/team-logic';
 
 export function SchedulePage() {
@@ -37,10 +39,12 @@ export function SchedulePage() {
   const counts = useMemo(() => {
     const byGame = {};
     (data.games || []).forEach((game) => {
-      byGame[game.id] = headcount({ game, rsvps: data.rsvps, profiles: data.profiles, settings: data.settings });
+      // Who was on the team in the game's session.
+      const profiles = membersForSession(data.profiles || [], data.roster?.rows, { year: game.season_year, session: game.session });
+      byGame[game.id] = headcount({ game, rsvps: data.rsvps, profiles, settings: data.settings });
     });
     return byGame;
-  }, [data.games, data.rsvps, data.profiles, data.settings]);
+  }, [data.games, data.rsvps, data.profiles, data.roster, data.settings]);
 
   if (data.loading) return <PageSpinner />;
 
@@ -68,6 +72,8 @@ export function SchedulePage() {
           </div>
         )}
       </PageHeader>
+
+      <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
 
       {sessions.length === 0 && (
         <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">

@@ -12,9 +12,10 @@ import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PayButtons, StatusChip, 
 
 /** The signed-in player's share of one session: amount, paid or not, and their partner if they pay together. */
 function myShare(data, period, userId) {
-  const { row, payments, history } = sessionSlice(data, period);
+  const { row, payments, history, members } = sessionSlice(data, period);
   if (!row) return { row: null };
-  const team = teamDues(Number(row.total_fee) || 0, data.profiles, payments);
+  // The team as it was that session, so later status changes don't rewrite it.
+  const team = teamDues(Number(row.total_fee) || 0, members, payments);
   const share = team.shareOf(userId);
   const partner = share ? team.partnerOf(userId) : null;
   const partnerShare = partner ? team.shareOf(partner.user_id) : null;

@@ -108,3 +108,21 @@ begin
   end if;
 end;
 $$;
+
+-- Who was on each session (once that exists). Adding players above already
+-- put them on the current session; this is last season's session 3, where Sam
+-- was still active and Mike was on break.
+do $$
+begin
+  if to_regclass('public.session_roster') is not null then
+    execute $sql$
+      insert into public.session_roster (season_year, session, user_id, guest_id, status, answered_at, changed_by) values
+        (2025, 3, '11111111-1111-4111-8111-111111111111', null, 'active', '2025-11-01 18:00+00', '11111111-1111-4111-8111-111111111111'),
+        (2025, 3, '22222222-2222-4222-8222-222222222222', null, 'active', '2025-11-01 18:00+00', '22222222-2222-4222-8222-222222222222'),
+        (2025, 3, '33333333-3333-4333-8333-333333333333', null, 'active', null, null),
+        (2025, 3, null, 'f1111111-1111-4111-8111-111111111111', 'on_break', '2025-11-02 18:00+00', '11111111-1111-4111-8111-111111111111')
+      on conflict do nothing;
+    $sql$;
+  end if;
+end;
+$$;

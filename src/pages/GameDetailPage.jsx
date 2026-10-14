@@ -13,6 +13,7 @@ import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
+import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, resultOf, suspendedIds } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -28,9 +29,14 @@ export function GameDetailPage() {
   const [busy, setBusy] = useState(false);
 
   const game = (data.games || []).find((g) => g.id === id);
+  // Who was on the team in the game's session.
+  const sessionProfiles = useMemo(
+    () => (game ? membersForSession(data.profiles || [], data.roster?.rows, { year: game.season_year, session: game.session }) : []),
+    [game, data.profiles, data.roster],
+  );
   const counts = useMemo(
-    () => (game ? computeHeadcount({ game, rsvps: data.rsvps, profiles: data.profiles, settings: data.settings }) : null),
-    [game, data.rsvps, data.profiles, data.settings],
+    () => (game ? computeHeadcount({ game, rsvps: data.rsvps, profiles: sessionProfiles, settings: data.settings }) : null),
+    [game, data.rsvps, sessionProfiles, data.settings],
   );
 
   if (data.loading) return <PageSpinner />;
@@ -114,6 +120,14 @@ export function GameDetailPage() {
     toast({ title: 'Result saved' });
   };
 
+  // The result lists that session's team, plus anyone who already has a line for this game.
+  const resultProfiles = [
+    ...sessionProfiles,
+    ...data.profiles.filter(
+      (p) => !sessionProfiles.some((s) => s.user_id === p.user_id) && data.stats.some((s) => s.game_id === game.id && s.user_id === p.user_id),
+    ),
+  ];
+
   const statsWithNames = data.stats
     .filter((s) => s.game_id === game.id)
     .map((s) => {
@@ -193,7 +207,7 @@ export function GameDetailPage() {
             </button>
             {!game.has_result && counts && <CopyReminderButton game={game} headcount={counts} settings={data.settings} />}
             {!game.has_result && (
-              <CallForSubsButton game={game} settings={data.settings} profiles={data.profiles} rsvps={data.rsvps} />
+              <CallForSubsButton game={game} settings={data.settings} profiles={sessionProfiles} rsvps={data.rsvps} />
             )}
             <button onClick={() => setEditOpen(true)} className={cn(pill, 'bg-white/5 text-white hover:bg-white/10')}>
               <Pencil className="h-3.5 w-3.5" /> Edit
@@ -236,7 +250,7 @@ export function GameDetailPage() {
         open={resultOpen}
         onOpenChange={setResultOpen}
         game={game}
-        profiles={data.profiles}
+        profiles={resultProfiles}
         rsvps={data.rsvps}
         stats={data.stats}
         onSave={saveResult}

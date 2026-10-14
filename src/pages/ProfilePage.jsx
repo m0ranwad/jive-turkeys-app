@@ -15,7 +15,7 @@ const softButton =
   'inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.12em] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:bg-zinc-50';
 
 export function ProfilePage() {
-  const { user, profile, isCaptain, loading, reload } = useTeam();
+  const { user, profile, isCaptain, loading, reload, roster } = useTeam();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
@@ -98,7 +98,8 @@ export function ProfilePage() {
         <section className={CARD}>
           <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Roster status</h2>
           <p className="mb-3 mt-1 text-xs font-medium text-zinc-500">
-            Set this anytime. On Break puts you in the sub pool for call-ups.
+            Set this anytime{roster?.current ? `. It counts for session ${roster.current.session}` : ''}. On Break puts you in
+            the sub pool for call-ups.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((opt) => (

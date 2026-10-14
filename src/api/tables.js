@@ -10,6 +10,7 @@ export const TABLES = {
   DuesPayment: 'dues_payments',
   DuesHistory: 'dues_history',
   TeamGuest: 'team_guests',
+  SessionRoster: 'session_roster',
   Message: 'messages',
   ChatThread: 'chat_threads',
   MessageReaction: 'message_reactions',
