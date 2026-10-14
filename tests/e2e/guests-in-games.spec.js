@@ -9,7 +9,8 @@
 import { enterTeamCode, expect, signIn, test } from './helpers';
 
 async function openNextGame(page) {
-  await page.getByRole('link', { name: /vs Goal Diggers/ }).click();
+  // Not the "Vote for Player of the Match" card, once there's a result.
+  await page.getByRole('link', { name: /vs Goal Diggers/ }).filter({ hasNotText: 'Vote for Player of the Match' }).click();
   await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
 }
 

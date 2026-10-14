@@ -205,11 +205,11 @@ test('load earlier messages keeps your place', async ({ page }) => {
   await expect(page.getByText('Paid 💸')).toBeVisible();
   await expect(log.locator('[data-message-id]')).toHaveCount(60);
   await log.evaluate((el) => (el.scrollTop = 0));
-  const oldestShown = message(page, /^Old message #32$/);
+  const oldestShown = message(page, /^Old message #33$/);
   await expect(oldestShown).toBeInViewport();
 
   await page.getByRole('button', { name: 'Load earlier messages' }).click();
-  await expect(log.locator('[data-message-id]')).toHaveCount(91);
+  await expect(log.locator('[data-message-id]')).toHaveCount(92);
   await expect(oldestShown).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
   await log.evaluate((el) => (el.scrollTop = 0));
@@ -235,7 +235,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
         created_date: when,
         updated_date: when,
       });
-      if (81 - i === 32)
+      if (81 - i === 33)
         db.message_reactions.push({
           id: crypto.randomUUID(),
           message_id: id,
@@ -249,7 +249,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
   });
   await page.reload();
   const log = page.getByRole('log');
-  const anchor = messageRow(page, /^Old message #32$/);
+  const anchor = messageRow(page, /^Old message #33$/);
   await expect(anchor.getByRole('button', { name: '👍 1' })).toBeVisible();
   await log.evaluate((el) => (el.scrollTop = 0));
   await expect(anchor).toBeInViewport();
@@ -260,7 +260,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
   await anchor.getByRole('button', { name: '👍 1' }).click();
   await page.clock.runFor(2000);
 
-  await expect(log.locator('[data-message-id]')).toHaveCount(91);
+  await expect(log.locator('[data-message-id]')).toHaveCount(92);
   await expect(anchor).toBeInViewport();
   await page.clock.resume();
 });
