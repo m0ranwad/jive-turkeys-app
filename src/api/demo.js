@@ -762,6 +762,27 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       );
       return delay(rows.slice(0, limit).reverse());
     },
+    // Same idea as the database's chat_search(): text anywhere in the message, newest first.
+    async search(q) {
+      requireUser();
+      const text = String(q || '').trim().toLowerCase();
+      if (text.length < 2) return delay([]);
+      const rows = sortRows(
+        db.messages.filter((m) => m.body.toLowerCase().includes(text)),
+        '-created_date',
+      )
+        .slice(0, 50)
+        .map((m) => ({
+          id: m.id,
+          thread_id: m.thread_id ?? null,
+          thread_title: m.thread_id ? db.chat_threads.find((t) => t.id === m.thread_id)?.title ?? null : null,
+          user_id: m.user_id,
+          author_name: m.author_name,
+          body: m.body,
+          created_date: m.created_date,
+        }));
+      return delay(rows);
+    },
     async overview() {
       requireUser();
       const me = currentUser();

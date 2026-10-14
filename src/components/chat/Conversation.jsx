@@ -27,6 +27,8 @@ export function Conversation({
   onReply,
   onCopy,
   onDelete,
+  focusId,
+  onFocused,
   emptyText,
 }) {
   const scroller = useRef(null);
@@ -125,6 +127,16 @@ export function Conversation({
     setHighlightId(id);
     setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1600);
   };
+
+  // A message picked in search: jump to it once it's on screen.
+  useEffect(() => {
+    if (!focusId) return undefined;
+    const timer = setTimeout(() => {
+      jumpTo(focusId);
+      onFocused?.();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focusId, messages]);
 
   const close =
     (fn) =>
