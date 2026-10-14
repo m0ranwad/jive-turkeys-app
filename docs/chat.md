@@ -124,6 +124,18 @@ everything, so the function can't be made to send anything else.
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
 | Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |
 
+**Player of the Match notifications** use the same devices and sender. Posting a result opens voting for a set
+time (Team Settings, 12 hours unless changed); a timer (`pg_cron`, every 5 minutes, `potm_tick()`) sends the
+reminder and posts the winners. The database writes the words and picks who gets each one
+(`potm_push_targets`), so the function can't be made to send anything else.
+
+| Expected behavior | Checked by |
+|---|---|
+| Posting a result tells everyone on the team that voting is open, with the score and when it closes. Tapping it opens the game. Captains can turn this off. | `[db]` `[unit]` |
+| A set time before voting closes (3 hours unless changed, or off), players who played and haven't cast every vote are reminded how long is left. | `[db]` |
+| Each goes out once; correcting the score doesn't send it again. | `[db]` |
+| When voting closes, the winners are posted in Team Chat by "Scoreboard" (ties and roster names included), which notifies like any Team Chat message. Captains can turn this off. | `[db]` `[browser]` |
+
 The sending keys (VAPID) are created once by `.github/workflows/functions.yml` and kept as Supabase function
 secrets. They're never in the code. Never replace them: every phone that turned notifications on would
 stop getting them until the player turns them on again.

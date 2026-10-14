@@ -7,7 +7,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v13';
+const DB_KEY = 'jt_demo_db_v14';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -120,6 +120,17 @@ function seed() {
     });
   });
 
+  // Player of the Match voting: last week's result went up 3 hours ago and voting
+  // is still open; earlier games' voting has closed. Last year's game is from
+  // before voting had a deadline.
+  games
+    .filter((g) => g.has_result && g.season_year === year)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .forEach((g, i) => {
+      const opened = i === 0 ? dayjs().subtract(3, 'hour') : dayjs(g.date).hour(22);
+      Object.assign(g, { potm_opened_at: opened.toISOString(), potm_closes_at: opened.add(12, 'hour').toISOString() });
+    });
+
   const next = games.find((g) => !g.has_result);
   const rsvps = profiles.slice(1, 9).map((p, i) => ({
     id: uid(), game_id: next.id, user_id: p.user_id, status: ['in', 'in', 'maybe', 'in', 'out', 'in', 'in', 'maybe'][i],
@@ -154,6 +165,14 @@ function seed() {
   react(win, '🔥', [profiles[2], profiles[3], me]);
   react(win, '💪', [profiles[4]]);
   say(null, profiles[2], 'Defense was locked in', 1556);
+  // What the site posts when Player of the Match voting closes (potm_tick() in the database).
+  const potmGame = games.filter((g) => g.has_result && g.season_year === year).sort((a, b) => (a.date < b.date ? 1 : -1))[1];
+  const firstOf = (gender) => profiles.slice(2).find((p) => p.gender === gender).display_name;
+  messages.push({
+    id: uid(), thread_id: null, reply_to_id: null, user_id: null, author_name: 'Scoreboard',
+    body: `🏆 Player of the Match, ${potmGame.score_us}–${potmGame.score_them} W vs ${potmGame.opponent}\nMan of the Match: ${firstOf('M')} (3 votes)\nWoman of the Match: ${firstOf('F')} (2 votes)`,
+    created_date: minutesAgo(1540), updated_date: minutesAgo(1540),
+  });
   const bottle = say(null, profiles[2], 'Also, who grabbed my water bottle? Blue Hydro Flask', 1555);
   say(null, profiles[3], 'I have it! Bringing it Thursday', 1500, bottle);
   const pinnies = say(null, profiles[1], 'Who is bringing the pinnies this week?', 180);
@@ -282,6 +301,10 @@ function seed() {
         min_players: 8,
         min_women: 3,
         potm_mode: 'separate',
+        potm_window_hours: 12,
+        potm_notify: true,
+        potm_reminder_hours: 3,
+        potm_announce: true,
         email_reminders: false,
         rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
         quick_hits: [
@@ -479,6 +502,18 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const follows = (table, fields) =>
     (table === 'player_profiles' || table === 'team_guests') && ('status' in fields || 'removed' in fields);
 
+  // Same as the database's potm_open_voting() and potm_voting_open(): posting a
+  // result opens Player of the Match voting for the team's window; votes lock at
+  // the deadline (games from before deadlines have none and stay open).
+  const openVoting = (game) => {
+    const hours = db.team_settings[0]?.potm_window_hours ?? 12;
+    Object.assign(game, { potm_opened_at: now(), potm_closes_at: dayjs().add(hours, 'hour').toISOString() });
+  };
+  const checkVotingOpen = (gameId) => {
+    const game = db.games.find((g) => g.id === gameId);
+    if (game?.potm_closes_at && !dayjs(game.potm_closes_at).isAfter(dayjs())) throw new Error('Voting has closed for this game.');
+  };
+
   function entity(table) {
     const write = () => save(db);
     return {
@@ -494,6 +529,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       },
       async create(row) {
         requireUser();
+        if (table === 'potm_votes') checkVotingOpen(row.game_id);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
         db[table].push(record);
         if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
@@ -510,7 +546,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         requireUser();
         const record = db[table].find((r) => r.id === id);
         if (!record) throw new Error('Not found');
+        if (table === 'potm_votes') checkVotingOpen(record.game_id);
+        const opensVoting = table === 'games' && patch.has_result && !record.has_result && !record.potm_opened_at;
         Object.assign(record, patch, { updated_date: now() });
+        if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
         write();
         notify(table, 'onUpdate', record);
@@ -521,6 +560,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       },
       async delete(id) {
         requireUser();
+        const vote = table === 'potm_votes' && db.potm_votes.find((r) => r.id === id);
+        if (vote && currentUser().role !== 'admin') checkVotingOpen(vote.game_id);
         db[table] = db[table].filter((r) => r.id !== id);
         if (table === 'games') {
           for (const child of ['rsvps', 'game_stats', 'game_fill_ins', 'potm_votes']) db[child] = db[child].filter((r) => r.game_id !== id);

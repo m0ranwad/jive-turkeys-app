@@ -3,12 +3,14 @@ import { Trophy } from 'lucide-react';
 import { api } from '@/api';
 import { useToast } from '@/components/ui/toast';
 import { AWARD_LABEL, CARD } from '@/lib/constants';
+import { closesLabel, potmAwards, votingOpen } from '@/lib/potm';
 import { playerKey } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 /**
  * Player of the Match: anyone who played can vote for a teammate who played,
- * including one who hasn't joined the site (they can't vote themselves).
+ * including one who hasn't joined the site (they can't vote themselves), until
+ * voting closes (a set time after the result is posted; lib/potm.js).
  * `profiles` includes roster names and `votes` are keyed with keyedVote().
  */
 export function PotmVoting({ game, profiles, stats, votes, user, settings, onChanged }) {
@@ -18,10 +20,11 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
 
   if (!game.has_result) return null;
 
-  const awards = settings?.potm_mode === 'overall' ? ['overall'] : ['man', 'woman'];
+  const awards = potmAwards(settings);
+  const open = votingOpen(game);
   const playedIds = stats.filter((s) => s.game_id === game.id && s.played).map((s) => s.user_id);
   const played = profiles.filter((p) => playedIds.includes(p.user_id));
-  const canVote = playedIds.includes(user.id);
+  const canVote = open && playedIds.includes(user.id);
   const nameOf = (userId) => profiles.find((p) => p.user_id === userId)?.display_name || 'Unknown';
 
   const tally = (award) => {
@@ -53,7 +56,20 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
 
   return (
     <section className={CARD}>
-      <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Player of the Match</h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Player of the Match</h3>
+        {game.potm_closes_at && (
+          <span
+            data-testid="potm-deadline"
+            className={cn(
+              'text-[10px] font-black uppercase tracking-[0.1em]',
+              open ? 'text-lime-700' : 'text-zinc-500',
+            )}
+          >
+            {open ? `Voting open until ${closesLabel(game.potm_closes_at)}` : 'Voting closed'}
+          </span>
+        )}
+      </div>
       <div className="mt-3 space-y-4">
         {awards.map((award) => {
           const ranked = tally(award);
@@ -70,7 +86,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
             <div key={award} className="rounded-2xl bg-zinc-50 p-3.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">{AWARD_LABEL[award]}</span>
-                {mine && !voting && (
+                {mine && !voting && canVote && (
                   <button
                     onClick={() => setChanging(award)}
                     className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400 transition hover:text-zinc-900"
@@ -138,7 +154,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                 </div>
               )}
 
-              {!canVote && leaders.length > 0 && (
+              {open && !canVote && leaders.length > 0 && (
                 <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
                   Voting is open to players who played this game
                 </p>

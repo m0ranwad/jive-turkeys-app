@@ -155,3 +155,15 @@ begin
   end if;
 end;
 $$;
+
+-- Player of the Match voting with a deadline, and the notifications that went
+-- out for it (once those exist).
+do $$
+begin
+  if to_regclass('public.potm_push_log') is not null then
+    insert into public.potm_push_log (game_id, kind, created_date) values
+      ('b1111111-1111-4111-8111-111111111111', 'open', '2026-09-10 23:30+00'),
+      ('b1111111-1111-4111-8111-111111111111', 'reminder', '2026-09-11 08:30+00');
+  end if;
+end;
+$$;

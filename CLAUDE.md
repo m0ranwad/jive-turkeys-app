@@ -205,6 +205,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   for that one game, count toward our score, show on that game's Result card, and nowhere else (no Team page, dues,
   headcounts, leaderboards or Player of the Match). The logic is in `src/lib/results.js`; tests in
   `tests/unit/results.test.js`, `tests/e2e/game-result.spec.js` and `supabase/tests/games.test.sql`.
+- Player of the Match voting closes: posting a result sets `games.potm_closes_at` (the window, reminder and
+  announcement are captain settings in `team_settings.potm_*`); `src/lib/potm.js`, `src/components/PotmPrompt.jsx`
+  (the Schedule card), `src/components/game/PotmVoting.jsx`. The database sends the "voting is open" and reminder
+  notifications through `notify-chat` and posts the winners in Team Chat from a `pg_cron` timer (`potm_tick()`).
+  Games whose result was posted before this have no deadline.
 - Notifications: `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`

@@ -31,6 +31,13 @@ export const TEST_NOTIFICATION = {
   tag: 'test',
 };
 
+/** A Player of the Match notification: the database writes the words. One per game is kept on screen. */
+export function potmNotification({ title, body, url }, gameId) {
+  return { title, body: clip(String(body), 160), url, tag: `potm-${gameId}` };
+}
+
+const POTM_KINDS = ['open', 'reminder'];
+
 async function deliver(targets, messageFor, { vapid, db, fetch }) {
   const result = { sent: 0, forgotten: 0, failed: 0, statuses: [] };
   await Promise.all(
@@ -60,7 +67,10 @@ async function deliver(targets, messageFor, { vapid, db, fetch }) {
  * - { message_id }: sent by the database when a message is posted. The database
  *   decides who gets it, and hands each message out only once, so a repeated
  *   or forged request can't send anything extra.
- * deps: { vapid, db: { pushTargets, subscriptionsOf, forget }, userOf(token), fetch }
+ * - { potm_game_id, kind }: sent by the database when Player of the Match voting
+ *   opens ('open') or is about to close ('reminder'). Same rules: the database
+ *   decides who, what it says, and that it goes out once.
+ * deps: { vapid, db: { pushTargets, potmTargets, subscriptionsOf, forget }, userOf(token), fetch }
  */
 export async function handleNotify(body, token, deps) {
   if (!deps.vapid?.publicKey || !deps.vapid?.privateKey) return [503, { error: "Notifications aren't set up yet." }];
@@ -73,6 +83,11 @@ export async function handleNotify(body, token, deps) {
   if (body?.message_id) {
     if (!UUID.test(body.message_id)) return [400, { error: 'Unknown message.' }];
     return [200, await deliver(await deps.db.pushTargets(body.message_id), chatNotification, deps)];
+  }
+  if (body?.potm_game_id) {
+    if (!UUID.test(body.potm_game_id) || !POTM_KINDS.includes(body.kind)) return [400, { error: 'Unknown game.' }];
+    const targets = await deps.db.potmTargets(body.potm_game_id, body.kind);
+    return [200, await deliver(targets, (t) => potmNotification(t, body.potm_game_id), deps)];
   }
   return [400, { error: 'Nothing to do.' }];
 }

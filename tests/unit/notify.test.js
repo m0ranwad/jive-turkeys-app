@@ -3,7 +3,7 @@
 import { createECDH, randomBytes } from 'node:crypto';
 import ece from 'http_ece';
 import { describe, expect, it, vi } from 'vitest';
-import { TEST_NOTIFICATION, chatNotification, handleNotify } from '../../supabase/functions/_shared/notify.js';
+import { TEST_NOTIFICATION, chatNotification, handleNotify, potmNotification } from '../../supabase/functions/_shared/notify.js';
 import { b64u, generateVapidKeys } from '../../supabase/functions/_shared/webpush.js';
 
 const MESSAGE = '11111111-2222-4333-8444-555555555555';
@@ -30,6 +30,7 @@ async function setup({ targets = [], subscriptions = [], status = () => 201, use
   });
   const db = {
     pushTargets: vi.fn(async () => targets),
+    potmTargets: vi.fn(async () => targets),
     subscriptionsOf: vi.fn(async () => subscriptions),
     forget: vi.fn(async () => {}),
   };
@@ -139,5 +140,42 @@ describe('handleNotify', () => {
     expect(result.sent).toBe(1);
     expect(db.subscriptionsOf).toHaveBeenCalledWith('me');
     expect(delivered).toEqual([{ to: 'mine', message: TEST_NOTIFICATION }]);
+  });
+
+  it('sends Player of the Match notifications the database wrote, to the phones it picked', async () => {
+    const GAME = '99999999-2222-4333-8444-555555555555';
+    const row = (id) => ({
+      ...phone(id),
+      subscription_id: id,
+      title: '🏆 Voting closes in 3 hours',
+      body: "You haven't voted for Player of the Match (5–3 W vs Ball Busters). Voting closes Fri 9:30 AM.",
+      url: `/games/${GAME}`,
+    });
+    const { deps, db, delivered } = await setup({ targets: [row('a'), row('b')] });
+    const [status, result] = await handleNotify({ potm_game_id: GAME, kind: 'reminder' }, '', deps);
+    expect(status).toBe(200);
+    expect(result).toMatchObject({ sent: 2 });
+    expect(db.potmTargets).toHaveBeenCalledWith(GAME, 'reminder');
+    expect(delivered[0].message).toEqual({
+      title: '🏆 Voting closes in 3 hours',
+      body: "You haven't voted for Player of the Match (5–3 W vs Ball Busters). Voting closes Fri 9:30 AM.",
+      url: `/games/${GAME}`,
+      tag: `potm-${GAME}`,
+    });
+  });
+
+  it('ignores Player of the Match requests that are not a real game and kind', async () => {
+    const { deps, db } = await setup();
+    expect((await handleNotify({ potm_game_id: 'nope', kind: 'open' }, '', deps))[0]).toBe(400);
+    expect((await handleNotify({ potm_game_id: MESSAGE, kind: 'winner' }, '', deps))[0]).toBe(400);
+    expect(db.potmTargets).not.toHaveBeenCalled();
+  });
+});
+
+describe('potmNotification', () => {
+  it('keeps one notification per game on screen, and long text short', () => {
+    const n = potmNotification({ title: 'T', body: 'x'.repeat(300), url: '/games/g' }, 'g');
+    expect(n.tag).toBe('potm-g');
+    expect(n.body).toHaveLength(160);
   });
 });
