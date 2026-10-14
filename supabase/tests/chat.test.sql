@@ -77,6 +77,8 @@ insert into auth.users (id, email) select id, name || '@test.local' from test.pe
 
 select test.ok((select role from public.users where id = test.id('cap')) = 'admin', 'the first sign-up becomes a captain');
 select test.ok((select role from public.users where id = test.id('ann')) = 'user', 'later sign-ups are players');
+-- Everyone here has joined the team with its code (membership.test.sql covers who hasn't).
+update public.users set joined_team_at = now();
 
 -- A message from before this sign-up flow, so "unread since you joined" has something to skip.
 insert into public.messages (user_id, author_name, body, created_date)

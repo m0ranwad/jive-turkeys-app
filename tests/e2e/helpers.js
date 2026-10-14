@@ -98,3 +98,10 @@ export async function tapMessage(page, text) {
   await message(page, text).click();
   await expect(page.getByRole('button', { name: 'Reply' })).toBeVisible();
 }
+
+/** A new account's first step: the team code (TURKEY in the sample data). */
+export async function enterTeamCode(page, code = 'TURKEY') {
+  await expect(page.getByRole('heading', { name: 'Enter the team code' })).toBeVisible();
+  await page.getByLabel('Team code').fill(code);
+  await page.getByRole('button', { name: 'Join the team' }).click();
+}

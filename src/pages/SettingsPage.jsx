@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CaptainsOnly, PageHeader, PageSpinner } from '@/components/PageSpinner';
+import { TeamCodeCard } from '@/components/TeamCodeCard';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
@@ -9,7 +10,7 @@ import { saveTeamSettings } from '@/lib/actions';
 import { cn } from '@/lib/utils';
 
 export function SettingsPage() {
-  const { settings, isCaptain, loading, reload } = useTeam();
+  const { user, settings, isCaptain, loading, reload, roster } = useTeam();
   const { toast } = useToast();
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -54,6 +55,7 @@ export function SettingsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Team settings" subtitle="Defaults for every game, the coed minimums, and awards." />
+      <TeamCodeCard meId={user?.id} roster={roster} />
       <section className={cn(CARD, 'space-y-5')}>
         <div className="grid gap-4 sm:grid-cols-2">
           {field('Primary jersey', 'primary_jersey')}

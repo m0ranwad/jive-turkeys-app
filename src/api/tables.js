@@ -11,6 +11,7 @@ export const TABLES = {
   DuesHistory: 'dues_history',
   TeamGuest: 'team_guests',
   SessionRoster: 'session_roster',
+  TeamJoinCode: 'team_join_code',
   Message: 'messages',
   ChatThread: 'chat_threads',
   MessageReaction: 'message_reactions',

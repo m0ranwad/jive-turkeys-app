@@ -80,6 +80,8 @@ insert into dues_test.people values
 insert into auth.users (id, email) select id, name || '@dues.test' from dues_test.people;
 update public.users set role = case when id = dues_test.id('kim') then 'admin' else 'user' end
   where id in (select id from dues_test.people);
+-- Everyone here has joined the team with its code (membership.test.sql covers who hasn't).
+update public.users set joined_team_at = now();
 
 insert into public.player_profiles (user_id, display_name, status)
 select id, initcap(name), case when name = 'sub' then 'sub_pool' else 'active' end from dues_test.people;
@@ -244,6 +246,7 @@ reset role;
 
 insert into dues_test.people values ('newbie', '00000000-0000-4000-8000-0000000000d6');
 insert into auth.users (id, email) values (dues_test.id('newbie'), 'newbie@dues.test');
+update public.users set joined_team_at = now() where id = dues_test.id('newbie');
 insert into public.player_profiles (user_id, display_name) values (dues_test.id('newbie'), 'Rosa');
 
 select dues_test.sign_in('kim');
@@ -279,6 +282,7 @@ reset role;
 -- is then linked: nothing either of them had is lost.
 insert into dues_test.people values ('late', '00000000-0000-4000-8000-0000000000d7');
 insert into auth.users (id, email) values (dues_test.id('late'), 'late@dues.test');
+update public.users set joined_team_at = now() where id = dues_test.id('late');
 insert into public.player_profiles (user_id, display_name, status) values (dues_test.id('late'), 'Lou', 'active');
 
 select dues_test.sign_in('kim');

@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const calls = [];
 const channels = [];
 let result = { data: [], error: null };
+// The signed-in session the stand-in client reports (auth.getSession).
+let session = null;
 
 // A chainable stand-in for supabase.from(...): records each call, resolves to `result`.
 function query(table) {
@@ -25,6 +27,7 @@ function query(table) {
     'update',
     'delete',
     'single',
+    'maybeSingle',
   ]) {
     q[method] = (...args) => {
       calls.push([table, method, ...args]);
@@ -36,7 +39,9 @@ function query(table) {
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
-    auth: {},
+    auth: {
+      getSession: async () => ({ data: { session } }),
+    },
     from: (table) => query(table),
     rpc: (name, params) => {
       calls.push(['rpc', name, params]);
@@ -66,6 +71,7 @@ beforeEach(() => {
   calls.length = 0;
   channels.length = 0;
   result = { data: [], error: null };
+  session = null;
 });
 
 describe('chat.history', () => {
@@ -212,5 +218,36 @@ describe('session lists', () => {
   it('reports database errors (the site then uses today\'s statuses)', async () => {
     result = { data: null, error: { message: 'function roster_start_current() does not exist' } };
     await expect(api.roster.start()).rejects.toThrow('does not exist');
+  });
+});
+
+describe('the team code', () => {
+  const signedIn = (row) => {
+    session = { user: { id: 'u1', email: 'zed@example.com', user_metadata: {} } };
+    result = { data: row, error: null };
+  };
+
+  it("says a new account hasn't joined the team until it enters the code", async () => {
+    signedIn({ id: 'u1', role: 'user', full_name: 'Zed', joined_team_at: null });
+    expect(await api.auth.me()).toMatchObject({ id: 'u1', role: 'user', joined: false });
+    signedIn({ id: 'u1', role: 'user', full_name: 'Zed', joined_team_at: '2026-10-14T12:00:00Z' });
+    expect(await api.auth.me()).toMatchObject({ joined: true });
+  });
+
+  it('counts captains as joined, and everyone before the database has team codes', async () => {
+    signedIn({ id: 'u1', role: 'admin', full_name: 'Cap', joined_team_at: null });
+    expect(await api.auth.me()).toMatchObject({ joined: true });
+    signedIn({ id: 'u1', role: 'user', full_name: 'Old' });
+    expect(await api.auth.me()).toMatchObject({ joined: true });
+  });
+
+  it('joins through the database function and explains a wrong code or too many tries', async () => {
+    result = { data: 'joined', error: null };
+    await api.users.joinTeam('TURKEY');
+    expect(calls).toEqual([['rpc', 'join_team', { p_code: 'TURKEY' }]]);
+    result = { data: 'wrong', error: null };
+    await expect(api.users.joinTeam('NOPE')).rejects.toThrow("That code isn't right");
+    result = { data: 'blocked', error: null };
+    await expect(api.users.joinTeam('NOPE')).rejects.toThrow('Too many tries. Try again in an hour.');
   });
 });

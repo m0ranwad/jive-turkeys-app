@@ -15,6 +15,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { StatsPage } from '@/pages/StatsPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { LoginPage } from '@/pages/auth/LoginPage';
+import { JoinTeamPage } from '@/pages/auth/JoinTeamPage';
 import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth/PasswordPages';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 
@@ -34,6 +35,8 @@ function RequireAuth() {
     const here = location.pathname + location.search;
     return <Navigate to={here === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(here)}`} replace />;
   }
+  // Signed in but not on the team yet: the team code comes first.
+  if (!user.joined) return <JoinTeamPage />;
   return <Outlet />;
 }
 

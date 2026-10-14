@@ -4,9 +4,12 @@
 import dayjs from 'dayjs';
 import { currentSession } from '@/lib/dues';
 import { today } from '@/lib/format';
+import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v10';
+const DB_KEY = 'jt_demo_db_v11';
+// The team code new accounts enter in the preview.
+export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
 // Set when someone signs out of the demo, so it stops signing them back in.
 const SIGNED_OUT_KEY = 'jt_demo_signed_out';
@@ -39,7 +42,10 @@ function seed() {
     password: i === 0 ? DEMO_LOGIN.password : 'demo1234',
     full_name: name,
     role: i === 0 ? 'admin' : 'user',
+    joined_team_at: now(),
   }));
+  // Signed up but hasn't entered the team code, so the preview can show that step.
+  users.push({ id: uid(), email: 'nia@demo.test', password: 'demo1234', full_name: 'Nia Newcomer', role: 'user', joined_team_at: null });
   const statuses = ['active', 'active', 'active', 'active', 'active', 'active', 'active', 'active', 'sub_pool', 'on_break', 'active', 'active'];
   const profiles = people.map(([name, gender, position, year], i) => ({
     id: uid(),
@@ -316,6 +322,10 @@ function seed() {
     dues_history: duesHistory,
     team_guests: teamGuests,
     session_roster: sessionRoster,
+    // Last changed before session 2 started, so captains are reminded to change it.
+    team_join_code: [
+      { id: uid(), code: DEMO_TEAM_CODE, updated_by: captainId, created_date: dayjs().subtract(60, 'day').toISOString(), updated_date: dayjs().subtract(60, 'day').toISOString() },
+    ],
     messages,
     chat_threads: threads,
     message_reactions: reactions,
@@ -535,7 +545,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const auth = {
     async me() {
       const user = currentUser();
-      return user ? delay({ id: user.id, email: user.email, full_name: user.full_name, role: user.role }) : null;
+      if (!user) return null;
+      const joined = !!user.joined_team_at || user.role === 'admin';
+      return delay({ id: user.id, email: user.email, full_name: user.full_name, role: user.role, joined });
     },
     onChange(callback) {
       authListeners.add(callback);
@@ -553,7 +565,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (db.users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
         throw new Error('An account with this email already exists. Try logging in.');
       }
-      const user = { id: uid(), email: email.trim(), password, full_name: '', role: 'user' };
+      const user = { id: uid(), email: email.trim(), password, full_name: '', role: 'user', joined_team_at: null };
       db.users.push(user);
       save(db);
       setSession(user.id);
@@ -606,6 +618,24 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   };
 
   const users = {
+    // Same as the database's join_team(): ten wrong codes in a row block tries for an hour.
+    async joinTeam(code) {
+      requireUser();
+      const user = currentUser();
+      if (user.joined_team_at) return delay(null);
+      if (user.join_blocked_until && user.join_blocked_until > now()) throw new Error(JOIN_ERRORS.blocked);
+      const right = (db.team_join_code[0]?.code || '').trim().toLowerCase();
+      if (right && String(code).trim().toLowerCase() === right) {
+        Object.assign(user, { joined_team_at: now(), join_tries: 0, join_blocked_until: null });
+        save(db);
+        return delay(null);
+      }
+      const tries = (user.join_blocked_until ? 0 : user.join_tries || 0) + 1;
+      const blocked = tries >= 10;
+      Object.assign(user, { join_tries: blocked ? 0 : tries, join_blocked_until: blocked ? dayjs().add(1, 'hour').toISOString() : null });
+      save(db);
+      throw new Error(blocked ? JOIN_ERRORS.blocked : JOIN_ERRORS.wrong);
+    },
     // Same as the database's move_team_guest(), claim_team_guest() and link_team_guest().
     async claimGuest(guestId) {
       requireUser();

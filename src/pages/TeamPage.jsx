@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { Copy, Pencil, Phone, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
@@ -12,6 +13,7 @@ import { copyText } from '@/lib/clipboard';
 import { guestAsPlayer } from '@/lib/dues';
 import { initials, today } from '@/lib/format';
 import { beforeFirstGame, sessionRows, unanswered } from '@/lib/roster';
+import { codeIsStale } from '@/lib/team-code';
 import { sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +53,14 @@ export function TeamPage() {
   useEffect(() => {
     loadGuests();
   }, [loadGuests]);
+
+  // The team code new players enter, for the invite. Null before the database has team codes.
+  const [joinCode, setJoinCode] = useState(null);
+  useEffect(() => {
+    api.entities.TeamJoinCode.list()
+      .then((rows) => setJoinCode(rows[0] || null))
+      .catch(() => setJoinCode(null));
+  }, []);
 
   const roster = useMemo(
     () =>
@@ -105,7 +115,9 @@ export function TeamPage() {
       [
         "🦃 You're on the Jive Turkeys roster! Join the team site:",
         window.location.origin,
-        'Sign up with Google or email, then pick your name from the list. Your spot and dues are already there.',
+        joinCode
+          ? `Sign up with Google or email, enter the team code ${joinCode.code}, then pick your name from the list. Your spot and dues are already there.`
+          : 'Sign up with Google or email, then pick your name from the list. Your spot and dues are already there.',
         `Still to join: ${names.join(', ')}`,
       ].join('\n'),
     );
@@ -164,6 +176,15 @@ export function TeamPage() {
             Still to answer: {waiting.map((p) => p.display_name).join(', ')}. If they don't, their status carries over.
             Tap a status below to answer for someone.
           </p>
+          {codeIsStale(joinCode, data.roster) && (
+            <p className="mt-2 text-xs font-semibold text-amber-950" data-testid="team-code-stale">
+              New session: change the team code in{' '}
+              <Link to="/settings" className="underline underline-offset-2">
+                Team Settings
+              </Link>{' '}
+              so invites from before stop working.
+            </p>
+          )}
         </section>
       )}
 

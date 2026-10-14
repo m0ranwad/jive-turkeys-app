@@ -27,15 +27,21 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [names, setNames] = useState(null);
   const [pick, setPick] = useState(undefined);
   // "I'm not on the list", but the name they typed looks like one that is
-  // ("Sam Ortiz" for "Sam O"): their details, and the names it looks like.
+  // ("Sam Ortiz" for "Sam O"), or like a player already on the site (a second
+  // account, made by forgetting which email they used): their details, and the
+  // names it looks like (`matches`) or the players (`accounts`).
   const [asking, setAsking] = useState(null);
   const [askError, setAskError] = useState('');
+  const [players, setPlayers] = useState([]);
 
   useEffect(() => {
     if (!open || !needsProfile) return;
     api.entities.TeamGuest.list('display_name')
       .then((rows) => setNames(rows.filter((g) => !g.removed && !g.linked_user_id)))
       .catch(() => setNames([]));
+    api.entities.PlayerProfile.list()
+      .then(setPlayers)
+      .catch(() => setPlayers([]));
   }, [open, needsProfile]);
 
   if (!open) return null;
@@ -72,9 +78,10 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
 
   const submitProfile = async (values) => {
     const matches = pick ? [] : (names || []).filter((g) => sameName(values.display_name, g.display_name));
-    if (matches.length) {
+    const accounts = pick || matches.length ? [] : players.filter((p) => sameName(values.display_name, p.display_name));
+    if (matches.length || accounts.length) {
       setAskError('');
-      setAsking({ values, matches });
+      setAsking(matches.length ? { values, matches } : { values, accounts });
       return;
     }
     await createProfile(values, pick);
@@ -179,7 +186,34 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       )}
                     </p>
                   )}
-                  {asking ? (
+                  {asking?.accounts ? (
+                    <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="already-on-site">
+                      <p className="text-sm font-bold text-amber-950">Already on the site?</p>
+                      <p className="text-sm text-amber-900">
+                        {asking.accounts.map((p) => p.display_name).join(' and ')}{' '}
+                        {asking.accounts.length === 1 ? 'has' : 'have'} an account here already. If that's you, sign out
+                        and sign in the way you did before (with Google, or the email you used), so your stats and dues
+                        stay in one place.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={signOut}
+                        className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        Sign out and use my other account
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => answer(null)}
+                        className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
+                      >
+                        No, that's someone else
+                      </button>
+                      {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
+                    </div>
+                  ) : asking ? (
                     <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="is-that-you">
                       <p className="text-sm font-bold text-amber-950">Is that you on the roster?</p>
                       <p className="text-sm text-amber-900">
