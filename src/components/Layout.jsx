@@ -22,7 +22,7 @@ import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
-import { resyncPush, setIconBadge } from '@/lib/push';
+import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
 import { STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -92,6 +92,10 @@ export function Layout() {
   useEffect(() => {
     setIconBadge(chatIconOn ? chatUnread : 0);
   }, [chatIconOn, chatUnread]);
+  useEffect(() => {
+    window.addEventListener(NOTIFY_CHOICES_EVENT, reload);
+    return () => window.removeEventListener(NOTIFY_CHOICES_EVENT, reload);
+  }, [reload]);
 
   // Other screens (the chat's notification settings) can open the Home Screen guide.
   useEffect(() => {
