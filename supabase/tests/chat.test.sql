@@ -106,7 +106,28 @@ insert into public.messages (user_id, author_name, body, reply_to_id)
 select test.id('bob'), 'Bob', 'I do', id from public.messages where body = 'Who has pinnies?';
 select test.ok((select reply_to_id is not null from public.messages where body = 'I do'), 'a reply points at the message it answers');
 select test.touches($$delete from public.messages where body = 'Who has pinnies?'$$, 0, 'a player cannot delete someone else''s message');
-select test.touches($$update public.messages set body = 'edited' where body = 'Who has pinnies?'$$, 0, 'players cannot edit messages (no edit feature yet)');
+select test.touches($$update public.messages set body = 'edited' where body = 'Who has pinnies?'$$, 0, 'a player cannot edit someone else''s message');
+
+-- Editing your own message: the text only, marked edited, and never as anyone else.
+select test.sign_in('ann');
+select test.touches($$update public.messages set body = 'Who has the pinnies?' where body = 'Who has pinnies?'$$, 1,
+  'a player fixes a typo in their own message');
+select test.ok((select edited_date is not null from public.messages where body = 'Who has the pinnies?'), 'and it''s marked edited');
+select test.ok((select edited_date is null from public.messages where body = 'I do'), 'other messages aren''t');
+select test.refused($$update public.messages set user_id = test.id('bob') where body = 'Who has the pinnies?'$$,
+  'only the text can change, not who wrote it');
+select test.refused($$update public.messages set created_date = now() - interval '1 day' where body = 'Who has the pinnies?'$$,
+  'or when');
+select test.refused($$update public.messages set edited_date = null where body = 'Who has the pinnies?'$$,
+  'or the edited label');
+select test.refused($$update public.messages set body = '' where body = 'Who has the pinnies?'$$, 'an edit can''t empty a message');
+select test.sign_in('cap');
+select test.touches($$update public.messages set body = 'captain was here' where body = 'Who has the pinnies?'$$, 0,
+  'captains don''t edit other people''s messages either');
+-- Back as it was, for the checks below.
+reset role;
+update public.messages set body = 'Who has pinnies?', edited_date = null where body = 'Who has the pinnies?';
+select test.sign_in('bob');
 
 -- ---------------------------------------------------------------------------
 -- Reactions
@@ -161,6 +182,10 @@ select test.refused($$insert into public.messages (user_id, author_name, body, t
   'nobody can post in a closed thread');
 select test.ok((select count(*) from public.messages m join public.chat_threads t on t.id = m.thread_id where t.title = '⚽ Sunday pickup') = 2,
   'a closed thread keeps its messages readable');
+select test.sign_in('ann');
+select test.refused(
+  $$update public.messages m set body = 'changed' from public.chat_threads t where t.id = m.thread_id and t.title = '⚽ Sunday pickup' and m.user_id = auth.uid()$$,
+  'or edit their messages in it');
 
 select test.sign_in('cap');
 select test.touches($$update public.chat_threads set archived = false where title = '⚽ Sunday pickup'$$, 1, 'a captain reopens anyone''s thread');
