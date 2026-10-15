@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { ChevronLeft, Lock, LockOpen, MessageSquare, MessagesSquare, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
+import { ChevronLeft, Lock, LockOpen, MessageSquare, MessagesSquare, MoreHorizontal, Pencil, Search, Trash2, X } from 'lucide-react';
 import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
 import { ConfirmDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
+import { ChatSearch } from '@/components/chat/ChatSearch';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { Conversation } from '@/components/chat/Conversation';
@@ -151,7 +152,13 @@ export function ChatPage() {
   const [reactions, setReactions] = useState([]);
   const [extras, setExtras] = useState({});
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  // Search: the dialog, and a found message to jump to once its room has loaded far enough back.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [findTarget, setFindTarget] = useState(null);
+  const [focusId, setFocusId] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  // One of your messages being edited in the message box.
+  const [editing, setEditing] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [visible, setVisible] = useState(() => !document.hidden);
@@ -208,6 +215,11 @@ export function ChatPage() {
         );
       },
       {
+        // An edit (yours on another device, or someone else's): the new text, in place.
+        onUpdate: (m) =>
+          setLoaded((current) =>
+            current && { ...current, messages: current.messages.map((x) => (x.id === m.id ? { ...x, ...m } : x)) },
+          ),
         onDelete: ({ id }) => {
           setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== id) });
           setReactions((list) => list.filter((r) => r.message_id !== id));
@@ -249,6 +261,7 @@ export function ChatPage() {
   useEffect(() => {
     let alive = true;
     setReplyTo(null);
+    setEditing(null);
     setMenuOpen(false);
     setLoaded(null);
     setReactions([]);
@@ -429,6 +442,21 @@ export function ChatPage() {
     }
   };
 
+  // A search result: once its room is open, load further back until the message is there, then jump to it.
+  useEffect(() => {
+    if (!findTarget || !loaded || loaded.room !== findTarget.room || loadingEarlier) return;
+    if (loaded.messages.some((m) => m.id === findTarget.id)) {
+      setFocusId(findTarget.id);
+      setFindTarget(null);
+    } else if (loaded.hasMore) {
+      loadEarlier();
+    } else {
+      setFindTarget(null);
+      toast({ title: "Couldn't find that message", description: 'It may have been deleted.' });
+    }
+    // loadEarlier and toast change every render; this runs on what's loaded.
+  }, [findTarget, loaded, loadingEarlier]);
+
   const toggleReaction = async (message, emoji) => {
     const existing = reactions.find((r) => r.message_id === message.id && r.user_id === me && r.emoji === emoji);
     if (existing?.pending) return;
@@ -454,8 +482,28 @@ export function ChatPage() {
   };
 
   const reply = (message) => {
+    setEditing(null);
     setReplyTo(message);
     composer.current?.focus();
+  };
+
+  const startEdit = (message) => {
+    setReplyTo(null);
+    setEditing(message);
+  };
+
+  const saveEdit = async (message, body) => {
+    try {
+      const updated = await api.entities.Message.update(message.id, { body });
+      setLoaded((current) =>
+        current && { ...current, messages: current.messages.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) },
+      );
+      setEditing(null);
+      return true;
+    } catch (err) {
+      toast({ title: "That edit didn't save", description: err.message });
+      return false;
+    }
   };
 
   const copy = async (message) => {
@@ -595,6 +643,13 @@ export function ChatPage() {
             </p>
           </div>
 
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search the chat"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+          >
+            <Search className="h-5 w-5" />
+          </button>
           <NotificationsButton state={pushStatus} onClick={() => setNotifyOpen(true)} />
 
           {!room && (
@@ -694,6 +749,9 @@ export function ChatPage() {
               onReply={reply}
               onCopy={copy}
               onDelete={(message) => setDialog({ kind: 'deleteMessage', message })}
+              onEdit={startEdit}
+              focusId={focusId}
+              onFocused={() => setFocusId(null)}
               emptyText={thread ? 'Nothing here yet. Say something to get it going.' : 'No messages yet. Break the ice.'}
             />
             {thread?.archived ? (
@@ -710,6 +768,9 @@ export function ChatPage() {
                 }
                 onCancelReply={() => setReplyTo(null)}
                 onSend={send}
+                editing={editing}
+                onCancelEdit={() => setEditing(null)}
+                onSaveEdit={saveEdit}
               />
             )}
           </>
@@ -721,6 +782,16 @@ export function ChatPage() {
       </section>
 
       <NotificationsDialog open={notifyOpen} onOpenChange={setNotifyOpen} state={pushStatus} />
+      <ChatSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        nameOf={nameOf}
+        onPick={(found) => {
+          setSearchOpen(false);
+          setFindTarget({ room: found.thread_id ?? null, id: found.id });
+          openRoom(found.thread_id ?? null);
+        }}
+      />
       <ThreadDialog
         open={dialog?.kind === 'new' || dialog?.kind === 'rename'}
         onOpenChange={(open) => !open && setDialog(null)}

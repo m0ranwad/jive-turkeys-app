@@ -54,5 +54,11 @@ export function useSeasonData() {
     return load();
   }, [load]);
 
-  return { ...state, reload };
+  /** Puts one saved RSVP in place, without downloading every game, RSVP, stat and vote again. */
+  const putRsvp = useCallback((row) => {
+    const saved = keyedRow(row);
+    setState((s) => ({ ...s, rsvps: [...(s.rsvps || []).filter((r) => r.id !== saved.id), saved] }));
+  }, []);
+
+  return { ...state, reload, putRsvp };
 }

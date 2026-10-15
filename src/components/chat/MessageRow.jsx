@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Copy, CornerUpLeft, Plus, Trash2 } from 'lucide-react';
+import { Copy, CornerUpLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
 import { QUICK_REACTIONS, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
 import { initials, shortName } from '@/lib/format';
@@ -38,12 +38,14 @@ export function MessageRow({
   nameOf,
   selected,
   canDelete,
+  canEdit,
   highlighted,
   onSelect,
   onReact,
   onReply,
   onCopy,
   onDelete,
+  onEdit,
   onJumpTo,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -122,6 +124,9 @@ export function MessageRow({
             <span className="whitespace-pre-wrap break-words">
               <Body text={m.body} mine={mine && !big} />
             </span>
+            {m.edited_date && (
+              <span className={cn('ml-1.5 align-baseline text-[10px] font-semibold', big ? 'text-zinc-400' : 'opacity-60')}>edited</span>
+            )}
           </div>
 
           {reactions.length > 0 && (
@@ -201,6 +206,7 @@ export function MessageRow({
           <div className="flex gap-1.5">
             <ActionButton icon={CornerUpLeft} label="Reply" onClick={() => onReply(m)} />
             <ActionButton icon={Copy} label="Copy" onClick={() => onCopy(m)} />
+            {canEdit && <ActionButton icon={Pencil} label="Edit" onClick={() => onEdit(m)} />}
             {canDelete && <ActionButton icon={Trash2} label="Delete" danger onClick={() => onDelete(m)} />}
           </div>
           {reactions.length > 0 && (

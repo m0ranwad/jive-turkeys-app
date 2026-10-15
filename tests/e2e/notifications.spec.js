@@ -4,7 +4,7 @@
 // Previews have no sender, so turning on shows a local sample instead; the
 // sender itself is tested in tests/unit/notify.test.js and the database rules
 // in supabase/tests/chat.test.sql.
-import { expect, isPhone, openChat, signIn, test } from './helpers';
+import { expect, iconBadge, isPhone, openChat, recordIconBadge, signIn, test } from './helpers';
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
@@ -148,6 +148,21 @@ test('chat messages and game alerts are both on, and each can be turned off, fro
   await expect(choice(settings, 'Chat messages')).toHaveAttribute('aria-checked', 'true');
 });
 
+test('players who turn chat messages off get no number on the app icon', async ({ context, page }) => {
+  await recordIconBadge(page);
+  await context.grantPermissions(['notifications']);
+  await signIn(page);
+  await expect.poll(() => iconBadge(page)).toBe(6);
+  await page.goto('/profile');
+  const settings = page.getByRole('region', { name: 'Notifications' });
+  await settings.getByRole('button', { name: 'Turn on notifications' }).click();
+  await choice(settings, 'Chat messages').click();
+  await expect(choice(settings, 'Chat messages')).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(() => iconBadge(page)).toBe(0);
+  await choice(settings, 'Chat messages').click();
+  await expect.poll(() => iconBadge(page)).toBe(6);
+});
+
 test('when notifications are blocked, it explains how to allow them', async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'denied' }));
   await signIn(page);
@@ -173,7 +188,7 @@ test.describe('on an iPhone that has not added the site to its Home Screen', () 
 });
 
 test.describe('the background helper', () => {
-  test('shows a pushed chat notification, and tapping it opens that room', async ({ context, page }) => {
+  async function startWorker(context, page) {
     await context.grantPermissions(['notifications']);
     await signIn(page);
     await page.evaluate(() => navigator.serviceWorker.ready);
@@ -191,7 +206,41 @@ test.describe('the background helper', () => {
         if (!work.length) throw new Error(`the ${event.type} handler didn't call waitUntil`);
         await Promise.all(work);
       };
+      self.push = (data) => self.fire(new PushEvent('push', { data: JSON.stringify(data) }));
     });
+    return worker;
+  }
+
+  test('a chat notification puts the unread count on the app icon; others leave it be', async ({ context, page }) => {
+    const worker = await startWorker(context, page);
+    await worker.evaluate(() => {
+      self.iconBadge = [];
+      const record = (n) => {
+        self.iconBadge.push(n);
+        return Promise.resolve();
+      };
+      Object.defineProperty(self.navigator, 'setAppBadge', { configurable: true, value: (n) => record(n) });
+      Object.defineProperty(self.navigator, 'clearAppBadge', { configurable: true, value: () => record(0) });
+    });
+    const chat = { title: 'Team Chat', body: 'Sam O.: Field 3', url: '/banter', tag: 'chat-team' };
+
+    await worker.evaluate((data) => self.push(data), { ...chat, badge: 4 });
+    await worker.evaluate((data) => self.push(data), { ...chat, badge: 5 });
+    await worker.evaluate((data) => self.push(data), {
+      title: '🏆 Player of the Match',
+      body: 'Voting is open',
+      url: '/games/g1',
+      tag: 'potm-g1',
+    });
+    expect(await worker.evaluate(() => self.iconBadge)).toEqual([4, 5]);
+    await worker.evaluate((data) => self.push(data), { ...chat, badge: 0 });
+    expect(await worker.evaluate(() => self.iconBadge), '0 clears it').toEqual([4, 5, 0]);
+    // The notifications still show.
+    expect(await worker.evaluate(async () => (await self.registration.getNotifications()).length)).toBe(2);
+  });
+
+  test('shows a pushed chat notification, and tapping it opens that room', async ({ context, page }) => {
+    const worker = await startWorker(context, page);
 
     await worker.evaluate(() => {
       const data = JSON.stringify({

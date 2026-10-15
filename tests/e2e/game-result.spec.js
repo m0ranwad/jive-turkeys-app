@@ -24,6 +24,8 @@ test.beforeEach(async ({ page }) => {
 test('fits the screen, with the score and Save in reach', async ({ page }, testInfo) => {
   const result = await openResult(page);
   const viewport = page.viewportSize();
+  // The screen zooms in as it opens; measure it once it has settled.
+  await result.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
 
   // Nothing slides sideways.
   for (const el of [result, result.locator('.overflow-y-auto')]) {
