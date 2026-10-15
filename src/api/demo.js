@@ -449,6 +449,17 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const requireUser = () => {
     if (!currentUser()) throw new Error('Not signed in');
   };
+  // Tests turn this on to act out a dropped connection: every save fails the way
+  // a real one does with no signal.
+  const failIfOffline = () => {
+    let offline = false;
+    try {
+      offline = localStorage.getItem('jt_demo_offline') === '1';
+    } catch {
+      // Private mode.
+    }
+    if (offline) throw new TypeError('Failed to fetch');
+  };
 
   // Same rules as the Supabase filter: null matches empty columns, an array matches any of its values.
   const matches = (row, where) =>
@@ -531,6 +542,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       },
       async create(row) {
         requireUser();
+        failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
         db[table].push(record);
@@ -546,6 +558,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       },
       async update(id, patch) {
         requireUser();
+        failIfOffline();
         const record = db[table].find((r) => r.id === id);
         if (!record) throw new Error('Not found');
         if (table === 'potm_votes') checkVotingOpen(record.game_id);
@@ -564,6 +577,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       },
       async delete(id) {
         requireUser();
+        failIfOffline();
         const vote = table === 'potm_votes' && db.potm_votes.find((r) => r.id === id);
         if (vote && currentUser().role !== 'admin') checkVotingOpen(vote.game_id);
         db[table] = db[table].filter((r) => r.id !== id);
@@ -868,6 +882,50 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
   };
 
+  // Same as the database's save_game_result(): everything is checked first, so
+  // a save goes through whole or not at all.
+  const games = {
+    async saveResult(gameId, { scoreUs, scoreThem, lines, fillIns }) {
+      requireUser();
+      failIfOffline();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can enter results');
+      const game = db.games.find((g) => g.id === gameId);
+      if (!game) throw new Error('That game is gone');
+      const counts = (row) => ['goals', 'assists', 'blue_cards', 'red_cards'].map((k) => Number(row[k]) || 0);
+      if ([...lines, ...(fillIns || [])].some((row) => counts(row).some((n) => n < 0))) throw new Error("Numbers can't go below zero");
+
+      const opensVoting = !game.has_result && !game.potm_opened_at;
+      Object.assign(game, { score_us: scoreUs, score_them: scoreThem, has_result: true, updated_date: now() });
+      if (opensVoting) openVoting(game);
+      for (const line of lines) {
+        const who = { user_id: line.user_id ?? null, guest_id: line.guest_id ?? null };
+        const mine = (s) => s.game_id === gameId && (s.user_id ?? null) === who.user_id && (s.guest_id ?? null) === who.guest_id;
+        const [goals, assists, blue_cards, red_cards] = counts(line);
+        const keep = !!line.played || goals + assists + blue_cards + red_cards > 0;
+        const row = db.game_stats.find(mine);
+        if (!keep) db.game_stats = db.game_stats.filter((s) => !mine(s));
+        else if (row) Object.assign(row, { played: !!line.played, goals, assists, blue_cards, red_cards, updated_date: now() });
+        else {
+          db.game_stats.push({
+            id: uid(), game_id: gameId, ...who, played: !!line.played, goals, assists, blue_cards, red_cards, created_date: now(), updated_date: now(),
+          });
+        }
+      }
+      if (fillIns) {
+        const keepIds = fillIns.filter((f) => f.id).map((f) => f.id);
+        db.game_fill_ins = db.game_fill_ins.filter((f) => f.game_id !== gameId || keepIds.includes(f.id));
+        for (const f of fillIns) {
+          const fields = { display_name: f.display_name?.trim() || null, gender: f.gender, goals: Number(f.goals) || 0, assists: Number(f.assists) || 0 };
+          const row = f.id && db.game_fill_ins.find((r) => r.id === f.id);
+          if (row) Object.assign(row, fields, { updated_date: now() });
+          else db.game_fill_ins.push({ id: uid(), game_id: gameId, ...fields, created_date: now(), updated_date: now() });
+        }
+      }
+      save(db);
+      return delay(null);
+    },
+  };
+
   // Same as the database's roster_start_current().
   const roster = {
     async start() {
@@ -899,6 +957,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     users,
     chat,
     dues,
+    games,
     roster,
     push,
     resetDemo() {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast';
 import {
   MAX_GOALS_MAN,
   atGoalLimit,
@@ -12,6 +13,7 @@ import {
   resultRows,
   scoreFollowsGoals,
 } from '@/lib/results';
+import { saveFailedToast } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 const TEAM = 'Jive Turkeys';
@@ -267,6 +269,7 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
   const [cardsOpen, setCardsOpen] = useState([]);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!open || !game) return;
@@ -313,6 +316,9 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
     try {
       await onSave({ score_us: Number(scoreUs) || 0, score_them: Number(scoreThem) || 0, rows, fillIns });
       onOpenChange(false);
+    } catch (err) {
+      // The screen stays open with everything entered, to try again.
+      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }
