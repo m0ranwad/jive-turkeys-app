@@ -391,6 +391,50 @@ select test.ok(test.push_targets('Leaving at 6') = 'https://push.test/cap', 'thr
 select test.ok((select thread_title from public.chat_push_targets(gen_random_uuid())) is null, 'an unknown message sends nothing');
 reset role;
 
+-- The number on the app icon: each notification carries the player's Chat tab number
+-- (unreadTotal in src/lib/chat.js: Team Chat plus threads they've opened).
+create table test.chat_tab (name text primary key, n bigint not null);
+grant insert on test.chat_tab to authenticated;
+grant select on test.chat_tab to service_role;
+create function test.note_chat_tab(who text) returns void language sql as $$
+  insert into test.chat_tab
+  select who, coalesce(sum(o.unread) filter (where o.thread_id is null or o.last_read_at is not null), 0)
+  from public.chat_overview() o;
+$$;
+grant execute on function test.note_chat_tab(text) to authenticated;
+create function test.icon_numbers() returns table (name text, n bigint) language sql as $$
+  select p.name, b.unread
+  from public.chat_push_unread(array(select id from public.push_subscriptions)) b
+  join public.push_subscriptions s on s.id = b.subscription_id
+  join test.people p on p.id = s.user_id;
+$$;
+grant execute on function test.icon_numbers() to service_role;
+
+select test.sign_in('cy');
+select public.chat_mark_read(null, now());
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'Badge one'), (test.id('ann'), 'Ann', 'Badge two');
+select test.note_chat_tab('ann');
+select test.sign_in('cap');
+select test.note_chat_tab('cap');
+select test.sign_in('cy');
+select test.note_chat_tab('cy');
+reset role;
+set role service_role;
+select test.ok((select n from test.icon_numbers() where name = 'cy') = 2,
+  'the app icon counts unread messages since the player last read (not before)');
+select test.ok(
+  (select count(*) = 3 and bool_and(i.n = t.n) from test.icon_numbers() i join test.chat_tab t using (name))
+    and (select count(distinct n) > 1 from test.chat_tab),
+  'the app icon shows the same number as each player''s Chat tab (Team Chat plus threads they opened, not their own messages)'
+);
+select test.ok(not exists (select 1 from public.chat_push_unread(array[gen_random_uuid()])), 'an unknown device gets no number');
+reset role;
+select test.sign_in('cy');
+select test.refused($$select * from public.chat_push_unread(array(select id from public.push_subscriptions))$$,
+  'players cannot ask for anyone''s unread count');
+reset role;
+
 -- A broken sender never stops a message from being posted.
 alter function net.http_post(text, jsonb, jsonb, jsonb, integer) rename to http_post_working;
 select test.sign_in('ann');
