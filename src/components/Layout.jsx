@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import {
   BookOpen,
@@ -18,12 +18,13 @@ import {
 } from 'lucide-react';
 import { isDemo } from '@/api';
 import { InstallCard, InstallGuide, useInstall } from '@/components/InstallApp';
+import { PageSpinner } from '@/components/PageSpinner';
 import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
-import { resyncPush } from '@/lib/push';
-import { STATUS_LABEL } from '@/lib/constants';
+import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
+import { DEFAULT_SETTINGS, STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -64,7 +65,7 @@ function hasSeenWalkthrough(userId) {
 }
 
 export function Layout() {
-  const { user, profile, isCaptain, loading, reload } = useTeam();
+  const { user, profile, isCaptain, loading, reload, settings } = useTeam();
   const [menuOpen, setMenuOpen] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
@@ -85,6 +86,17 @@ export function Layout() {
   useEffect(() => {
     if (user) resyncPush().catch(() => {});
   }, [user?.id]);
+
+  // The number on the app icon follows the Chat tab, for players who get chat notifications (they keep
+  // it up to date while the app is closed).
+  const chatIconOn = !!user && profile?.notify_chat !== false;
+  useEffect(() => {
+    setIconBadge(chatIconOn ? chatUnread : 0);
+  }, [chatIconOn, chatUnread]);
+  useEffect(() => {
+    window.addEventListener(NOTIFY_CHOICES_EVENT, reload);
+    return () => window.removeEventListener(NOTIFY_CHOICES_EVENT, reload);
+  }, [reload]);
 
   // Other screens (the chat's notification settings) can open the Home Screen guide.
   useEffect(() => {
@@ -132,7 +144,7 @@ export function Layout() {
                 Jive Turkeys
               </span>
               <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.2em] text-lime-400">
-                Season 12 · Indoor Coed
+                {settings?.season_label || DEFAULT_SETTINGS.season_label}
               </span>
             </span>
           </Link>
@@ -188,7 +200,10 @@ export function Layout() {
       {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
       <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
         {pathname === '/' && <InstallCard onShowHow={() => setInstallOpen(true)} />}
-        <Outlet />
+        {/* Keeps the header and tabs up while a screen downloads the first time. */}
+        <Suspense fallback={<PageSpinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <nav

@@ -1,7 +1,21 @@
 // The unread badge on the Chat tab. See docs/chat.md for the expected behavior.
-import { chatBadge, chatTab, expect, goToSchedule, message, openChat, openRoom, send, signIn, test } from './helpers';
+import {
+  chatBadge,
+  chatTab,
+  expect,
+  goToSchedule,
+  iconBadge,
+  message,
+  openChat,
+  openRoom,
+  recordIconBadge,
+  send,
+  signIn,
+  test,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
+  await recordIconBadge(page);
   await signIn(page);
 });
 
@@ -33,6 +47,16 @@ test('your own messages never count as unread', async ({ page }) => {
   await send(page, 'Talking to myself');
   await goToSchedule(page);
   await expect(chatBadge(page)).toHaveText('3');
+});
+
+test('the app icon (Home Screen app) shows the same number, and clears as you read', async ({ page }) => {
+  await expect.poll(() => iconBadge(page)).toBe(6);
+  await openChat(page);
+  await expect(message(page, '🔥🔥🔥')).toBeVisible();
+  await expect.poll(() => iconBadge(page)).toBe(3);
+  await openRoom(page, 'Sunday pickup?');
+  await expect(message(page, "Can't this week")).toBeVisible();
+  await expect.poll(() => iconBadge(page)).toBe(0);
 });
 
 test('the menu shows the same count', async ({ page }) => {

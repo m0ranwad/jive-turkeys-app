@@ -124,6 +124,8 @@ everything, so the function can't be made to send anything else.
 | If notifications can't be sent (the sender is down, not set up yet), messages still post normally. | `[db]` |
 | A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
 | Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
+| **The app icon shows the unread number**, the same as the Chat tab (Team Chat plus threads you've opened, not your own messages). Each chat notification carries it (`chat_push_unread`), so it goes up while the app is closed; game alerts leave it as it is. If the count isn't available, the notification still goes out. | `[db]` `[unit]` `[browser]` |
+| While the site is open, the icon follows the Chat tab and clears once everything is read. Players who turn **Chat messages** off, or turn notifications off on the device (signing out does), get no number. On an iPhone it only shows on the Home Screen app. | `[browser]` |
 | The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
 | Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |
@@ -160,7 +162,8 @@ devices signed in as different players:
 6. Notifications (after a change to them): on a phone, turn them on with the bell (on an iPhone, from the Home
    Screen app) and tap **Send a test**: it arrives within a few seconds. Close the app and post in Team Chat
    from the other device: the phone gets "Name: message", and tapping it opens Team Chat. With Team Chat open
-   on the phone, post again: no notification.
+   on the phone, post again: no notification. Close the app and post twice more: the Home Screen icon shows
+   2. Open the app and read Team Chat, then close it: the number is gone.
 
 ## Running the tests
 
