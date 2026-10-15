@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api';
-import { CHAT_READ_EVENT, unreadTotal } from '@/lib/chat';
+import { CHAT_READ_EVENT, mentionTotal, unreadTotal } from '@/lib/chat';
 
-/** Live unread count for the Chat tab badge. */
+const NONE = { unread: 0, mentions: 0 };
+
+/** Live counts for the Chat tab: unread messages, and unread ones that @mention the player. */
 export function useChatUnread(enabled) {
-  const [count, setCount] = useState(0);
+  const [counts, setCounts] = useState(NONE);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -16,7 +18,7 @@ export function useChatUnread(enabled) {
       timer = setTimeout(() => {
         api.chat
           .overview()
-          .then((rows) => alive && setCount(unreadTotal(rows)))
+          .then((rows) => alive && setCounts({ unread: unreadTotal(rows), mentions: mentionTotal(rows) }))
           .catch(() => {});
       }, 500);
     };
@@ -35,5 +37,5 @@ export function useChatUnread(enabled) {
     };
   }, [enabled]);
 
-  return count;
+  return counts;
 }

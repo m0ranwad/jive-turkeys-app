@@ -13,7 +13,7 @@ export function ThreadIcon({ title, className }) {
   );
 }
 
-function RoomItem({ room, icon, title, summary, active, unread, isNew, me, nameOf, onClick }) {
+function RoomItem({ room, icon, title, summary, active, unread, mentions, isNew, me, nameOf, onClick }) {
   const preview = summary
     ? `${summary.last_user_id === me ? 'You' : shortName(nameOf(summary.last_user_id, summary.last_author_name))}: ${summary.last_body}`
     : 'No messages yet';
@@ -47,6 +47,7 @@ function RoomItem({ room, icon, title, summary, active, unread, isNew, me, nameO
           <span className={cn('min-w-0 flex-1 truncate text-xs', bold ? 'font-semibold text-zinc-700' : 'text-zinc-400')}>
             {preview}
           </span>
+          {!active && mentions > 0 && <MentionCount n={mentions} />}
           {!active && isNew && (
             <span className="shrink-0 rounded-full bg-lime-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-black">
               New
@@ -56,6 +57,21 @@ function RoomItem({ room, icon, title, summary, active, unread, isNew, me, nameO
         </span>
       </span>
     </button>
+  );
+}
+
+/** Unread messages that @mention you, apart from the unread number so they stand out. */
+export function MentionCount({ n, className }) {
+  return (
+    <span
+      aria-label={`${n} ${n === 1 ? 'mention' : 'mentions'}`}
+      className={cn(
+        'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-zinc-950 px-1.5 text-[10px] font-black leading-none text-lime-400',
+        className,
+      )}
+    >
+      @{n > 99 ? '99+' : n}
+    </span>
   );
 }
 
@@ -91,6 +107,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
           title="Team Chat"
           summary={team.summary}
           unread={team.unread}
+          mentions={team.mentions}
           active={activeRoom === null}
           me={me}
           nameOf={nameOf}
@@ -120,6 +137,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
             title={splitLeadingEmoji(room.thread.title).text}
             summary={room.summary}
             unread={room.unread}
+            mentions={room.mentions}
             isNew={room.isNew}
             active={activeRoom === room.thread.id}
             me={me}
@@ -146,6 +164,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
                   icon={<ThreadIcon title={room.thread.title} className="opacity-60" />}
                   title={splitLeadingEmoji(room.thread.title).text}
                   summary={room.summary}
+                  mentions={room.mentions}
                   active={activeRoom === room.thread.id}
                   me={me}
                   nameOf={nameOf}
@@ -194,6 +213,7 @@ export function ThreadStrip({ rooms, activeRoom, onOpen, onNewThread }) {
       >
         <MessageSquare className="h-3.5 w-3.5" strokeWidth={2.6} />
         Team Chat
+        {activeRoom !== null && rooms.team.mentions > 0 && <MentionCount n={rooms.team.mentions} />}
         {activeRoom !== null && rooms.team.unread > 0 && <UnreadCount n={rooms.team.unread} />}
       </button>
       {rooms.open.map((room) => {
@@ -209,6 +229,7 @@ export function ThreadStrip({ rooms, activeRoom, onOpen, onNewThread }) {
           >
             {emoji ? <span className="text-sm leading-none">{emoji}</span> : <Hash className="h-3.5 w-3.5" />}
             <span className="max-w-[10rem] truncate">{text}</span>
+            {!active && room.mentions > 0 && <MentionCount n={room.mentions} />}
             {!active && room.isNew && <span aria-label="New" className="h-2 w-2 rounded-full bg-lime-500" />}
             {!active && !room.isNew && room.unread > 0 && <UnreadCount n={room.unread} />}
           </button>

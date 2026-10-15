@@ -41,16 +41,18 @@ const TABS = [
 
 const seenKey = (userId) => `jt_seen_walkthrough_${userId}`;
 
-function Badge({ n, className }) {
+/** The Chat tab's unread number, or (with `mention`) its separate @ count of messages that mention you. */
+function Badge({ n, mention, className }) {
   if (!n) return null;
   return (
     <span
-      aria-label={`${n} unread`}
+      aria-label={mention ? `${n} ${n === 1 ? 'mention' : 'mentions'}` : `${n} unread`}
       className={cn(
         'grid h-[18px] min-w-[18px] place-items-center rounded-full bg-lime-400 px-1 text-[10px] font-black leading-none tracking-normal text-black ring-2 ring-white',
         className,
       )}
     >
+      {mention && '@'}
       {n > 99 ? '99+' : n}
     </span>
   );
@@ -73,8 +75,9 @@ export function Layout() {
   const { pathname } = useLocation();
   const onChat = pathname === CHAT_PATH;
   const chatUnread = useChatUnread(!!user);
-  // No badge while reading the chat itself.
-  const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread : 0);
+  // No badges while reading the chat itself.
+  const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.unread : 0);
+  const mentionsFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.mentions : 0);
   const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';
 
   useEffect(() => {
@@ -91,8 +94,8 @@ export function Layout() {
   // it up to date while the app is closed).
   const chatIconOn = !!user && profile?.notify_chat !== false;
   useEffect(() => {
-    setIconBadge(chatIconOn ? chatUnread : 0);
-  }, [chatIconOn, chatUnread]);
+    setIconBadge(chatIconOn ? chatUnread.unread : 0);
+  }, [chatIconOn, chatUnread.unread]);
   useEffect(() => {
     window.addEventListener(NOTIFY_CHOICES_EVENT, reload);
     return () => window.removeEventListener(NOTIFY_CHOICES_EVENT, reload);
@@ -167,6 +170,7 @@ export function Layout() {
               >
                 {tab.label}
                 <Badge n={unreadFor(tab.to)} className="ring-zinc-950" />
+                <Badge mention n={mentionsFor(tab.to)} className="ring-zinc-950" />
               </NavLink>
             ))}
           </nav>
@@ -232,6 +236,7 @@ export function Layout() {
                       strokeWidth={isActive || tab.bold ? 2.6 : 2}
                     />
                     <Badge n={unreadFor(tab.to)} className="absolute -right-2.5 -top-1.5 bg-zinc-950 text-lime-400" />
+                    <Badge mention n={mentionsFor(tab.to)} className="absolute -left-3 -top-1.5 bg-zinc-950 text-lime-400" />
                   </span>
                   {tab.label}
                 </Fragment>
@@ -283,7 +288,10 @@ export function Layout() {
                   >
                     <item.icon className="h-4 w-4 text-lime-400" />
                     {item.label}
-                    <Badge n={unreadFor(item.to)} className="ml-auto ring-zinc-950" />
+                    <span className="ml-auto flex gap-1">
+                      <Badge n={unreadFor(item.to)} className="ring-zinc-950" />
+                      <Badge mention n={mentionsFor(item.to)} className="ring-zinc-950" />
+                    </span>
                   </Link>
                 ))}
               <button

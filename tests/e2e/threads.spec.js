@@ -42,9 +42,16 @@ test('threads show unread counts, and New for ones never opened', async ({ page 
   await expect(roomRow(page, 'Post-game food spot').getByLabel(/unread/)).toHaveCount(0);
 });
 
-test('the Threads button on phones counts unread in threads you follow', async ({ page }, testInfo) => {
+test('the Threads button on phones counts unread in threads you follow, or mentions of you first', async ({ page }, testInfo) => {
   test.skip(!isPhone(testInfo), 'phones only; computers show the list beside the chat');
-  await expect(page.getByRole('button', { name: /^Threads/ }).getByLabel('3 unread')).toBeVisible();
+  const threads = page.getByRole('button', { name: /^Threads/ });
+  // The fantasy thread (never opened) mentions you: that shows in place of the unread number.
+  await expect(threads.getByLabel('1 mention')).toBeVisible();
+  await expect(threads.getByLabel(/unread/)).toHaveCount(0);
+  await openRoom(page, 'Fantasy football league');
+  await expect(message(page, 'Count me in')).toBeVisible();
+  await openTeamChat(page);
+  await expect(threads.getByLabel('3 unread')).toBeVisible();
 });
 
 test('opening a thread clears its unread count and New label', async ({ page }) => {
@@ -203,10 +210,10 @@ test.describe('the thread row on phones', () => {
 
   test('says "Start a thread" when there are none yet', async ({ page }) => {
     await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem('jt_demo_db_v15'));
+      const db = JSON.parse(localStorage.getItem('jt_demo_db_v16'));
       db.chat_threads = [];
       db.messages = db.messages.filter((m) => !m.thread_id);
-      localStorage.setItem('jt_demo_db_v15', JSON.stringify(db));
+      localStorage.setItem('jt_demo_db_v16', JSON.stringify(db));
     });
     await page.reload();
     await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);

@@ -7,7 +7,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v15';
+const DB_KEY = 'jt_demo_db_v16';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -151,8 +151,8 @@ function seed() {
     threads.push(row);
     return row.id;
   };
-  const say = (threadId, p, body, ago, replyTo = null) => {
-    const row = { id: uid(), thread_id: threadId, reply_to_id: replyTo, user_id: p.user_id, author_name: p.display_name, body, created_date: minutesAgo(ago), updated_date: minutesAgo(ago) };
+  const say = (threadId, p, body, ago, replyTo = null, extra = {}) => {
+    const row = { id: uid(), thread_id: threadId, reply_to_id: replyTo, user_id: p.user_id, author_name: p.display_name, body, created_date: minutesAgo(ago), updated_date: minutesAgo(ago), ...extra };
     messages.push(row);
     return row.id;
   };
@@ -183,7 +183,7 @@ function seed() {
   say(null, profiles[5], 'Paid 💸', 12);
   // Fixed a typo after posting.
   Object.assign(messages.find((m) => m.body === 'Running 10 min late, start without me in goal'), { edited_date: minutesAgo(58) });
-  say(null, profiles[11], 'Parking tip for the new folks: the back lot is closer to the indoor fields https://www.google.com/maps/search/?api=1&query=North+Coast+Premier+Soccer+Complex', 10);
+  say(null, profiles[11], 'Parking tip for the new folks: the back lot is closer to the indoor fields https://www.google.com/maps/search/?api=1&query=North+Coast+Premier+Soccer+Complex @Casey C. worth adding to the field rules?', 10, null, { mentions: [me.user_id] });
   say(null, profiles[1], '🔥🔥🔥', 8);
 
   const pickup = thread(profiles[2], '⚽ Sunday pickup?', 300);
@@ -196,12 +196,14 @@ function seed() {
 
   const fantasy = thread(profiles[4], '🏈 Fantasy football league', 90);
   say(fantasy, profiles[4], 'Starting a team fantasy league, $20 buy-in. Who wants in?', 90);
-  say(fantasy, profiles[10], 'Me!!', 85);
+  say(fantasy, profiles[10], 'Me!! @Casey C. you in?', 85, null, { mentions: [me.user_id] });
   say(fantasy, profiles[9], 'Count me in 🙋‍♀️', 40);
 
   const food = thread(profiles[3], '🍕 Post-game food spot', 2900);
   say(food, profiles[3], "Where are we going after Thursday's game?", 2900);
-  say(food, me, 'Wings place on Lake Rd?', 2880);
+  // @mentions: the captain's @team here, and teammates mentioning the captain in Team Chat
+  // (unread) and in the fantasy thread (never opened).
+  say(food, me, '@team wings place on Lake Rd?', 2880, null, { mentions_team: true });
   react(say(food, profiles[11], 'Yes please 🍗', 2870), '🙌', [profiles[3], me]);
   readUpTo(food, 2870);
 
@@ -529,6 +531,20 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (game?.potm_closes_at && !dayjs(game.potm_closes_at).isAfter(dayjs())) throw new Error('Voting has closed for this game.');
   };
 
+  // Same as the database's message_mentions(): only teammates on the site, each once and never
+  // the author, and only a captain's message mentions @team.
+  const cleanMentions = (message) => {
+    if ('mentions' in message) {
+      const ids = [...new Set(message.mentions || [])].filter(
+        (id) => id !== message.user_id && db.users.some((u) => u.id === id && (u.joined_team_at || u.role === 'admin')),
+      );
+      message.mentions = ids.length ? ids : null;
+    }
+    if ('mentions_team' in message) {
+      message.mentions_team = !!message.mentions_team && db.users.some((u) => u.id === message.user_id && u.role === 'admin');
+    }
+  };
+
   function entity(table) {
     const write = () => save(db);
     return {
@@ -547,6 +563,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
+        if (table === 'messages') cleanMentions(record);
         db[table].push(record);
         if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
         write();
@@ -568,6 +585,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         // Same as the database's message_edited(): changing the text marks it edited.
         const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;
         Object.assign(record, patch, { updated_date: now() }, edited && { edited_date: now() });
+        if (table === 'messages') cleanMentions(record);
         if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
         write();
@@ -811,7 +829,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const threadId = m.thread_id ?? null;
         if (!rooms.has(threadId)) {
           const read = db.chat_reads.find((r) => r.user_id === me.id && (r.thread_id ?? null) === threadId);
-          rooms.set(threadId, { thread_id: threadId, last_read_at: read?.last_read_at ?? null, unread: 0 });
+          rooms.set(threadId, { thread_id: threadId, last_read_at: read?.last_read_at ?? null, unread: 0, mentions: 0 });
         }
         const room = rooms.get(threadId);
         Object.assign(room, {
@@ -820,7 +838,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           last_author_name: m.author_name,
           last_body: m.body.slice(0, 140),
         });
-        if (m.user_id !== me.id && (!room.last_read_at || m.created_date > room.last_read_at)) room.unread += 1;
+        if (m.user_id !== me.id && (!room.last_read_at || m.created_date > room.last_read_at)) {
+          room.unread += 1;
+          if (m.mentions_team || m.mentions?.includes(me.id)) room.mentions += 1;
+        }
       }
       return delay([...rooms.values()]);
     },

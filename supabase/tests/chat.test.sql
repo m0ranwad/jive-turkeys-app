@@ -492,3 +492,117 @@ select test.ok((select array_agg(body) = array['Gate code is 555-4417'] from pub
 select test.ok(not exists (select 1 from public.chat_search('x')), 'one letter finds nothing');
 select test.ok(exists (select 1 from public.chat_search('Leaving') where thread_title = 'Carpool'), 'thread messages come with their thread''s title');
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- @mentions (rolled back at the end, so the other test files don't see Dee or Cy's profile)
+-- ---------------------------------------------------------------------------
+
+begin;
+
+-- Dee signed up but hasn't entered the team code.
+insert into test.people values ('dee', '00000000-0000-4000-8000-00000000000e');
+insert into auth.users (id, email) values (test.id('dee'), 'dee@test.local');
+-- Cy has a profile, so their notification choices can change.
+insert into public.player_profiles (user_id, display_name) values (test.id('cy'), 'Cy');
+update public.chat_reads set viewing_at = null;
+
+create function test.mentions_of(message text) returns uuid[] language sql as $$
+  select mentions from public.messages where body = message order by created_date desc limit 1;
+$$;
+grant execute on function test.mentions_of(text) to authenticated, service_role;
+
+select test.sign_in('ann');
+select test.touches($$insert into public.messages (user_id, author_name, body, mentions) values (test.id('ann'), 'Ann', '@Cy bring the ball', array[test.id('cy')])$$, 1,
+  'a player mentions a teammate');
+select test.ok(test.mentions_of('@Cy bring the ball') = array[test.id('cy')], 'the message keeps who it mentions');
+insert into public.messages (user_id, author_name, body, mentions)
+  values (test.id('ann'), 'Ann', '@Ann @Cy @Cy @Dee @Nobody', array[test.id('ann'), test.id('cy'), test.id('cy'), test.id('dee'), gen_random_uuid()]);
+select test.ok(test.mentions_of('@Ann @Cy @Cy @Dee @Nobody') = array[test.id('cy')],
+  'only teammates on the site, each once, and never the author');
+insert into public.messages (user_id, author_name, body, mentions) values (test.id('ann'), 'Ann', '@Dee hi', array[test.id('dee')]);
+select test.ok(test.mentions_of('@Dee hi') is null, 'a message that mentions nobody on the team mentions nobody');
+insert into public.messages (user_id, author_name, body, mentions_team) values (test.id('ann'), 'Ann', '@team party at mine', true);
+select test.ok((select not mentions_team from public.messages where body = '@team party at mine'), 'players can''t ping the whole team');
+select test.sign_in('cap');
+insert into public.messages (user_id, author_name, body, mentions_team) values (test.id('cap'), 'Cap', '@team game moved to Field 3', true);
+select test.ok((select mentions_team from public.messages where body = '@team game moved to Field 3'), 'captains can');
+
+-- Editing can change who a message mentions, with the same rules; never someone else's.
+select test.sign_in('ann');
+select test.touches($$update public.messages set body = '@Cap bring the ball', mentions = array[test.id('cap'), test.id('dee')] where body = '@Cy bring the ball'$$, 1,
+  'an edit changes who a message mentions');
+select test.ok(test.mentions_of('@Cap bring the ball') = array[test.id('cap')], 'with the same rules');
+update public.messages set mentions_team = true where body = '@Cap bring the ball';
+select test.ok((select not mentions_team from public.messages where body = '@Cap bring the ball'), 'and still no @team for players');
+select test.sign_in('cy');
+select test.touches($$update public.messages set mentions = array[test.id('cy')] where body = '@Cap bring the ball'$$, 0,
+  'players can''t change who someone else''s message mentions');
+reset role;
+
+-- The @ count: unread messages that mention you, in any room, including threads you've never opened.
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id, mentions)
+  select test.id('ann'), 'Ann', '@Cy want a ride?', id, array[test.id('cy')] from public.chat_threads where title = 'Carpool';
+select test.sign_in('cy');
+select test.ok((select mentions from public.chat_overview() where thread_id is null) = 2,
+  'Team Chat counts unread messages that mention you by name or @team');
+select test.ok((select o.mentions from public.chat_overview() o join public.chat_threads t on t.id = o.thread_id where t.title = 'Carpool') = 1,
+  'mentions count in threads you''ve never opened');
+select public.chat_mark_read(null, now());
+select test.ok((select mentions from public.chat_overview() where thread_id is null) = 0, 'reading the room clears its mentions');
+select test.sign_in('cap');
+select test.ok((select coalesce(sum(mentions), 0) from public.chat_overview()) = 1, 'and they''re per player (cap: ann''s edit, not cy''s)');
+reset role;
+
+-- Notifications: a mention reaches the player in a thread they haven't opened.
+set role service_role;
+select test.ok(test.push_targets('@Cy want a ride?') = 'https://push.test/cap,https://push.test/cy',
+  'a mention notifies the player even in a thread they haven''t opened');
+reset role;
+
+-- With chat messages off, only mentions (and @team) come through.
+update public.player_profiles set notify_chat = false where user_id = test.id('cy');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'Chatter for nobody in particular');
+insert into public.messages (user_id, author_name, body, mentions) values (test.id('ann'), 'Ann', '@Cy you there?', array[test.id('cy')]);
+select test.sign_in('cap');
+insert into public.messages (user_id, author_name, body, mentions_team) values (test.id('cap'), 'Cap', '@team bring both jerseys', true);
+set role service_role;
+select test.ok(test.push_targets('Chatter for nobody in particular') = 'https://push.test/cap', 'chat messages off: no ordinary messages');
+select test.ok(test.push_targets('@Cy you there?') = 'https://push.test/cap,https://push.test/cy', 'but mentions still come through');
+select test.ok(test.push_targets('@team bring both jerseys') = 'https://push.test/ann,https://push.test/cy', 'and @team');
+select test.ok((select n from test.icon_numbers() where name = 'cy') = 0, 'with chat messages off, the app icon gets no number');
+reset role;
+
+-- With @mentions off as well, nothing.
+update public.player_profiles set notify_mentions = false where user_id = test.id('cy');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, mentions) values (test.id('ann'), 'Ann', '@Cy hello?', array[test.id('cy')]);
+set role service_role;
+select test.ok(test.push_targets('@Cy hello?') = 'https://push.test/cap', '@mentions off: no mention notifications');
+reset role;
+update public.player_profiles set notify_chat = true where user_id = test.id('cy');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id, mentions)
+  select test.id('ann'), 'Ann', '@Cy seat saved', id, array[test.id('cy')] from public.chat_threads where title = 'Carpool';
+set role service_role;
+select test.ok(test.push_targets('@Cy seat saved') = 'https://push.test/cap',
+  'chat messages on but @mentions off: only the rooms they follow');
+reset role;
+
+-- Someone looking at the room isn't buzzed for a mention there either.
+update public.player_profiles set notify_mentions = true where user_id = test.id('cy');
+select test.sign_in('cy');
+select public.chat_viewing(null);
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, mentions) values (test.id('ann'), 'Ann', '@Cy look up', array[test.id('cy')]);
+set role service_role;
+select test.ok(test.push_targets('@Cy look up') = 'https://push.test/cap', 'whoever is looking at the room isn''t buzzed for a mention in it');
+reset role;
+
+select test.sign_in('cy');
+select test.touches($$update public.player_profiles set notify_mentions = true where user_id = auth.uid()$$, 1, 'a player sets their own @mentions choice');
+select test.touches($$update public.player_profiles set notify_mentions = false where user_id <> auth.uid()$$, 0, 'and nobody else''s');
+reset role;
+
+rollback;

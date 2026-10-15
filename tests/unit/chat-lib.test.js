@@ -12,6 +12,7 @@ import {
   isAfter,
   isEmojiOnly,
   linkParts,
+  mentionTotal,
   organizeRooms,
   roomOf,
   shortWhen,
@@ -225,6 +226,25 @@ describe('rooms and unread', () => {
     expect(unreadTotal([])).toBe(0);
   });
 
+  it('counts unread @mentions of you in every room, threads you have never opened too', () => {
+    expect(
+      mentionTotal([
+        summary(null, { unread: 2, mentions: 1 }),
+        summary('opened', { unread: 3, mentions: 0 }),
+        summary('never-opened', { unread: 4, mentions: 2, last_read_at: null }),
+        summary('older-site', { unread: 1 }),
+      ]),
+    ).toBe(3);
+  });
+
+  it('adds a live message that mentions you to the room\'s @ count, if it counts as unread', () => {
+    const list = [summary(null, { unread: 1, mentions: 0 })];
+    expect(bumpOverview(list, msg('n', 'ann', 0), true, true)[0]).toMatchObject({ unread: 2, mentions: 1 });
+    expect(bumpOverview(list, msg('n', 'ann', 0), true, false)[0]).toMatchObject({ unread: 2, mentions: 0 });
+    expect(bumpOverview(list, msg('n', 'ann', 0), false, true)[0]).toMatchObject({ unread: 1, mentions: 0 });
+    expect(bumpOverview([], msg('n', 'ann', 0, { thread_id: 't1' }), true, true)[0]).toMatchObject({ unread: 1, mentions: 1 });
+  });
+
   it('updates a room summary when a message arrives', () => {
     const list = [summary(null, { unread: 1 })];
     const after = bumpOverview(list, msg('n', 'ann', 0, { body: 'x'.repeat(200) }), true);
@@ -268,6 +288,18 @@ describe('rooms and unread', () => {
     expect(rooms.open.find((r) => r.thread.id === 'busy').isNew).toBe(false);
     expect(rooms.unreadInThreads).toBe(3);
     expect(rooms.freshThreads).toBe(true);
+    expect(rooms.team.mentions).toBe(0);
+    expect(rooms.mentionsInThreads).toBe(0);
+    // Mentions count in threads you've never opened, unlike unread messages.
+    const mentioned = organizeRooms(threads, [
+      summary(null, { unread: 2, mentions: 1 }),
+      summary('busy', { unread: 3, mentions: 1 }),
+      summary('fresh', { last_read_at: null, unread: 1, mentions: 1 }),
+    ]);
+    expect(mentioned.team.mentions).toBe(1);
+    expect(mentioned.open.find((r) => r.thread.id === 'fresh').mentions).toBe(1);
+    expect(mentioned.mentionsInThreads).toBe(2);
+    expect(mentioned.unreadInThreads).toBe(3);
     // A never-opened thread whose last message is a week old doesn't keep the dot lit.
     expect(
       organizeRooms([threads[3]], [summary('old-new', { last_message_at: at(8000), last_read_at: null, unread: 2 })])

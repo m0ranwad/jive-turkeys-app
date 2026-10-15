@@ -3,25 +3,46 @@ import { Copy, CornerUpLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
 import { QUICK_REACTIONS, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
 import { initials, shortName } from '@/lib/format';
+import { TEAM, mentionParts } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
 
-function Body({ text, mine }) {
-  return linkParts(text).map((part, i) =>
-    part.href ? (
-      <a
-        key={i}
-        href={part.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className={cn('break-all underline underline-offset-2', mine ? 'text-lime-300' : 'text-lime-700')}
-      >
-        {part.text}
-      </a>
-    ) : (
-      <Fragment key={i}>{part.text}</Fragment>
-    ),
-  );
+/** The message text: links can be tapped, and the people it @mentions stand out (you most of all). */
+function Body({ message, mine, me, people }) {
+  const mentioned = message.mentions?.length ? people.filter((p) => message.mentions.includes(p.id)) : [];
+  const team = !!message.mentions_team;
+  return linkParts(message.body).flatMap((part, i) => {
+    if (part.href) {
+      return (
+        <a
+          key={i}
+          href={part.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={cn('break-all underline underline-offset-2', mine ? 'text-lime-300' : 'text-lime-700')}
+        >
+          {part.text}
+        </a>
+      );
+    }
+    if (!mentioned.length && !team) return <Fragment key={i}>{part.text}</Fragment>;
+    return mentionParts(part.text, mentioned, { team }).map((piece, j) => {
+      if (!piece.mention) return <Fragment key={`${i}-${j}`}>{piece.text}</Fragment>;
+      const you = !mine && (piece.mention === me || piece.mention === TEAM);
+      return (
+        <span
+          key={`${i}-${j}`}
+          data-mention={you ? 'you' : 'other'}
+          className={cn(
+            'font-bold',
+            you ? 'rounded-md bg-lime-300 px-1 text-zinc-950' : mine ? 'text-lime-300' : 'text-lime-700',
+          )}
+        >
+          {piece.text}
+        </span>
+      );
+    });
+  });
 }
 
 /** One chat message: name, reply quote, bubble, reactions, and its actions when tapped. */
@@ -36,6 +57,8 @@ export function MessageRow({
   replyAuthor,
   reactions,
   nameOf,
+  me,
+  people = [],
   selected,
   canDelete,
   canEdit,
@@ -122,7 +145,7 @@ export function MessageRow({
             )}
           >
             <span className="whitespace-pre-wrap break-words">
-              <Body text={m.body} mine={mine && !big} />
+              <Body message={m} mine={mine && !big} me={me} people={people} />
             </span>
             {m.edited_date && (
               <span className={cn('ml-1.5 align-baseline text-[10px] font-semibold', big ? 'text-zinc-400' : 'opacity-60')}>edited</span>

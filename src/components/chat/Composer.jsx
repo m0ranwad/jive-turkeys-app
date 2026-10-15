@@ -1,6 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, X } from 'lucide-react';
+import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
+import { initials } from '@/lib/format';
+import { TEAM, mentionChoices, mentionQuery } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
 
 const MAX_LENGTH = 2000;
@@ -11,16 +13,60 @@ const drafts = new Map();
 
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
- * reply preview. With `editing` (one of your messages), it holds that message's
- * text and saves the change instead of sending.
+ * reply preview, and a list of teammates to @mention while typing a name after
+ * @ (`people`, from mentionPeople(); @team too with `canMentionTeam`). With
+ * `editing` (one of your messages), it holds that message's text and saves the
+ * change instead of sending.
  */
 export const Composer = forwardRef(function Composer(
-  { room, placeholder, replyTo, replyName, onCancelReply, onSend, editing, onCancelEdit, onSaveEdit },
+  {
+    room,
+    placeholder,
+    replyTo,
+    replyName,
+    onCancelReply,
+    onSend,
+    editing,
+    onCancelEdit,
+    onSaveEdit,
+    people = [],
+    me,
+    canMentionTeam = false,
+  },
   ref,
 ) {
   const [draft, setDraft] = useState(() => drafts.get(room) || '');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const box = useRef(null);
+
+  // The @mention list: shown while the cursor is in a name typed after @.
+  const [caret, setCaret] = useState(null);
+  const [pickIndex, setPickIndex] = useState(0);
+  const [dismissedAt, setDismissedAt] = useState(null);
+  const query = caret == null ? null : mentionQuery(draft, caret);
+  const choices = query && query.start !== dismissedAt ? mentionChoices(people, query.query, { me, canMentionTeam }) : [];
+  const picking = choices.length > 0;
+  const picked = choices[Math.min(pickIndex, choices.length - 1)];
+  useEffect(() => {
+    setPickIndex(0);
+    if (!query) setDismissedAt(null);
+  }, [query?.start, query?.query]);
+  const trackCaret = (e) => setCaret(document.activeElement === e.target ? e.target.selectionStart : null);
+
+  const pick = (choice) => {
+    if (!query) return;
+    const insert = `@${choice.label} `;
+    const next = (draft.slice(0, query.start) + insert + draft.slice(caret)).slice(0, MAX_LENGTH);
+    const at = Math.min(query.start + insert.length, next.length);
+    setDraft(next);
+    setCaret(at);
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(at, at);
+    });
+  };
 
   useImperativeHandle(ref, () => ({ focus: () => box.current?.focus() }), []);
 
@@ -71,6 +117,24 @@ export const Composer = forwardRef(function Composer(
   };
 
   const onKeyDown = (e) => {
+    if (picking) {
+      const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (move) {
+        e.preventDefault();
+        setPickIndex((i) => (Math.min(i, choices.length - 1) + move + choices.length) % choices.length);
+        return;
+      }
+      if (((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') && !e.nativeEvent.isComposing) {
+        e.preventDefault();
+        pick(picked);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDismissedAt(query.start);
+        return;
+      }
+    }
     // On a computer Enter sends and Shift+Enter adds a line; on phones Enter adds a line.
     const fineKeyboard = window.matchMedia?.('(pointer: fine)').matches;
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && fineKeyboard) {
@@ -96,7 +160,44 @@ export const Composer = forwardRef(function Composer(
 
   return (
     <div className="relative border-t border-black/5 bg-white p-2.5">
-      {emojiOpen && (
+      {picking && (
+        <div
+          id={`mentions-${room}`}
+          role="listbox"
+          aria-label="Mention a teammate"
+          className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 max-h-52 overflow-y-auto rounded-3xl border border-black/5 bg-white p-1.5 shadow-xl sm:right-auto sm:w-80"
+        >
+          {choices.map((choice, i) => (
+            <div
+              key={choice.id}
+              id={`mention-${room}-${choice.id}`}
+              role="option"
+              aria-selected={choice === picked}
+              onMouseDown={keepTyping}
+              onMouseEnter={() => setPickIndex(i)}
+              onClick={() => pick(choice)}
+              className={cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-2xl px-2.5 py-2 transition',
+                choice === picked ? 'bg-lime-100' : 'hover:bg-zinc-50',
+              )}
+            >
+              <span
+                className={cn(
+                  'grid h-8 w-8 shrink-0 place-items-center rounded-full font-display text-[10px] font-extrabold uppercase',
+                  choice.id === TEAM ? 'bg-zinc-950 text-lime-400' : 'bg-lime-400 text-black',
+                )}
+              >
+                {choice.id === TEAM ? <Users className="h-4 w-4" /> : initials(choice.name)}
+              </span>
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate text-sm font-bold text-zinc-900">@{choice.label}</span>
+                {choice.name !== choice.label && <span className="block truncate text-[11px] text-zinc-500">{choice.name}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {emojiOpen && !picking && (
         <EmojiPicker
           onPick={insertEmoji}
           keepFocus
@@ -158,8 +259,16 @@ export const Composer = forwardRef(function Composer(
           ref={box}
           rows={1}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            trackCaret(e);
+          }}
+          onSelect={trackCaret}
+          onBlur={() => setCaret(null)}
           onKeyDown={onKeyDown}
+          aria-autocomplete="list"
+          aria-controls={picking ? `mentions-${room}` : undefined}
+          aria-activedescendant={picking ? `mention-${room}-${picked.id}` : undefined}
           placeholder={placeholder}
           maxLength={MAX_LENGTH}
           aria-label="Message"
