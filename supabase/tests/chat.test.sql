@@ -482,14 +482,13 @@ insert into public.messages (user_id, author_name, body) values
   (test.id('cy'), 'Cy', 'Bring the pinnies Thursday'),
   (test.id('cy'), 'Cy', 'Parking tip: the back lot is closer'),
   (test.id('cy'), 'Cy', 'Dues to Venmo @cory_b-91 please'),
-  (test.id('cy'), 'Cy', '100% of us should be there');
+  (test.id('cy'), 'Cy', '100% of us should be there'),
+  (test.id('cy'), 'Cy', 'Gate code is 555-4417');
 select test.ok(exists (select 1 from public.chat_search('pinnies') where body = 'Bring the pinnies Thursday'), 'search finds a word');
 select test.ok(exists (select 1 from public.chat_search('parked') where body like 'Parking tip%'), 'in any form ("parked" finds "parking")');
 select test.ok(exists (select 1 from public.chat_search('@cory_b') where body like 'Dues to Venmo%'), 'and handles as typed');
-select test.ok((select count(*) = 1 from public.chat_search('100%')), 'a % is just a character, not "anything"');
+select test.ok(not exists (select 1 from public.chat_search('1%0')), 'a % is just a character, not "anything"');
+select test.ok((select array_agg(body) = array['Gate code is 555-4417'] from public.chat_search('-4417')), 'and a leading - too, not "without"');
 select test.ok(not exists (select 1 from public.chat_search('x')), 'one letter finds nothing');
-select test.ok(
-  exists (select 1 from public.chat_search('Carpool') where thread_title = 'Carpool')
-  or exists (select 1 from public.chat_search('Leaving') where thread_title = 'Carpool'),
-  'thread messages come with their thread''s title');
+select test.ok(exists (select 1 from public.chat_search('Leaving') where thread_title = 'Carpool'), 'thread messages come with their thread''s title');
 reset role;
