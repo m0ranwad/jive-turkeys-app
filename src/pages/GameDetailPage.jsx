@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { AddToCalendar } from '@/components/game/AddToCalendar';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
+import { fmtDateLong, fmtTime, jerseyText, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
@@ -224,7 +224,7 @@ export function GameDetailPage() {
                   </button>
                 ))}
               </div>
-              <AddToCalendar game={game} settings={data.settings} />
+              {game.date >= today() && <AddToCalendar game={game} settings={data.settings} />}
             </div>
           )}
           {game.notes && <p className="mt-3 rounded-2xl bg-white/5 px-3.5 py-2.5 text-xs text-white/70">{game.notes}</p>}
