@@ -31,7 +31,7 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
 test('later games can be answered from the list', async ({ page }) => {
   await signIn(page);
   // The game after the next one, answered under its card in the list (not on the Next game card).
-  const later = page.getByRole('group', { name: 'Your answer for vs FC Lightning' });
+  const later = page.getByRole('group', { name: /^Your answer for vs FC Lightning, / });
   await later.getByRole('button', { name: 'OUT', exact: true }).click();
   await expect(later.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();

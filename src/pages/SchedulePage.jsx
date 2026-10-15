@@ -7,7 +7,8 @@ import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
-import { AnswerButtons, NextGameCard } from '@/components/schedule/NextGame';
+import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
+import { NextGameCard } from '@/components/schedule/NextGame';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { ImportScheduleDialog } from '@/components/schedule/ImportScheduleDialog';
 import { useToast } from '@/components/ui/toast';
@@ -84,7 +85,7 @@ export function SchedulePage() {
               {onRoster && !g.has_result && g.id !== nextGame?.id && (
                 <AnswerButtons
                   compact
-                  game={g}
+                  label={answerLabel(g)}
                   status={rsvp.mine(g)?.status}
                   onSet={(status) => rsvp.setStatus(g, status)}
                   busy={rsvp.isBusy(g)}
@@ -111,7 +112,7 @@ export function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Schedule" subtitle="Tap a game to RSVP and see the headcount.">
+      <PageHeader title="Schedule" subtitle="Answer right here, or tap a game for the full headcount.">
         {data.isCaptain && (
           <div className="flex gap-2">
             <button

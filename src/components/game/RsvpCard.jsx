@@ -1,12 +1,7 @@
 import { Check } from 'lucide-react';
+import { AnswerButtons, SuspendedBadge } from '@/components/game/AnswerButtons';
 import { CARD } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-
-const CHOICES = [
-  { value: 'in', label: 'IN', active: 'border-lime-400 bg-lime-400 text-black' },
-  { value: 'maybe', label: 'MAYBE', active: 'border-amber-300 bg-amber-300 text-black' },
-  { value: 'out', label: 'OUT', active: 'border-zinc-900 bg-zinc-900 text-white' },
-];
 
 export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
   const status = rsvp?.status;
@@ -14,29 +9,15 @@ export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
     <div className={CARD}>
       <div className="flex items-center justify-between">
         <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Your RSVP</h3>
-        {suspended && (
-          <span className="rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
-            Suspended – next game
-          </span>
-        )}
+        {suspended && <SuspendedBadge />}
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {CHOICES.map((choice) => (
-          <button
-            key={choice.value}
-            disabled={busy}
-            onClick={() => onSet(choice.value)}
-            className={cn(
-              'rounded-2xl border-2 py-3.5 font-display text-[13px] font-extrabold uppercase tracking-[0.1em] transition active:scale-[0.98] disabled:opacity-60',
-              status === choice.value ? choice.active : 'border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300',
-            )}
-          >
-            {choice.label}
-          </button>
-        ))}
+      <div className="mt-3">
+        <AnswerButtons label="Your RSVP" status={status} onSet={onSet} busy={busy} />
       </div>
       {status === 'in' && (
         <button
+          type="button"
+          aria-pressed={!!rsvp?.playing_gk}
           onClick={() => onToggleGk(!rsvp?.playing_gk)}
           disabled={busy}
           className={cn(

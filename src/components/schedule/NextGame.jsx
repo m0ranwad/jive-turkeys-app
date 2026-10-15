@@ -1,38 +1,8 @@
 import { Link } from 'react-router';
 import { ChevronRight } from 'lucide-react';
+import { AnswerButtons, SuspendedBadge, answerLabel } from '@/components/game/AnswerButtons';
 import { ShortBanner, JerseyDot } from '@/components/schedule/GameCard';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
-import { cn } from '@/lib/utils';
-
-export const ANSWERS = [
-  { value: 'in', label: 'IN', active: 'border-lime-400 bg-lime-400 text-black' },
-  { value: 'maybe', label: 'MAYBE', active: 'border-amber-300 bg-amber-300 text-black' },
-  { value: 'out', label: 'OUT', active: 'border-zinc-900 bg-zinc-900 text-white' },
-];
-
-/** IN / MAYBE / OUT for one game, sized for a card or for a line under a game in the list. */
-export function AnswerButtons({ game, status, onSet, busy, compact = false }) {
-  return (
-    <div className={cn('grid grid-cols-3', compact ? 'gap-1.5' : 'gap-2')} role="group" aria-label={`Your answer for vs ${game.opponent}`}>
-      {ANSWERS.map((answer) => (
-        <button
-          key={answer.value}
-          type="button"
-          disabled={busy}
-          aria-pressed={status === answer.value}
-          onClick={() => onSet(answer.value)}
-          className={cn(
-            'rounded-2xl border-2 font-display font-extrabold uppercase tracking-[0.1em] transition active:scale-[0.98] disabled:opacity-60',
-            compact ? 'py-1.5 text-[11px]' : 'py-3.5 text-[13px]',
-            status === answer.value ? answer.active : 'border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300',
-          )}
-        >
-          {answer.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /**
  * The next game, at the top of Schedule: when and where, the headcount, and
@@ -79,13 +49,9 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-500">
               {status ? 'Your answer' : "You haven't answered"}
             </span>
-            {suspended && (
-              <span className="rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
-                Suspended – red card
-              </span>
-            )}
+            {suspended && <SuspendedBadge />}
           </div>
-          <AnswerButtons game={game} status={status} onSet={onSet} busy={busy} />
+          <AnswerButtons label={answerLabel(game)} status={status} onSet={onSet} busy={busy} />
         </div>
       )}
     </section>
