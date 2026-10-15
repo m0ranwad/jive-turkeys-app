@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { api } from '@/api';
 import { ProfileForm } from '@/components/ProfileForm';
@@ -117,160 +116,153 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
         </div>
 
         <div className="max-h-[75vh] overflow-y-auto px-6 pb-6 pt-5">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-            >
-              {onProfileStep && names === null ? (
-                <p className="py-10 text-center text-sm text-zinc-400">One moment…</p>
-              ) : onProfileStep && names.length > 0 && pick === undefined ? (
-                <div>
-                  <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
+          {/* Each step fades and slides in (a CSS animation; no animation library to download). */}
+          <div key={step} className="duration-200 ease-out animate-in fade-in slide-in-from-bottom-3">
+            {onProfileStep && names === null ? (
+              <p className="py-10 text-center text-sm text-zinc-400">One moment…</p>
+            ) : onProfileStep && names.length > 0 && pick === undefined ? (
+              <div>
+                <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
+                <p className="mt-1.5 text-sm text-zinc-500">
+                  Find your name. Your captain already put you on the roster, so your spot and your dues are waiting
+                  for you.
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {names.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setPick(g)}
+                      className="flex items-center justify-between rounded-2xl border-2 border-dashed border-zinc-300 px-4 py-3 text-left text-sm font-bold transition hover:border-zinc-900"
+                    >
+                      {g.display_name}
+                      <ChevronRight className="h-4 w-4 text-zinc-400" />
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPick(null)}
+                  className="mt-4 w-full text-center text-sm font-semibold text-zinc-500 underline underline-offset-2"
+                >
+                  I'm not on the list
+                </button>
+                <p className="mt-4 text-center text-xs text-zinc-400">
+                  Wrong account?{' '}
+                  <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
+                    Sign out
+                  </button>
+                </p>
+              </div>
+            ) : onProfileStep ? (
+              <div>
+                <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
+                {pick ? (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Find your name. Your captain already put you on the roster, so your spot and your dues are waiting
-                    for you.
+                    You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details: your roster
+                    spot and dues come with you.{' '}
+                    <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
+                      Not you?
+                    </button>
                   </p>
-                  <div className="mt-4 grid gap-2">
-                    {names.map((g) => (
+                ) : (
+                  <p className="mt-1.5 text-sm text-zinc-500">
+                    Set up your profile to get on the roster and into game headcounts. Name and gender are required.
+                    Everything else is optional, and you can pick your position later on the Team tab.
+                    {names.length > 0 && (
+                      <>
+                        {' '}
+                        <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
+                          Back to the names
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                {asking?.accounts ? (
+                  <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="already-on-site">
+                    <p className="text-sm font-bold text-amber-950">Already on the site?</p>
+                    <p className="text-sm text-amber-900">
+                      {asking.accounts.map((p) => p.display_name).join(' and ')}{' '}
+                      {asking.accounts.length === 1 ? 'has' : 'have'} an account here already. If that's you, sign out
+                      and sign in the way you did before (with Google, or the email you used), so your stats and dues
+                      stay in one place.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={signOut}
+                      className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      Sign out and use my other account
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => answer(null)}
+                      className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
+                    >
+                      No, that's someone else
+                    </button>
+                    {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
+                  </div>
+                ) : asking ? (
+                  <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="is-that-you">
+                    <p className="text-sm font-bold text-amber-950">Is that you on the roster?</p>
+                    <p className="text-sm text-amber-900">
+                      Your captain put {asking.matches.map((g) => g.display_name).join(' and ')} on the roster. If that's
+                      you, your spot and dues come with you, and you keep the name {asking.values.display_name}.
+                    </p>
+                    {asking.matches.map((g) => (
                       <button
                         key={g.id}
                         type="button"
-                        onClick={() => setPick(g)}
-                        className="flex items-center justify-between rounded-2xl border-2 border-dashed border-zinc-300 px-4 py-3 text-left text-sm font-bold transition hover:border-zinc-900"
-                      >
-                        {g.display_name}
-                        <ChevronRight className="h-4 w-4 text-zinc-400" />
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPick(null)}
-                    className="mt-4 w-full text-center text-sm font-semibold text-zinc-500 underline underline-offset-2"
-                  >
-                    I'm not on the list
-                  </button>
-                  <p className="mt-4 text-center text-xs text-zinc-400">
-                    Wrong account?{' '}
-                    <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
-                      Sign out
-                    </button>
-                  </p>
-                </div>
-              ) : onProfileStep ? (
-                <div>
-                  <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
-                  {pick ? (
-                    <p className="mt-1.5 text-sm text-zinc-500">
-                      You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details: your roster
-                      spot and dues come with you.{' '}
-                      <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
-                        Not you?
-                      </button>
-                    </p>
-                  ) : (
-                    <p className="mt-1.5 text-sm text-zinc-500">
-                      Set up your profile to get on the roster and into game headcounts. Name and gender are required.
-                      Everything else is optional, and you can pick your position later on the Team tab.
-                      {names.length > 0 && (
-                        <>
-                          {' '}
-                          <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
-                            Back to the names
-                          </button>
-                        </>
-                      )}
-                    </p>
-                  )}
-                  {asking?.accounts ? (
-                    <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="already-on-site">
-                      <p className="text-sm font-bold text-amber-950">Already on the site?</p>
-                      <p className="text-sm text-amber-900">
-                        {asking.accounts.map((p) => p.display_name).join(' and ')}{' '}
-                        {asking.accounts.length === 1 ? 'has' : 'have'} an account here already. If that's you, sign out
-                        and sign in the way you did before (with Google, or the email you used), so your stats and dues
-                        stay in one place.
-                      </p>
-                      <button
-                        type="button"
                         disabled={busy}
-                        onClick={signOut}
+                        onClick={() => answer(g)}
                         className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800 disabled:opacity-50"
                       >
-                        Sign out and use my other account
+                        Yes, I'm {g.display_name}
                       </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => answer(null)}
-                        className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
-                      >
-                        No, that's someone else
-                      </button>
-                      {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
-                    </div>
-                  ) : asking ? (
-                    <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="is-that-you">
-                      <p className="text-sm font-bold text-amber-950">Is that you on the roster?</p>
-                      <p className="text-sm text-amber-900">
-                        Your captain put {asking.matches.map((g) => g.display_name).join(' and ')} on the roster. If that's
-                        you, your spot and dues come with you, and you keep the name {asking.values.display_name}.
-                      </p>
-                      {asking.matches.map((g) => (
-                        <button
-                          key={g.id}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => answer(g)}
-                          className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800 disabled:opacity-50"
-                        >
-                          Yes, I'm {g.display_name}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => answer(null)}
-                        className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
-                      >
-                        No, that's someone else
-                      </button>
-                      {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
-                    </div>
-                  ) : (
-                    <div className="mt-5">
-                      <ProfileForm
-                        key={pick?.id || 'new'}
-                        initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
-                        onSubmit={submitProfile}
-                        submitLabel="Start using the app"
-                        busy={busy}
-                        hidePosition
-                      />
-                    </div>
-                  )}
-                  <p className="mt-4 text-center text-xs text-zinc-400">
-                    Wrong account?{' '}
-                    <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
-                      Sign out
+                    ))}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => answer(null)}
+                      className="h-11 w-full rounded-2xl border-2 border-zinc-200 bg-white text-sm font-bold text-zinc-700 transition hover:border-zinc-300 disabled:opacity-50"
+                    >
+                      No, that's someone else
                     </button>
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-600">{STEPS[step].eyebrow}</span>
-                  <h2 className="mt-2 font-display text-3xl font-extrabold uppercase leading-[1.05] tracking-tight">
-                    {STEPS[step].title}
-                  </h2>
-                  <p className="mt-3 text-[15px] leading-relaxed text-zinc-600">{STEPS[step].body}</p>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                    {askError && <p className="text-xs font-semibold text-red-700">{askError}</p>}
+                  </div>
+                ) : (
+                  <div className="mt-5">
+                    <ProfileForm
+                      key={pick?.id || 'new'}
+                      initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
+                      onSubmit={submitProfile}
+                      submitLabel="Start using the app"
+                      busy={busy}
+                      hidePosition
+                    />
+                  </div>
+                )}
+                <p className="mt-4 text-center text-xs text-zinc-400">
+                  Wrong account?{' '}
+                  <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
+                    Sign out
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-600">{STEPS[step].eyebrow}</span>
+                <h2 className="mt-2 font-display text-3xl font-extrabold uppercase leading-[1.05] tracking-tight">
+                  {STEPS[step].title}
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-zinc-600">{STEPS[step].body}</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {!onProfileStep && (

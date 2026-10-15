@@ -13,6 +13,7 @@ import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
 import { AddToCalendar } from '@/components/game/AddToCalendar';
+import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
@@ -25,6 +26,7 @@ export function GameDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const data = useSeasonData();
+  const rsvp = useRsvp(data);
   const { toast } = useToast();
   const [resultOpen, setResultOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -73,14 +75,8 @@ export function GameDetailPage() {
     }
   };
 
-  const setRsvp = (status) =>
-    run(() =>
-      myRsvp
-        ? api.entities.Rsvp.update(myRsvp.id, { status, playing_gk: status === 'in' && !!myRsvp.playing_gk })
-        : api.entities.Rsvp.create({ game_id: game.id, user_id: data.user.id, status, playing_gk: false }),
-    );
-
-  const toggleGk = () => myRsvp && run(() => api.entities.Rsvp.update(myRsvp.id, { playing_gk: !myRsvp.playing_gk }));
+  const setRsvp = (status) => rsvp.setStatus(game, status);
+  const toggleGk = () => rsvp.toggleGk(game);
 
   // Captains set anyone's RSVP; null clears it back to no reply.
   const rsvpOf = (player) => (data.rsvps || []).find((r) => r.game_id === game.id && r.user_id === player.user_id) || null;
@@ -260,7 +256,7 @@ export function GameDetailPage() {
           onSet={setRsvp}
           onToggleGk={toggleGk}
           suspended={suspended.includes(data.user.id)}
-          busy={busy}
+          busy={busy || rsvp.busy === game.id}
         />
       )}
 
