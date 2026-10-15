@@ -77,7 +77,8 @@ insert into games_test.people values
   ('mike', '00000000-0000-4000-8000-0000000000a6'),
   ('dana', '00000000-0000-4000-8000-0000000000a7'),
   ('g1', '00000000-0000-4000-8000-0000000000b1'),
-  ('g2', '00000000-0000-4000-8000-0000000000b2');
+  ('g2', '00000000-0000-4000-8000-0000000000b2'),
+  ('g3', '00000000-0000-4000-8000-0000000000b3');
 
 insert into auth.users (id, email) select id, name || '@games.test' from games_test.people where name in ('kim', 'pat');
 update public.users set role = case when id = games_test.id('kim') then 'admin' else 'user' end, joined_team_at = now()
@@ -212,8 +213,64 @@ select games_test.ok(
   (select voted_for_id = games_test.id('mo') and voted_for_guest_id is null from public.potm_votes where voter_id = games_test.id('pat')),
   'and so do votes for it');
 
--- Deleting a game takes its fill-ins with it.
-delete from public.games where id = games_test.id('g1');
-select games_test.ok(not exists (select 1 from public.game_fill_ins), 'a deleted game''s fill-ins go with it');
+-- ---------------------------------------------------------------------------
+-- Who can change games, sign-ups, stat lines and votes (docs/games.md).
+-- ---------------------------------------------------------------------------
+
+select games_test.sign_in('pat');
+select games_test.refused(
+  $$insert into public.rsvps (game_id, user_id, status) values (games_test.id('g2'), games_test.id('kim'), 'in')$$,
+  'players cannot RSVP for another player');
+select games_test.touches($$update public.rsvps set status = 'in' where user_id = games_test.id('mo')$$, 0,
+  'or change another player''s RSVP');
+select games_test.touches($$delete from public.rsvps where user_id = games_test.id('mo')$$, 0, 'or take it back');
+select games_test.refused(
+  $$insert into public.games (season_year, session, date, opponent) values (2026, 1, current_date + 10, 'Sneaky FC')$$,
+  'players cannot add games');
+select games_test.touches($$update public.games set score_us = 9 where id = games_test.id('g1')$$, 0, 'or change a score');
+select games_test.touches($$delete from public.games where id = games_test.id('g2')$$, 0, 'or delete a game');
+select games_test.touches($$update public.game_stats set goals = 5 where user_id = auth.uid()$$, 0,
+  'or change stat lines, even their own');
+select games_test.refused(
+  $$insert into public.potm_votes (game_id, voter_id, voted_for_id, award) values (games_test.id('g1'), games_test.id('kim'), games_test.id('mo'), 'man')$$,
+  'or vote as someone else');
+select games_test.touches($$update public.potm_votes set voted_for_id = auth.uid(), voted_for_guest_id = null where voter_id <> auth.uid()$$, 0,
+  'or change someone else''s vote');
+reset role;
+
+select games_test.sign_in('kim');
+select games_test.touches(
+  $$insert into public.games (id, season_year, session, date, opponent) values (games_test.id('g3'), 2026, 1, current_date + 10, 'Goal Diggers')$$, 1,
+  'captains add games');
+select games_test.touches($$update public.games set field_number = '3' where id = games_test.id('g2')$$, 1, 'and change them');
+select games_test.touches(
+  $$insert into public.game_stats (game_id, user_id, played, goals) values (games_test.id('g1'), games_test.id('pat'), true, 2)
+    on conflict (game_id, user_id) do update set goals = 2$$, 1,
+  'and enter anyone''s stat line');
+reset role;
+
+-- Deleting a game takes its sign-ups, stat lines, votes and fill-ins with it, and nothing else.
+insert into public.rsvps (game_id, user_id, status) values (games_test.id('g1'), games_test.id('kim'), 'in');
+create temp table before_delete as
+  select (select count(*) from public.rsvps where game_id <> games_test.id('g1')) as rsvps,
+    (select count(*) from public.game_stats where game_id <> games_test.id('g1')) as stats,
+    (select count(*) from public.potm_votes where game_id <> games_test.id('g1')) as votes,
+    (select count(*) from public.games where id <> games_test.id('g1')) as games,
+    (select count(*) from public.player_profiles) as profiles;
+select games_test.sign_in('kim');
+select games_test.touches($$delete from public.games where id = games_test.id('g1')$$, 1, 'a captain deletes a game');
+reset role;
+select games_test.ok(
+  not exists (select 1 from public.rsvps where game_id = games_test.id('g1'))
+  and not exists (select 1 from public.game_stats where game_id = games_test.id('g1'))
+  and not exists (select 1 from public.potm_votes where game_id = games_test.id('g1')),
+  'its sign-ups, stat lines and votes go with it');
+select games_test.ok(not exists (select 1 from public.game_fill_ins), 'and its fill-ins');
+select games_test.ok(
+  (select rsvps = (select count(*) from public.rsvps) and stats = (select count(*) from public.game_stats)
+     and votes = (select count(*) from public.potm_votes) and games = (select count(*) from public.games)
+     and profiles = (select count(*) from public.player_profiles)
+   from before_delete),
+  'and nothing else');
 
 rollback;

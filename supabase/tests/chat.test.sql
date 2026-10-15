@@ -106,7 +106,28 @@ insert into public.messages (user_id, author_name, body, reply_to_id)
 select test.id('bob'), 'Bob', 'I do', id from public.messages where body = 'Who has pinnies?';
 select test.ok((select reply_to_id is not null from public.messages where body = 'I do'), 'a reply points at the message it answers');
 select test.touches($$delete from public.messages where body = 'Who has pinnies?'$$, 0, 'a player cannot delete someone else''s message');
-select test.touches($$update public.messages set body = 'edited' where body = 'Who has pinnies?'$$, 0, 'players cannot edit messages (no edit feature yet)');
+select test.touches($$update public.messages set body = 'edited' where body = 'Who has pinnies?'$$, 0, 'a player cannot edit someone else''s message');
+
+-- Editing your own message: the text only, marked edited, and never as anyone else.
+select test.sign_in('ann');
+select test.touches($$update public.messages set body = 'Who has the pinnies?' where body = 'Who has pinnies?'$$, 1,
+  'a player fixes a typo in their own message');
+select test.ok((select edited_date is not null from public.messages where body = 'Who has the pinnies?'), 'and it''s marked edited');
+select test.ok((select edited_date is null from public.messages where body = 'I do'), 'other messages aren''t');
+select test.refused($$update public.messages set user_id = test.id('bob') where body = 'Who has the pinnies?'$$,
+  'only the text can change, not who wrote it');
+select test.refused($$update public.messages set created_date = now() - interval '1 day' where body = 'Who has the pinnies?'$$,
+  'or when');
+select test.refused($$update public.messages set edited_date = null where body = 'Who has the pinnies?'$$,
+  'or the edited label');
+select test.refused($$update public.messages set body = '' where body = 'Who has the pinnies?'$$, 'an edit can''t empty a message');
+select test.sign_in('cap');
+select test.touches($$update public.messages set body = 'captain was here' where body = 'Who has the pinnies?'$$, 0,
+  'captains don''t edit other people''s messages either');
+-- Back as it was, for the checks below.
+reset role;
+update public.messages set body = 'Who has pinnies?', edited_date = null where body = 'Who has the pinnies?';
+select test.sign_in('bob');
 
 -- ---------------------------------------------------------------------------
 -- Reactions
@@ -161,6 +182,10 @@ select test.refused($$insert into public.messages (user_id, author_name, body, t
   'nobody can post in a closed thread');
 select test.ok((select count(*) from public.messages m join public.chat_threads t on t.id = m.thread_id where t.title = '⚽ Sunday pickup') = 2,
   'a closed thread keeps its messages readable');
+select test.sign_in('ann');
+select test.refused(
+  $$update public.messages m set body = 'changed' from public.chat_threads t where t.id = m.thread_id and t.title = '⚽ Sunday pickup' and m.user_id = auth.uid()$$,
+  'or edit their messages in it');
 
 select test.sign_in('cap');
 select test.touches($$update public.chat_threads set archived = false where title = '⚽ Sunday pickup'$$, 1, 'a captain reopens anyone''s thread');
@@ -389,6 +414,50 @@ set role service_role;
 select test.ok(test.push_targets('Room for 2') = 'https://push.test/ann', 'thread messages go to the thread''s starter');
 select test.ok(test.push_targets('Leaving at 6') = 'https://push.test/cap', 'thread messages go to people who opened it, not everyone');
 select test.ok((select thread_title from public.chat_push_targets(gen_random_uuid())) is null, 'an unknown message sends nothing');
+reset role;
+
+-- The number on the app icon: each notification carries the player's Chat tab number
+-- (unreadTotal in src/lib/chat.js: Team Chat plus threads they've opened).
+create table test.chat_tab (name text primary key, n bigint not null);
+grant insert on test.chat_tab to authenticated;
+grant select on test.chat_tab to service_role;
+create function test.note_chat_tab(who text) returns void language sql as $$
+  insert into test.chat_tab
+  select who, coalesce(sum(o.unread) filter (where o.thread_id is null or o.last_read_at is not null), 0)
+  from public.chat_overview() o;
+$$;
+grant execute on function test.note_chat_tab(text) to authenticated;
+create function test.icon_numbers() returns table (name text, n bigint) language sql as $$
+  select p.name, b.unread
+  from public.chat_push_unread(array(select id from public.push_subscriptions)) b
+  join public.push_subscriptions s on s.id = b.subscription_id
+  join test.people p on p.id = s.user_id;
+$$;
+grant execute on function test.icon_numbers() to service_role;
+
+select test.sign_in('cy');
+select public.chat_mark_read(null, now());
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body) values (test.id('ann'), 'Ann', 'Badge one'), (test.id('ann'), 'Ann', 'Badge two');
+select test.note_chat_tab('ann');
+select test.sign_in('cap');
+select test.note_chat_tab('cap');
+select test.sign_in('cy');
+select test.note_chat_tab('cy');
+reset role;
+set role service_role;
+select test.ok((select n from test.icon_numbers() where name = 'cy') = 2,
+  'the app icon counts unread messages since the player last read (not before)');
+select test.ok(
+  (select count(*) = 3 and bool_and(i.n = t.n) from test.icon_numbers() i join test.chat_tab t using (name))
+    and (select count(distinct n) > 1 from test.chat_tab),
+  'the app icon shows the same number as each player''s Chat tab (Team Chat plus threads they opened, not their own messages)'
+);
+select test.ok(not exists (select 1 from public.chat_push_unread(array[gen_random_uuid()])), 'an unknown device gets no number');
+reset role;
+select test.sign_in('cy');
+select test.refused($$select * from public.chat_push_unread(array(select id from public.push_subscriptions))$$,
+  'players cannot ask for anyone''s unread count');
 reset role;
 
 -- A broken sender never stops a message from being posted.

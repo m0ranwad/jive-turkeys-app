@@ -47,7 +47,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | A one-time tip explains tapping a message. It stays dismissed. | `[browser]` |
 | Unsent text is kept per room while you switch rooms (until the page is reloaded). | `[browser]` |
 
-## 3. Message options: react, reply, copy, delete
+## 3. Message options: react, reply, copy, edit, delete
 
 Tapping (or clicking) a message shows its options. Tap it again, or press Escape, to close them.
 
@@ -59,6 +59,7 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | **Reply** quotes the message above yours ("Replying to Jordan R." while typing, Esc or ✕ cancels). Tapping the quote jumps to the original and flashes it. If the original was deleted, the quote says "Original message was deleted". | `[browser]` `[db]` |
 | **Copy** copies the text. | `[browser]` |
 | **Delete** (after a confirm) removes the message for everyone, with its reactions. Replies to it stay. Players see Delete only on their own messages; captains on every message. The database enforces the same. | `[browser]` `[db]` |
+| **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Nobody can edit messages yet (planned: issue #6). | `[db]` |
 
 **Search** (the 🔍 in the chat header) finds messages in Team Chat and every thread:
@@ -131,6 +132,8 @@ everything, so the function can't be made to send anything else.
 | If notifications can't be sent (the sender is down, not set up yet), messages still post normally. | `[db]` |
 | A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
 | Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
+| **The app icon shows the unread number**, the same as the Chat tab (Team Chat plus threads you've opened, not your own messages). Each chat notification carries it (`chat_push_unread`), so it goes up while the app is closed; game alerts leave it as it is. If the count isn't available, the notification still goes out. | `[db]` `[unit]` `[browser]` |
+| While the site is open, the icon follows the Chat tab and clears once everything is read. Players who turn **Chat messages** off, or turn notifications off on the device (signing out does), get no number. On an iPhone it only shows on the Home Screen app. | `[browser]` |
 | The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
 | Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |
@@ -167,7 +170,8 @@ devices signed in as different players:
 6. Notifications (after a change to them): on a phone, turn them on with the bell (on an iPhone, from the Home
    Screen app) and tap **Send a test**: it arrives within a few seconds. Close the app and post in Team Chat
    from the other device: the phone gets "Name: message", and tapping it opens Team Chat. With Team Chat open
-   on the phone, post again: no notification.
+   on the phone, post again: no notification. Close the app and post twice more: the Home Screen icon shows
+   2. Open the app and read Team Chat, then close it: the number is gone.
 
 ## Running the tests
 

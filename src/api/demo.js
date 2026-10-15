@@ -7,7 +7,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v14';
+const DB_KEY = 'jt_demo_db_v15';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -181,6 +181,8 @@ function seed() {
   react(say(null, me, 'Reminder: dues for session 2 are due before the first game!', 30), '👍', [profiles[1], profiles[2], profiles[4], profiles[3]]);
   readUpTo(null, 30);
   say(null, profiles[5], 'Paid 💸', 12);
+  // Fixed a typo after posting.
+  Object.assign(messages.find((m) => m.body === 'Running 10 min late, start without me in goal'), { edited_date: minutesAgo(58) });
   say(null, profiles[11], 'Parking tip for the new folks: the back lot is closer to the indoor fields https://www.google.com/maps/search/?api=1&query=North+Coast+Premier+Soccer+Complex', 10);
   say(null, profiles[1], '🔥🔥🔥', 8);
 
@@ -548,7 +550,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         if (!record) throw new Error('Not found');
         if (table === 'potm_votes') checkVotingOpen(record.game_id);
         const opensVoting = table === 'games' && patch.has_result && !record.has_result && !record.potm_opened_at;
-        Object.assign(record, patch, { updated_date: now() });
+        // Same as the database's message_edited(): changing the text marks it edited.
+        const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;
+        Object.assign(record, patch, { updated_date: now() }, edited && { edited_date: now() });
         if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
         write();

@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { CornerUpLeft, Lock, Send, Smile, X } from 'lucide-react';
+import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
 import { cn } from '@/lib/utils';
 
@@ -9,17 +9,44 @@ const keepTyping = (e) => e.preventDefault();
 // Unsent text per room, kept while moving between rooms.
 const drafts = new Map();
 
-/** Message box: grows with the text, Enter sends on a computer, emoji picker, reply preview. */
-export const Composer = forwardRef(function Composer({ room, placeholder, replyTo, replyName, onCancelReply, onSend }, ref) {
+/**
+ * Message box: grows with the text, Enter sends on a computer, emoji picker,
+ * reply preview. With `editing` (one of your messages), it holds that message's
+ * text and saves the change instead of sending.
+ */
+export const Composer = forwardRef(function Composer(
+  { room, placeholder, replyTo, replyName, onCancelReply, onSend, editing, onCancelEdit, onSaveEdit },
+  ref,
+) {
   const [draft, setDraft] = useState(() => drafts.get(room) || '');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const box = useRef(null);
 
   useImperativeHandle(ref, () => ({ focus: () => box.current?.focus() }), []);
 
+  // The draft you were writing comes back after an edit.
+  const draftBeforeEdit = useRef('');
   useEffect(() => {
-    drafts.set(room, draft);
-  }, [room, draft]);
+    if (!editing) return;
+    draftBeforeEdit.current = drafts.get(room) || '';
+    setDraft(editing.body);
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+    // Only when a different message starts being edited.
+  }, [editing?.id]);
+
+  useEffect(() => {
+    if (!editing) drafts.set(room, draft);
+  }, [room, draft, editing]);
+
+  const stopEditing = () => {
+    setDraft(draftBeforeEdit.current);
+    onCancelEdit();
+  };
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -31,6 +58,12 @@ export const Composer = forwardRef(function Composer({ room, placeholder, replyT
   const submit = async () => {
     const body = draft.trim();
     if (!body) return;
+    if (editing) {
+      if (body === editing.body) return stopEditing();
+      const saved = await onSaveEdit(editing, body);
+      if (saved) setDraft(draftBeforeEdit.current);
+      return undefined;
+    }
     setDraft('');
     setEmojiOpen(false);
     const sent = await onSend(body);
@@ -44,7 +77,8 @@ export const Composer = forwardRef(function Composer({ room, placeholder, replyT
       e.preventDefault();
       submit();
     }
-    if (e.key === 'Escape' && replyTo) onCancelReply();
+    if (e.key === 'Escape' && editing) stopEditing();
+    else if (e.key === 'Escape' && replyTo) onCancelReply();
   };
 
   const insertEmoji = (emoji) => {
@@ -69,7 +103,21 @@ export const Composer = forwardRef(function Composer({ room, placeholder, replyT
           className="absolute bottom-full left-2.5 right-2.5 mb-2 sm:right-auto sm:w-96"
         />
       )}
-      {replyTo && (
+      {editing && (
+        <div className="mb-2 flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
+          <Pencil className="h-4 w-4 shrink-0 text-amber-700" />
+          <div className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-[0.1em] text-amber-800">Editing message</div>
+          <button
+            type="button"
+            onClick={stopEditing}
+            aria-label="Cancel edit"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-zinc-500 transition hover:bg-amber-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {replyTo && !editing && (
         <div className="mb-2 flex items-center gap-2 rounded-2xl bg-lime-50 px-3 py-2 ring-1 ring-lime-200">
           <CornerUpLeft className="h-4 w-4 shrink-0 text-lime-700" />
           <div className="min-w-0 flex-1 leading-tight">
@@ -121,10 +169,10 @@ export const Composer = forwardRef(function Composer({ room, placeholder, replyT
           type="submit"
           disabled={!draft.trim()}
           onMouseDown={keepTyping}
-          aria-label="Send"
+          aria-label={editing ? 'Save edit' : 'Send'}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-zinc-950 text-lime-400 transition hover:bg-zinc-800 active:scale-95 disabled:opacity-30"
         >
-          <Send className="h-5 w-5" />
+          {editing ? <Check className="h-5 w-5" /> : <Send className="h-5 w-5" />}
         </button>
       </form>
     </div>

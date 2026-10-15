@@ -157,6 +157,8 @@ export function ChatPage() {
   const [findTarget, setFindTarget] = useState(null);
   const [focusId, setFocusId] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  // One of your messages being edited in the message box.
+  const [editing, setEditing] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [visible, setVisible] = useState(() => !document.hidden);
@@ -213,6 +215,11 @@ export function ChatPage() {
         );
       },
       {
+        // An edit (yours on another device, or someone else's): the new text, in place.
+        onUpdate: (m) =>
+          setLoaded((current) =>
+            current && { ...current, messages: current.messages.map((x) => (x.id === m.id ? { ...x, ...m } : x)) },
+          ),
         onDelete: ({ id }) => {
           setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== id) });
           setReactions((list) => list.filter((r) => r.message_id !== id));
@@ -254,6 +261,7 @@ export function ChatPage() {
   useEffect(() => {
     let alive = true;
     setReplyTo(null);
+    setEditing(null);
     setMenuOpen(false);
     setLoaded(null);
     setReactions([]);
@@ -474,8 +482,28 @@ export function ChatPage() {
   };
 
   const reply = (message) => {
+    setEditing(null);
     setReplyTo(message);
     composer.current?.focus();
+  };
+
+  const startEdit = (message) => {
+    setReplyTo(null);
+    setEditing(message);
+  };
+
+  const saveEdit = async (message, body) => {
+    try {
+      const updated = await api.entities.Message.update(message.id, { body });
+      setLoaded((current) =>
+        current && { ...current, messages: current.messages.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) },
+      );
+      setEditing(null);
+      return true;
+    } catch (err) {
+      toast({ title: "That edit didn't save", description: err.message });
+      return false;
+    }
   };
 
   const copy = async (message) => {
@@ -721,6 +749,7 @@ export function ChatPage() {
               onReply={reply}
               onCopy={copy}
               onDelete={(message) => setDialog({ kind: 'deleteMessage', message })}
+              onEdit={startEdit}
               focusId={focusId}
               onFocused={() => setFocusId(null)}
               emptyText={thread ? 'Nothing here yet. Say something to get it going.' : 'No messages yet. Break the ice.'}
@@ -739,6 +768,9 @@ export function ChatPage() {
                 }
                 onCancelReply={() => setReplyTo(null)}
                 onSend={send}
+                editing={editing}
+                onCancelEdit={() => setEditing(null)}
+                onSaveEdit={saveEdit}
               />
             )}
           </>
