@@ -6,10 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveTeamSettings } from '@/lib/actions';
+import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { cleanPayHandle, dollars, feeTotal } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { DIALOG, DIALOG_TITLE, EYEBROW, HistoryList, StatusChip, shortDate } from './DuesParts';
+import { EYEBROW, HistoryList, StatusChip, shortDate } from './DuesParts';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
 const FIELD_LABEL = cn(EYEBROW, 'text-zinc-400');

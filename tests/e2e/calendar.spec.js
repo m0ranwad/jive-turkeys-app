@@ -1,5 +1,5 @@
-// "Add to calendar" on an upcoming game: an .ics file for iPhone, Outlook and
-// most calendars, or Google Calendar. What the event says is checked in
+// "Add to calendar" on an upcoming game: an .ics file for Apple Calendar,
+// Outlook and most calendars, or Google Calendar. What the event says is checked in
 // tests/unit/calendar.test.js.
 import { expect, signIn, test } from './helpers';
 
@@ -10,7 +10,7 @@ test('players add an upcoming game to their calendar', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Add to calendar' });
 
   const download = page.waitForEvent('download');
-  await dialog.getByRole('button', { name: 'iPhone, Outlook or other calendar' }).click();
+  await dialog.getByRole('button', { name: 'Apple Calendar, Outlook & others' }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('jive-turkeys-vs-goal-diggers.ics');
   const text = await (await file.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString());
