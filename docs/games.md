@@ -1,0 +1,53 @@
+# Game day: how it should work
+
+The expected behavior of the schedule, RSVPs, headcounts, results, stats and Player of the Match. Each rule
+says which automated test checks it, so a change that breaks one shows up as a red check before anyone can
+publish it. If you change how game day works on purpose, update this page and the tests in the same change.
+
+**Tests:** `[browser]` = `tests/e2e/game-day.spec.js` and the other `tests/e2e/*.spec.js` (Playwright, demo
+mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.test.sql` · `[unit]` =
+`tests/unit/game-day.test.js`, `games.test.js`, `results.test.js`. How to run them: see the Tests section of
+`CLAUDE.md`.
+
+## 1. RSVPs and the headcount
+
+| Rule | Checked by |
+|---|---|
+| Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
+| Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
+| Active players who haven't answered are **No reply**; Sub Pool and On Break players who haven't are **Subs**, so reminders don't nag them. | `[unit]` |
+| A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
+| The game is short when IN is under the minimum players or women on the field (8 and 3 unless captains change them). | `[unit]` |
+| Players off the roster (removed, or roster names who joined under their own account) aren't counted. | `[unit]` |
+| A red card sits the player out the next game with a result after it, and only that one. Blue cards never do. | `[unit]` |
+
+## 2. Games and results
+
+| Rule | Checked by |
+|---|---|
+| Only captains add, change or delete games, and enter results and stat lines. | `[db]` |
+| A captain's result shows on the game and in Stats. | `[browser]` |
+| A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
+| Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
+| Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |
+| The record counts wins, losses, draws and goals from games with a result only, overall, per season and session, and per opponent. | `[unit]` |
+| The leaderboard and career stats add up games played, goals, assists, cards and Player of the Match awards. | `[unit]` |
+
+## 3. Player of the Match
+
+| Rule | Checked by |
+|---|---|
+| Players who played vote for a teammate who played (roster names included), never themselves, and only as themselves. | `[db]` |
+| A vote can be changed until voting closes. | `[browser]` `[db]` |
+| Voting opens when the result is posted and closes after the team's window (12 hours unless changed). After that, votes can't be cast, changed or taken back, and the buttons go away. | `[db]` `[browser]` |
+| The most votes wins each award; ties share it. | `[unit]` `[db]` |
+| Notifications and the winners post: see section 7 of `docs/chat.md`. | |
+
+## 4. Importing a league schedule
+
+| Rule | Checked by |
+|---|---|
+| Date, time, field and opponent columns are found by name, in `.xlsx` and `.csv` files, below any title rows. | `[unit]` |
+| A league sheet with Home and Away columns keeps only Jive Turkeys games, with the other team as the opponent. If our name isn't in it at all, every game is kept. | `[unit]` |
+| Without headers, each cell's role is guessed from what it looks like. | `[unit]` |
+| A date with no time gets no time (not 12:00 AM). | `[unit]` |

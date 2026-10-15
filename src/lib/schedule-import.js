@@ -68,7 +68,11 @@ export function normalizeDate(value, year) {
 /** Any common time format -> HH:mm (24h), or '' if none found. */
 export function normalizeTime(value) {
   if (value == null || value === '') return '';
-  if (value instanceof Date) return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  if (value instanceof Date) {
+    // A date cell with no time reads as midnight; nobody kicks off at 12:00 AM.
+    if (value.getHours() === 0 && value.getMinutes() === 0) return '';
+    return `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  }
   if (typeof value === 'number') {
     const fraction = value % 1;
     if (fraction === 0 && value >= 1) return '';

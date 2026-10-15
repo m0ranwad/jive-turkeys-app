@@ -61,6 +61,11 @@ Deno.serve(async (req) => {
         if (error) throw error;
         return data ?? [];
       },
+      async unreadCounts(subscriptionIds: string[]) {
+        const { data, error } = await admin.rpc('chat_push_unread', { p_subscription_ids: subscriptionIds });
+        if (error) throw error;
+        return data ?? [];
+      },
       async potmTargets(gameId: string, kind: string) {
         const { data, error } = await admin.rpc('potm_push_targets', { p_game_id: gameId, p_kind: kind });
         if (error) throw error;
