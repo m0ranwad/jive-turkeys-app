@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils';
 
 const WINDOW_HOURS = [6, 12, 24, 48];
 const REMINDER_HOURS = [0, 1, 2, 3, 6, 12];
-const GAME_REMINDER_HOURS = [2, 4, 6, 12, 24];
 
 /** A setting picked from a row of buttons, like the Player of the Match award choice. */
 function Choice({ label, hint, options, value, onPick }) {
@@ -78,8 +77,6 @@ export function SettingsPage() {
         potm_notify: !!form.potm_notify,
         potm_reminder_hours: Number(form.potm_reminder_hours),
         potm_announce: !!form.potm_announce,
-        game_reminders: !!form.game_reminders,
-        game_reminder_hours: Number(form.game_reminder_hours),
       });
       await reload();
       toast({ title: 'Team settings saved' });
@@ -178,30 +175,12 @@ export function SettingsPage() {
             onPick={(v) => set({ potm_announce: v })}
           />
         </section>
-        <section className="space-y-4 rounded-2xl bg-zinc-50 p-3.5" aria-label="Game reminders">
-          <div>
-            <span className="block text-sm font-bold">Game reminders</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
-              Before each game, Active players who haven't answered get "Are you in?". If we're short, Sub Pool and On
-              Break players who haven't said OUT are asked to sub (only women, when it's women we need). Phones with
-              notifications on only. "Copy reminder" on each game still works for the group text.
-            </span>
-          </div>
-          <Choice
-            label="Send game reminders"
-            options={ON_OFF}
-            value={!!form.game_reminders}
-            onPick={(v) => set({ game_reminders: v })}
-          />
-          {form.game_reminders && (
-            <Choice
-              label="How long before kickoff"
-              options={GAME_REMINDER_HOURS.map((h) => ({ v: h, l: hoursLabel(h) }))}
-              value={Number(form.game_reminder_hours)}
-              onPick={(h) => set({ game_reminder_hours: h })}
-            />
-          )}
-        </section>
+        <div className="rounded-2xl bg-zinc-50 p-3.5">
+          <span className="block text-sm font-bold">RSVP reminders</span>
+          <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
+            Use "Copy reminder" on each game to paste a nudge into the team group text.
+          </span>
+        </div>
         <Button onClick={save} disabled={busy} className="h-12 w-full text-sm font-bold uppercase tracking-[0.12em]">
           {busy ? 'Saving…' : 'Save team settings'}
         </Button>

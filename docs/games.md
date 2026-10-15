@@ -52,17 +52,3 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.t
 | A league sheet with Home and Away columns keeps only Jive Turkeys games, with the other team as the opponent. If our name isn't in it at all, every game is kept. | `[unit]` |
 | Without headers, each cell's role is guessed from what it looks like. | `[unit]` |
 | A date with no time gets no time (not 12:00 AM). | `[unit]` |
-
-## 5. Game reminders
-
-A timer (`pg_cron`, every 5 minutes, `game_reminders_tick()`) sends them through `notify-chat`; the database writes
-the words and picks who gets each one (`game_reminder_targets`).
-
-| Rule | Checked by |
-|---|---|
-| A set time before kickoff (6 hours unless captains change it in Team Settings, or turn reminders off), Active players who haven't answered get "Are you in?" with the day, time, opponent and field. Tapping it opens the game. | `[db]` `[unit]` |
-| When we're short then, Sub Pool and On Break players who haven't said OUT get "We need subs" with how many (and how many women). If only women are short, only women are asked. If someone drops out later, up to kickoff, it goes out then. | `[db]` |
-| The headcount behind it is the site's: a woman in goal doesn't count toward the women, roster names count, and captains' minimums apply. | `[db]` |
-| Each goes out once per game; none after kickoff or once there's a result; never to players who turned **Game alerts** off. | `[db]` |
-| Kickoff times are read the way captains type them ("19:00", "7:00 PM", "7pm"), in Eastern time; a game with no time gets no reminder. | `[db]` |
-

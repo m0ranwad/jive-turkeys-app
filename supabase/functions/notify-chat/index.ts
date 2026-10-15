@@ -1,7 +1,6 @@
 // Sends chat notifications to players' phones (Web Push).
 // The database calls it when a message is posted (see the chat_push migration)
-// for Player of the Match voting (the potm_voting_window migration) and game
-// reminders (the game_reminders migration); the
+// and for Player of the Match voting (the potm_voting_window migration); the
 // site calls it for the public key and for "Send a test".
 // Deployed by .github/workflows/functions.yml. The logic lives in ../_shared/notify.js.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -64,11 +63,6 @@ Deno.serve(async (req) => {
       },
       async unreadCounts(subscriptionIds: string[]) {
         const { data, error } = await admin.rpc('chat_push_unread', { p_subscription_ids: subscriptionIds });
-        if (error) throw error;
-        return data ?? [];
-      },
-      async reminderTargets(gameId: string, kind: string) {
-        const { data, error } = await admin.rpc('game_reminder_targets', { p_game_id: gameId, p_kind: kind });
         if (error) throw error;
         return data ?? [];
       },
