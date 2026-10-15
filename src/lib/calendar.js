@@ -36,7 +36,7 @@ function details(game, settings, link) {
 const icsText = (text) => String(text).replace(/\\/g, '\\\\').replace(/([,;])/g, '\\$1').replace(/\r?\n/g, '\\n');
 const stamp = (d) => d.format('YYYYMMDD[T]HHmmss[Z]');
 
-/** The game as an .ics file. Adding it again updates the same event (its UID is the game's id). */
+/** The game as an .ics file. Its UID is the game's id. */
 export function gameIcs(game, settings, link) {
   const { title, location, description } = details(game, settings, link);
   const times = gameTimes(game);
@@ -79,7 +79,7 @@ export function downloadIcs(game, settings, link) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `jive-turkeys-vs-${game.opponent.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`;
+  a.download = `jive-turkeys-vs-${game.opponent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.ics`;
   document.body.appendChild(a);
   a.click();
   a.remove();

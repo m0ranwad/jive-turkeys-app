@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { gameLink } from '@/components/game/ShareButtons';
 import { downloadIcs, googleCalendarUrl } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
 /** "Add to calendar" for one game: iPhone / Outlook (an .ics file), or Google Calendar. */
 export function AddToCalendar({ game, settings, className }) {
   const [open, setOpen] = useState(false);
-  const link = `${window.location.origin}/games/${game.id}`;
+  const link = gameLink(game);
 
   return (
     <>
@@ -28,7 +29,7 @@ export function AddToCalendar({ game, settings, className }) {
             <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Add to calendar</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-zinc-600">
-            vs {game.opponent}, with the field, jersey and a link back here. Adding it again updates the same event.
+            vs {game.opponent}, with the field, jersey and a link back here.
           </p>
           <div className="grid gap-2">
             <Button

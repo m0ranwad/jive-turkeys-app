@@ -3,7 +3,7 @@ import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
 
-const gameLink = (game) => `${window.location.origin}/games/${game.id}`;
+export const gameLink = (game) => `${window.location.origin}/games/${game.id}`;
 const women = (n) => (n === 1 ? 'woman' : 'women');
 
 /** Copies an RSVP nudge for the team group text. */
