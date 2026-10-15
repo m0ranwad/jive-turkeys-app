@@ -87,7 +87,7 @@ export function SchedulePage() {
                   game={g}
                   status={rsvp.mine(g)?.status}
                   onSet={(status) => rsvp.setStatus(g, status)}
-                  busy={rsvp.busy === g.id}
+                  busy={rsvp.isBusy(g)}
                 />
               )}
             </div>
@@ -139,7 +139,7 @@ export function SchedulePage() {
           onRoster={onRoster}
           suspended={suspendedIds(nextGame, data.games, data.stats).includes(data.user?.id)}
           onSet={(status) => rsvp.setStatus(nextGame, status)}
-          busy={rsvp.busy === nextGame.id}
+          busy={rsvp.isBusy(nextGame)}
         />
       )}
       <PotmPrompt data={data} />

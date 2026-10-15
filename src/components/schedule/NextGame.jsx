@@ -50,7 +50,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
             {fmtDateShort(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'}
           </div>
           <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-white/70">
-            <JerseyDot jersey={game.jersey} className="h-2.5 w-2.5" />
+            <JerseyDot jersey={game.jersey} className="h-2.5 w-2.5 ring-1 ring-white/30" />
             {jerseyText(game.jersey, settings)}
           </div>
         </div>
