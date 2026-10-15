@@ -66,6 +66,7 @@ export function SettingsPage() {
     setBusy(true);
     try {
       await saveTeamSettings({
+        season_label: form.season_label?.trim() || null,
         primary_jersey: form.primary_jersey,
         backup_jersey: form.backup_jersey,
         venue_name: form.venue_name,
@@ -91,8 +92,8 @@ export function SettingsPage() {
 
   const field = (label, key, props = {}) => (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      <Input value={form[key] ?? ''} onChange={(e) => set({ [key]: e.target.value })} {...props} />
+      <Label htmlFor={`setting-${key}`}>{label}</Label>
+      <Input id={`setting-${key}`} value={form[key] ?? ''} onChange={(e) => set({ [key]: e.target.value })} {...props} />
     </div>
   );
 
@@ -101,6 +102,7 @@ export function SettingsPage() {
       <PageHeader title="Team settings" subtitle="Defaults for every game, the coed minimums, and awards." />
       <TeamCodeCard meId={user?.id} roster={roster} />
       <section className={cn(CARD, 'space-y-5')}>
+        {field('Header line (under "Jive Turkeys")', 'season_label', { maxLength: 40, placeholder: DEFAULT_SETTINGS.season_label })}
         <div className="grid gap-4 sm:grid-cols-2">
           {field('Primary jersey', 'primary_jersey')}
           {field('Backup jersey', 'backup_jersey')}

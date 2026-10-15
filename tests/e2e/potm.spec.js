@@ -42,15 +42,17 @@ test('once voting has closed, the game shows the winners and takes no votes', as
   await expect(potm(page)).toContainText('votes');
 });
 
-test('when the deadline passes, voting locks', async ({ page }) => {
+test('when the deadline passes, voting locks, even on a page left open', async ({ page }) => {
   await signIn(page);
   await openGame(page, 'The Hat Tricks');
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting open until Thu 9:00 PM');
-  // 9 hours later.
+  const man = potm(page).locator('div.rounded-2xl', { hasText: 'Man of the Match' });
+  await expect(man.getByRole('button').first()).toBeVisible();
+  // 9 hours later, without a reload.
   await page.clock.fastForward('09:01:00');
-  await page.reload();
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting closed');
   await expect(potm(page).getByRole('button', { name: 'Change vote' })).toHaveCount(0);
+  await expect(man.locator('button.rounded-full.border-2')).toHaveCount(0);
 });
 
 test('posting a result opens voting for the time set in Team Settings', async ({ page }) => {

@@ -27,6 +27,7 @@ export function Conversation({
   onReply,
   onCopy,
   onDelete,
+  onEdit,
   emptyText,
 }) {
   const scroller = useRef(null);
@@ -200,6 +201,7 @@ export function Conversation({
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
               canDelete={mine || isCaptain}
+              canEdit={mine && !m.pending && !!onEdit}
               onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
               onReact={(message, emoji, fromMenu) => {
                 if (fromMenu) setSelectedId(null);
@@ -208,6 +210,7 @@ export function Conversation({
               onReply={close(onReply)}
               onCopy={close(onCopy)}
               onDelete={close(onDelete)}
+              onEdit={onEdit && close(onEdit)}
               onJumpTo={jumpTo}
             />
           );
