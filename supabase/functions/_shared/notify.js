@@ -38,6 +38,22 @@ export function potmNotification({ title, body, url }, gameId) {
 
 const POTM_KINDS = ['open', 'reminder'];
 
+/**
+ * Each phone's unread chat count, for the number on the app icon. If the database
+ * can't say (say, the function went live before the database update), the
+ * notifications go out without it and the icon keeps its number.
+ */
+async function unreadCounts(targets, db) {
+  if (!targets.length) return new Map();
+  try {
+    const rows = await db.unreadCounts(targets.map((t) => t.subscription_id));
+    return new Map(rows.map((row) => [row.subscription_id, Number(row.unread)]));
+  } catch (err) {
+    console.error('unread counts failed', err);
+    return new Map();
+  }
+}
+
 async function deliver(targets, messageFor, { vapid, db, fetch }) {
   const result = { sent: 0, forgotten: 0, failed: 0, statuses: [] };
   await Promise.all(
@@ -66,11 +82,12 @@ async function deliver(targets, messageFor, { vapid, db, fetch }) {
  * - { action: 'test' }: sends a test to the signed-in player's own devices.
  * - { message_id }: sent by the database when a message is posted. The database
  *   decides who gets it, and hands each message out only once, so a repeated
- *   or forged request can't send anything extra.
+ *   or forged request can't send anything extra. Each one carries that player's
+ *   unread chat count (badge) for the app icon.
  * - { potm_game_id, kind }: sent by the database when Player of the Match voting
  *   opens ('open') or is about to close ('reminder'). Same rules: the database
  *   decides who, what it says, and that it goes out once.
- * deps: { vapid, db: { pushTargets, potmTargets, subscriptionsOf, forget }, userOf(token), fetch }
+ * deps: { vapid, db: { pushTargets, unreadCounts, potmTargets, subscriptionsOf, forget }, userOf(token), fetch }
  */
 export async function handleNotify(body, token, deps) {
   if (!deps.vapid?.publicKey || !deps.vapid?.privateKey) return [503, { error: "Notifications aren't set up yet." }];
@@ -82,7 +99,14 @@ export async function handleNotify(body, token, deps) {
   }
   if (body?.message_id) {
     if (!UUID.test(body.message_id)) return [400, { error: 'Unknown message.' }];
-    return [200, await deliver(await deps.db.pushTargets(body.message_id), chatNotification, deps)];
+    const targets = await deps.db.pushTargets(body.message_id);
+    const unread = await unreadCounts(targets, deps.db);
+    const messageFor = (target) => {
+      const message = chatNotification(target);
+      const badge = unread.get(target.subscription_id);
+      return badge === undefined ? message : { ...message, badge };
+    };
+    return [200, await deliver(targets, messageFor, deps)];
   }
   if (body?.potm_game_id) {
     if (!UUID.test(body.potm_game_id) || !POTM_KINDS.includes(body.kind)) return [400, { error: 'Unknown game.' }];

@@ -15,7 +15,7 @@ function phone(id) {
   return { id, ecdh, endpoint: `https://push.example/${id}`, p256dh: b64u.encode(ecdh.getPublicKey()), auth: b64u.encode(auth) };
 }
 
-async function setup({ targets = [], subscriptions = [], status = () => 201, user = { id: 'me' } } = {}) {
+async function setup({ targets = [], subscriptions = [], unread = async () => [], status = () => 201, user = { id: 'me' } } = {}) {
   const vapid = { ...(await generateVapidKeys()), subject: 'mailto:team@jiveturkeys.app' };
   const delivered = [];
   const fetch = vi.fn(async (url, init) => {
@@ -30,6 +30,7 @@ async function setup({ targets = [], subscriptions = [], status = () => 201, use
   });
   const db = {
     pushTargets: vi.fn(async () => targets),
+    unreadCounts: vi.fn(unread),
     potmTargets: vi.fn(async () => targets),
     subscriptionsOf: vi.fn(async () => subscriptions),
     forget: vi.fn(async () => {}),
@@ -104,6 +105,39 @@ describe('handleNotify', () => {
     expect(db.pushTargets).toHaveBeenCalledWith(MESSAGE);
     expect(delivered.map((d) => d.to).sort()).toEqual(['a', 'b']);
     expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'Jordan R.: In', url: '/banter', tag: 'chat-team' });
+  });
+
+  it("puts each player's unread chat count on their app icon", async () => {
+    const row = (id) => ({ ...phone(id), subscription_id: id, thread_id: null, author_name: 'Jordan Rivera', body: 'In' });
+    const { deps, db, delivered } = await setup({
+      targets: [row('a'), row('b'), row('c')],
+      unread: async () => [
+        { subscription_id: 'a', unread: 4 },
+        { subscription_id: 'b', unread: 0 },
+      ],
+    });
+    await handleNotify({ message_id: MESSAGE }, '', deps);
+    expect(db.unreadCounts).toHaveBeenCalledTimes(1);
+    expect(db.unreadCounts.mock.calls[0][0].sort()).toEqual(['a', 'b', 'c']);
+    const badgeOf = (id) => delivered.find((d) => d.to === id).message.badge;
+    expect(badgeOf('a')).toBe(4);
+    expect(badgeOf('b'), 'all read: 0 clears the icon').toBe(0);
+    expect(badgeOf('c'), 'no count, no number: the icon keeps what it had').toBeUndefined();
+    expect(delivered.find((d) => d.to === 'a').message).toMatchObject({ title: 'Team Chat', body: 'Jordan R.: In' });
+  });
+
+  it("still sends chat notifications when the database can't count unread messages", async () => {
+    const row = (id) => ({ ...phone(id), subscription_id: id, thread_id: null, author_name: 'A', body: 'x' });
+    const { deps, delivered } = await setup({
+      targets: [row('a')],
+      unread: async () => {
+        throw new Error('function public.chat_push_unread does not exist');
+      },
+    });
+    const [status, result] = await handleNotify({ message_id: MESSAGE }, '', deps);
+    expect(status).toBe(200);
+    expect(result).toMatchObject({ sent: 1, failed: 0 });
+    expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'A: x', url: '/banter', tag: 'chat-team' });
   });
 
   it('forgets phones that unsubscribed, and keeps going past failures', async () => {
