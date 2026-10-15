@@ -20,6 +20,7 @@ export function Conversation({
   lookup,
   nameOf,
   isCaptainUser,
+  people,
   hasMore,
   loadingEarlier,
   onLoadEarlier,
@@ -210,6 +211,8 @@ export function Conversation({
               replyAuthor={target ? nameOf(target.user_id, target.author_name) : ''}
               reactions={summarizeReactions(reactionsByMessage.get(m.id) || [], me)}
               nameOf={nameOf}
+              me={me}
+              people={people}
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
               canDelete={mine || isCaptain}

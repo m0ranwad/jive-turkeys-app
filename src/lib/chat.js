@@ -150,6 +150,9 @@ export const CHAT_READ_EVENT = 'jt:chat-read';
 export const unreadTotal = (overview) =>
   overview.reduce((n, room) => (room.thread_id === null || room.last_read_at ? n + room.unread : n), 0);
 
+/** The Chat tab's @ count: unread messages that mention the player, in any room (threads they haven't opened too). */
+export const mentionTotal = (overview) => overview.reduce((n, room) => n + (room.mentions || 0), 0);
+
 // ---------------------------------------------------------------------------
 // Keeping the chat screen's lists up to date as messages, reactions and
 // threads arrive (from this player or live from others).
@@ -176,8 +179,11 @@ export function addReaction(list, reaction) {
 export const upsertThread = (list, thread) =>
   list && (list.some((t) => t.id === thread.id) ? list.map((t) => (t.id === thread.id ? thread : t)) : [thread, ...list]);
 
-/** Updates a room's latest-message summary when a message arrives. */
-export function bumpOverview(list, message, countsAsUnread) {
+/**
+ * Updates a room's latest-message summary when a message arrives. A message
+ * that counts as unread and mentions the player adds to the room's @ count too.
+ */
+export function bumpOverview(list, message, countsAsUnread, mentionsMe = false) {
   const room = roomOf(message);
   const latest = {
     last_message_at: message.created_date,
@@ -185,10 +191,14 @@ export function bumpOverview(list, message, countsAsUnread) {
     last_author_name: message.author_name,
     last_body: message.body.slice(0, 140),
   };
+  const unread = countsAsUnread ? 1 : 0;
+  const mentions = countsAsUnread && mentionsMe ? 1 : 0;
   const existing = list.find((o) => o.thread_id === room);
-  if (!existing) return [...list, { thread_id: room, last_read_at: null, unread: countsAsUnread ? 1 : 0, ...latest }];
+  if (!existing) return [...list, { thread_id: room, last_read_at: null, unread, mentions, ...latest }];
   if (isAfter(existing.last_message_at, message.created_date)) return list;
-  return list.map((o) => (o === existing ? { ...o, ...latest, unread: o.unread + (countsAsUnread ? 1 : 0) } : o));
+  return list.map((o) =>
+    o === existing ? { ...o, ...latest, unread: o.unread + unread, mentions: (o.mentions || 0) + mentions } : o,
+  );
 }
 
 const NEW_THREAD_DAYS = 3;
@@ -196,8 +206,9 @@ const NEW_THREAD_DAYS = 3;
 /**
  * Team Chat plus open threads (latest activity first) and closed threads, with
  * each room's summary from chat overview. `unreadInThreads` counts threads the
- * player has opened; `freshThreads` is true when a thread they've never opened
- * got messages in the last few days.
+ * player has opened; `mentionsInThreads` counts unread mentions in any thread;
+ * `freshThreads` is true when a thread they've never opened got messages in
+ * the last few days.
  */
 export function organizeRooms(threads, overview, now = Date.now()) {
   const summaries = new Map(overview.map((o) => [o.thread_id, o]));
@@ -208,6 +219,7 @@ export function organizeRooms(threads, overview, now = Date.now()) {
       thread,
       summary,
       unread: summary?.unread || 0,
+      mentions: summary?.mentions || 0,
       // Never opened, and there's something in it from someone else.
       isNew: !!summary && !summary.last_read_at && summary.unread > 0,
       recent: !!summary && MS(summary.last_message_at) > recent,
@@ -218,10 +230,11 @@ export function organizeRooms(threads, overview, now = Date.now()) {
   const team = summaries.get(null);
   const open = list.filter((r) => !r.thread.archived);
   return {
-    team: { summary: team, unread: team?.unread || 0 },
+    team: { summary: team, unread: team?.unread || 0, mentions: team?.mentions || 0 },
     open,
     closed: list.filter((r) => r.thread.archived),
     unreadInThreads: open.reduce((n, r) => (r.summary?.last_read_at ? n + r.unread : n), 0),
+    mentionsInThreads: list.reduce((n, r) => n + r.mentions, 0),
     freshThreads: open.some((r) => r.isNew && r.recent),
   };
 }

@@ -8,7 +8,7 @@ import { ChatSearch } from '@/components/chat/ChatSearch';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { Conversation } from '@/components/chat/Conversation';
-import { ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
+import { MentionCount, ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
@@ -24,6 +24,7 @@ import {
   upsertThread,
 } from '@/lib/chat';
 import { shortName } from '@/lib/format';
+import { findMentions, mentionPeople, mentionsMe } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
 
 const PAGE = 60;
@@ -209,7 +210,7 @@ export function ChatPage() {
         const { me: myId, viewing } = live.current;
         const messageRoom = roomOf(m);
         if (arriving.current.room === messageRoom) arriving.current.messages.push(m);
-        setOverview((list) => bumpOverview(list, m, m.user_id !== myId && messageRoom !== viewing));
+        setOverview((list) => bumpOverview(list, m, m.user_id !== myId && messageRoom !== viewing, mentionsMe(m, myId)));
         setLoaded((current) =>
           current && current.room === messageRoom ? { ...current, messages: insertMessage(current.messages, m) } : current,
         );
@@ -328,7 +329,12 @@ export function ChatPage() {
       setOverview((list) =>
         list.map((o) =>
           o.thread_id === loaded.room
-            ? { ...o, unread: 0, last_read_at: isAfter(last.created_date, o.last_read_at) ? last.created_date : o.last_read_at }
+            ? {
+                ...o,
+                unread: 0,
+                mentions: 0,
+                last_read_at: isAfter(last.created_date, o.last_read_at) ? last.created_date : o.last_read_at,
+              }
             : o,
         ),
       );
@@ -352,6 +358,13 @@ export function ChatPage() {
     [profilesById],
   );
   const isCaptainUser = useCallback((userId) => !!profilesById.get(userId)?.is_captain, [profilesById]);
+  // Who can be @mentioned, and who a message mentions (only what's set is sent, so a message
+  // without mentions saves the same way it always has).
+  const people = useMemo(() => mentionPeople(profiles), [profiles]);
+  const mentionFields = (body) => {
+    const { mentions, team } = findMentions(body, people, { me, canMentionTeam: isCaptain });
+    return { ...(mentions.length && { mentions }), ...(team && { mentions_team: true }) };
+  };
 
   const reactionsByMessage = useMemo(() => {
     const map = new Map();
@@ -388,6 +401,7 @@ export function ChatPage() {
       body,
       thread_id: target,
       reply_to_id: reply?.id ?? null,
+      ...mentionFields(body),
       created_date: new Date().toISOString(),
     };
     setReplyTo(null);
@@ -401,6 +415,7 @@ export function ChatPage() {
         body,
         thread_id: target,
         reply_to_id: pending.reply_to_id,
+        ...mentionFields(body),
       });
       setLoaded((current) =>
         current && current.room === target
@@ -500,8 +515,14 @@ export function ChatPage() {
   };
 
   const saveEdit = async (message, body) => {
+    const found = mentionFields(body);
+    // Who it mentions follows the new text (cleared if the mentions were taken out).
+    const mentions =
+      found.mentions || found.mentions_team || message.mentions?.length || message.mentions_team
+        ? { mentions: found.mentions ?? null, mentions_team: !!found.mentions_team }
+        : {};
     try {
-      const updated = await api.entities.Message.update(message.id, { body });
+      const updated = await api.entities.Message.update(message.id, { body, ...mentions });
       setLoaded((current) =>
         current && { ...current, messages: current.messages.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) },
       );
@@ -536,6 +557,7 @@ export function ChatPage() {
           body: first,
           thread_id: created.id,
           reply_to_id: null,
+          ...mentionFields(first),
         });
       }
       openRoom(created.id);
@@ -666,7 +688,10 @@ export function ChatPage() {
             >
               <MessagesSquare className="h-4 w-4" />
               Threads
-              {rooms.unreadInThreads > 0 ? (
+              {/* Mentions first: one count leaves space for the room's name. */}
+              {rooms.mentionsInThreads > 0 ? (
+                <MentionCount n={rooms.mentionsInThreads} className="-mr-1" />
+              ) : rooms.unreadInThreads > 0 ? (
                 <UnreadCount n={rooms.unreadInThreads} className="-mr-1" />
               ) : (
                 rooms.freshThreads && <span className="h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
@@ -749,6 +774,7 @@ export function ChatPage() {
               lookup={lookup}
               nameOf={nameOf}
               isCaptainUser={isCaptainUser}
+              people={people}
               hasMore={loaded.hasMore}
               loadingEarlier={loadingEarlier}
               onLoadEarlier={loadEarlier}
@@ -778,6 +804,9 @@ export function ChatPage() {
                 editing={editing}
                 onCancelEdit={() => setEditing(null)}
                 onSaveEdit={saveEdit}
+                people={people}
+                me={me}
+                canMentionTeam={isCaptain}
               />
             )}
           </>

@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v15';
+const DB_KEY = 'jt_demo_db_v16';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -74,6 +74,57 @@ describe('sample chat data', () => {
     expect(team.some((m) => m.reply_to_id)).toBe(true);
     const reactions = await api.entities.MessageReaction.filter({ message_id: team.map((m) => m.id) });
     expect(reactions.length).toBeGreaterThan(5);
+  });
+
+  it('has @mentions of the captain: one unread in Team Chat, one in a thread they have never opened', async () => {
+    const { api } = await signedIn();
+    const threads = await api.entities.ChatThread.list();
+    const fantasy = threads.find((t) => t.title === '🏈 Fantasy football league');
+    const overview = await api.chat.overview();
+    expect(overview.find((o) => o.thread_id === null).mentions).toBe(1);
+    expect(overview.find((o) => o.thread_id === fantasy.id).mentions).toBe(1);
+    expect(overview.reduce((n, o) => n + o.mentions, 0)).toBe(2);
+    const food = threads.find((t) => t.title === '🍕 Post-game food spot');
+    expect((await api.chat.history(food.id)).some((m) => m.mentions_team)).toBe(true);
+  });
+});
+
+describe('@mentions', () => {
+  it('keeps only teammates on the site, never the author, and @team only from captains (like the database)', async () => {
+    const { api, me } = await signedIn();
+    const people = await api.entities.PlayerProfile.list();
+    const jordan = people.find((p) => p.display_name === 'Jordan Rivera').user_id;
+    // Signed up, but hasn't entered the team code.
+    const nia = JSON.parse(localStorage.getItem(DB_KEY)).users.find((u) => u.email === 'nia@demo.test').id;
+    const sent = await api.entities.Message.create({
+      user_id: me.id, author_name: 'Casey', body: '@team @Jordan R.', thread_id: null,
+      mentions: [jordan, jordan, me.id, nia, 'nobody'], mentions_team: true,
+    });
+    expect(sent).toMatchObject({ mentions: [jordan], mentions_team: true });
+
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const theirs = await api.entities.Message.create({
+      user_id: jordan, author_name: 'Jordan', body: '@team', thread_id: null, mentions: [], mentions_team: true,
+    });
+    expect(theirs).toMatchObject({ mentions: null, mentions_team: false });
+    const edited = await api.entities.Message.update(theirs.id, { body: '@Casey C.', mentions: [me.id], mentions_team: true });
+    expect(edited).toMatchObject({ mentions: [me.id], mentions_team: false });
+  });
+
+  it('counts unread messages that mention you, until you read the room', async () => {
+    const { api } = await signedIn();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const jordan = await api.auth.me();
+    const [food] = await api.entities.ChatThread.filter({ title: '🍕 Post-game food spot' });
+    // The captain's @team mentions everyone.
+    expect((await api.chat.overview()).find((o) => o.thread_id === food.id).mentions).toBe(1);
+    await api.chat.markRead(food.id, (await api.chat.history(food.id)).at(-1).created_date);
+    expect((await api.chat.overview()).find((o) => o.thread_id === food.id).mentions).toBe(0);
+    expect((await api.chat.overview()).find((o) => o.thread_id === null).mentions).toBe(0);
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    await api.entities.Message.create({ user_id: (await api.auth.me()).id, author_name: 'Casey', body: '@Jordan R. hi', thread_id: null, mentions: [jordan.id] });
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    expect((await api.chat.overview()).find((o) => o.thread_id === null).mentions).toBe(1);
   });
 });
 

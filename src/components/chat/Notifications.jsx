@@ -144,10 +144,15 @@ export function NotificationsPrompt({ state, variant = 'bar' }) {
 
 const CHOICES = [
   { key: 'notify_chat', label: 'Chat messages', hint: 'New Team Chat messages, and threads you started or opened.' },
+  {
+    key: 'notify_mentions',
+    label: '@mentions',
+    hint: 'When someone @mentions you, or a captain uses @team: anywhere in the chat, even with Chat messages off.',
+  },
   { key: 'notify_games', label: 'Game alerts', hint: 'When Player of the Match voting opens, and a reminder before it closes.' },
 ];
 
-/** Which notifications you get: chat messages, game alerts, or both. Saved to your profile, so it covers every device. */
+/** Which notifications you get: chat messages, @mentions, game alerts. Saved to your profile, so it covers every device. */
 export function NotificationChoices() {
   const { profile, reload } = useTeam();
   const { toast } = useToast();

@@ -40,6 +40,10 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | A sent message shows right away ("Sending…"), and stays after a reload. | `[browser]` `[unit]` |
 | If sending fails (say, no signal), the text goes back in the box and a message says it didn't send. | not automated |
 | Links (http/https only) can be tapped, open in a new tab, and long ones are shortened. Messages of 1 to 3 emoji show big, without a bubble. | `[browser]` `[unit]` |
+| **@mentions:** typing @ in the message box lists teammates on the site (first names first; not yourself or removed players). Typing narrows it; tapping one (on a computer, the arrows and Enter or Tab) puts in their chat name, like "@Jordan R.", and Escape closes the list. Teammates who share a short name show their full names. A name typed out in full counts too, but only at the start of a word, so an email address doesn't. | `[browser]` `[unit]` |
+| Mentions stand out in the message, and mentions of you (by name or @team) get a lime background. A message keeps who it mentions (`messages.mentions`); editing the text updates that, without a notification. | `[browser]` `[unit]` `[db]` |
+| **@team** mentions everyone. Only captains get it in the list, and the database ignores it from anyone else (`messages.mentions_team`). | `[browser]` `[db]` |
+| A message only mentions teammates on the site (not an account that hasn't entered the team code), each once, and never its author, whatever the site sends. | `[db]` `[unit]` |
 | Shows the latest 60 messages. **Load earlier messages** adds the 60 before, without jumping away from where you were. | `[browser]` `[unit]` |
 | New messages that arrive while you're scrolled up show a "↓ N new messages" button instead of yanking you down. | manual (see below) |
 | On phones the chat fills the screen, with the message box just above the tab bar. Only the messages scroll, not the page. | `[browser]` |
@@ -96,6 +100,7 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 | Your own messages never count. History from before you signed up doesn't count. | `[browser]` `[db]` |
 | Opening a room marks it read up to its latest message, shortly after it's shown and while the page is in view. The marker only ever moves forward. | `[browser]` `[db]` `[unit]` |
 | Threads you've never opened show **New** in the list instead of a count, and don't add to the Chat tab badge. A dot on the Threads button flags ones with activity in the last 3 days. | `[browser]` `[unit]` |
+| **@ count:** next to the unread number, the Chat tab (and the menu) shows a separate "@2": unread messages that mention you, by name or @team, in every room, threads you've never opened included. Each room in the list and in the phone room row shows its own; the Threads button shows the threads' total in place of their unread number. Opening a room clears its mentions. | `[browser]` `[unit]` `[db]` |
 | Read markers are private: nobody can see or change another player's. | `[db]` |
 
 ## 6. Who can see what
@@ -110,9 +115,10 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 ## 7. Phone notifications
 
 Players turn them on with the bell in the chat header, on My Profile, or from the one-time offer at the top of
-Schedule (also shown in the chat until it's answered or dismissed). Once on, players choose **Chat messages** and
-**Game alerts** separately (both on unless turned off; `player_profiles.notify_chat` / `notify_games`), and the
-choice covers all their devices. They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so
+Schedule (also shown in the chat until it's answered or dismissed). Once on, players choose **Chat messages**,
+**@mentions** and **Game alerts** separately (all on unless turned off; `player_profiles.notify_chat` /
+`notify_mentions` / `notify_games`), and the choice covers all their devices. Chat messages off with @mentions on
+means "only when someone @mentions me". They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so
 the bell walks iPhone players through that first. No email.
 
 How a message becomes a notification: posting a message fires a database trigger (`messages_push`) that calls
@@ -124,8 +130,9 @@ everything, so the function can't be made to send anything else.
 |---|---|
 | Team Chat messages notify everyone who turned notifications on, except the author. | `[db]` |
 | Thread messages notify only the thread's starter and players who have opened the thread. | `[db]` |
+| A message that mentions a player (by name or @team) notifies them wherever it is, even in a thread they haven't opened and even with **Chat messages** off, unless they turned **@mentions** off. | `[db]` |
 | Only players on the team get notifications: a player a captain removed gets none until they're added back. | `[db]` |
-| A player who turned **Chat messages** off gets no chat notifications; **Game alerts** off, no Player of the Match ones. Both start on, and only the player can change theirs. | `[db]` `[browser]` |
+| A player who turned **Chat messages** off gets no chat notifications except @mentions; **@mentions** off, none for mentions in rooms they don't follow; **Game alerts** off, no Player of the Match ones. All start on, and only the player can change theirs. | `[db]` `[browser]` |
 | Nobody gets buzzed for the room they're looking at right now (the chat page checks in every 15 seconds while it's on screen; on any of their devices). | `[db]` `[browser]` |
 | Each message is sent out once, and messages older than 10 minutes never are. | `[db]` |
 | The notification shows the room (Team Chat or the thread's title) and "Name: message", one line, cut at 160 characters. Tapping it opens that room. | `[unit]` `[browser]` |
@@ -133,7 +140,7 @@ everything, so the function can't be made to send anything else.
 | A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
 | Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
 | **The app icon shows the unread number**, the same as the Chat tab (Team Chat plus threads you've opened, not your own messages). Each chat notification carries it (`chat_push_unread`), so it goes up while the app is closed; game alerts leave it as it is. If the count isn't available, the notification still goes out. | `[db]` `[unit]` `[browser]` |
-| While the site is open, the icon follows the Chat tab and clears once everything is read. Players who turn **Chat messages** off, or turn notifications off on the device (signing out does), get no number. On an iPhone it only shows on the Home Screen app. | `[browser]` |
+| While the site is open, the icon follows the Chat tab and clears once everything is read. Players who turn **Chat messages** off, or turn notifications off on the device (signing out does), get no number (an @mention notification clears it instead). On an iPhone it only shows on the Home Screen app. | `[browser]` `[db]` |
 | The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
 | Previews (demo mode) never send real notifications; turning them on shows a sample on that device. | `[browser]` |
@@ -173,6 +180,8 @@ devices signed in as different players:
    from the other device: the phone gets "Name: message", and tapping it opens Team Chat. With Team Chat open
    on the phone, post again: no notification. Close the app and post twice more: the Home Screen icon shows
    2. Open the app and read Team Chat, then close it: the number is gone.
+7. @mentions (after a change to them): from one device, @mention the other player in a thread they've never
+   opened. Their phone gets the notification, and their Chat tab shows "@1" until they open that thread.
 
 ## Running the tests
 
