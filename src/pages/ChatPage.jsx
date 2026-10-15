@@ -436,6 +436,8 @@ export function ChatPage() {
       );
       loadReactions(rows);
     } catch (err) {
+      // A search jump waiting on this stops here instead of asking again and again.
+      setFindTarget(null);
       toast({ title: "Couldn't load more", description: err.message });
     } finally {
       setLoadingEarlier(false);
@@ -456,6 +458,11 @@ export function ChatPage() {
     }
     // loadEarlier and toast change every render; this runs on what's loaded.
   }, [findTarget, loaded, loadingEarlier]);
+
+  // Leaving that room before the message turns up drops the jump.
+  useEffect(() => {
+    setFindTarget((target) => (target && target.room !== room ? null : target));
+  }, [room]);
 
   const toggleReaction = async (message, emoji) => {
     const existing = reactions.find((r) => r.message_id === message.id && r.user_id === me && r.emoji === emoji);

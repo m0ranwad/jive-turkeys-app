@@ -66,7 +66,7 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 
 | Expected behavior | Checked by |
 |---|---|
-| Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%` is just a character. Two characters at least. | `[db]` |
+| Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%`, a leading `-` or the word "or" are just text. Two characters at least. | `[db]` |
 | Results show who, where (Team Chat or the thread's name), when, and the match highlighted. Tapping one opens that room and jumps to the message, loading older messages until it's there. | `[browser]` |
 | Players only find messages they can read; an account that hasn't joined the team finds nothing. | `[db]` |
 

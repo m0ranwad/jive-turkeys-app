@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import dayjs from 'dayjs';
 import { Search } from 'lucide-react';
 import { api } from '@/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { shortWhen } from '@/lib/chat';
 import { shortName } from '@/lib/format';
 
 /** The message text with what was searched for highlighted (case-insensitive). */
@@ -32,18 +32,20 @@ export function ChatSearch({ open, onOpenChange, nameOf, onPick }) {
   const latest = useRef(0);
 
   useEffect(() => {
+    // Any change outdates an answer still on its way, and the last error.
+    const ask = ++latest.current;
+    setError('');
     if (!open) return undefined;
     const q = query.trim();
     if (q.length < 2) {
       setResults(null);
       return undefined;
     }
-    const ask = ++latest.current;
     const timer = setTimeout(() => {
       api.chat
         .search(q)
-        .then((rows) => ask === latest.current && (setResults(rows), setError('')))
-        .catch((err) => ask === latest.current && setError(err.message));
+        .then((rows) => ask === latest.current && setResults(rows))
+        .catch((err) => ask === latest.current && (setResults(null), setError(err.message)));
     }, 250);
     return () => clearTimeout(timer);
   }, [open, query]);
@@ -94,7 +96,7 @@ export function ChatSearch({ open, onOpenChange, nameOf, onPick }) {
                       {shortName(nameOf(m.user_id, m.author_name))}
                       <span className="font-semibold text-zinc-400"> · {m.thread_id ? m.thread_title || 'Thread' : 'Team Chat'}</span>
                     </span>
-                    <span className="shrink-0 font-semibold text-zinc-400">{dayjs(m.created_date).format('MMM D')}</span>
+                    <span className="shrink-0 font-semibold text-zinc-400">{shortWhen(m.created_date)}</span>
                   </div>
                   <div className="mt-0.5 line-clamp-2 text-sm text-zinc-700">
                     <Highlighted text={m.body} query={query} />
