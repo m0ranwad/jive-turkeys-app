@@ -11,18 +11,24 @@ import { saveFailedToast } from '@/lib/errors';
  */
 export function useRsvp(data) {
   const { toast } = useToast();
-  const [busy, setBusy] = useState(null);
+  // Games with a save on the way. Per game, so answering a second game doesn't
+  // unlock the first one's buttons before its save is back.
+  const [saving, setSaving] = useState(() => new Set());
 
   const mine = (game) => (data.rsvps || []).find((r) => r.game_id === game.id && r.user_id === data.user?.id) || null;
 
   const save = async (game, write) => {
-    setBusy(game.id);
+    setSaving((s) => new Set(s).add(game.id));
     try {
       data.putRsvp(await write());
     } catch (err) {
       toast(saveFailedToast(err));
     } finally {
-      setBusy(null);
+      setSaving((s) => {
+        const next = new Set(s);
+        next.delete(game.id);
+        return next;
+      });
     }
   };
 
@@ -42,5 +48,5 @@ export function useRsvp(data) {
     return save(game, () => api.entities.Rsvp.update(current.id, { playing_gk: !current.playing_gk }));
   };
 
-  return { mine, setStatus, toggleGk, busy };
+  return { mine, setStatus, toggleGk, isBusy: (game) => saving.has(game.id) };
 }
