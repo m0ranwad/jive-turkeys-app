@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
-import { saveFailedToast } from '@/lib/errors';
 import { venueText } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { JerseyDot } from './GameCard';
@@ -12,7 +10,6 @@ import { SessionPicker } from './SessionPicker';
 export function GameFormDialog({ open, onOpenChange, game, settings, defaultSession, onSave }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -53,8 +50,6 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
         notes: form.notes || '',
       });
       onOpenChange(false);
-    } catch (err) {
-      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }

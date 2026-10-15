@@ -27,7 +27,6 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.t
 |---|---|
 | Only captains add, change or delete games, and enter results and stat lines. | `[db]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
-| A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
 | Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |
 | The record counts wins, losses, draws and goals from games with a result only, overall, per season and session, and per opponent. | `[unit]` |

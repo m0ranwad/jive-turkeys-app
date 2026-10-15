@@ -8,7 +8,6 @@ import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { saveTeamSettings } from '@/lib/actions';
-import { saveFailedToast } from '@/lib/errors';
 import { CARD, DEFAULT_SETTINGS } from '@/lib/constants';
 import { mapsUrl } from '@/lib/format';
 import { groupRules, isCardsRule, isThreeLineRule } from '@/lib/rules';
@@ -24,7 +23,6 @@ const fromLines = (text) =>
 function EditRulesDialog({ open, onOpenChange, settings, onSave }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -49,8 +47,6 @@ function EditRulesDialog({ open, onOpenChange, settings, onSave }) {
         rules_footer: form.rules_footer,
       });
       onOpenChange(false);
-    } catch (err) {
-      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }

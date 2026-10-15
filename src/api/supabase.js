@@ -275,20 +275,6 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
-  const games = {
-    /** Captains: a game's score, stat lines and fill-ins, all saved together or not at all. */
-    async saveResult(gameId, { scoreUs, scoreThem, lines, fillIns }) {
-      const { error } = await supabase.rpc('save_game_result', {
-        p_game_id: gameId,
-        p_score_us: scoreUs,
-        p_score_them: scoreThem,
-        p_lines: lines,
-        p_fill_ins: fillIns,
-      });
-      if (error) fail(error);
-    },
-  };
-
   const roster = {
     /** Starts the current session's list if it hasn't been yet. Resolves to { season_year, session }. */
     async start() {
@@ -328,5 +314,5 @@ export function createSupabaseBackend(url, key) {
     test: () => notifyChat('test'),
   };
 
-  return { mode: 'supabase', auth, entities, users, chat, dues, games, roster, push };
+  return { mode: 'supabase', auth, entities, users, chat, dues, roster, push };
 }

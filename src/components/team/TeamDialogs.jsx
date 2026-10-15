@@ -6,14 +6,12 @@ import { Input, Label } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
 import { POSITIONS } from '@/lib/constants';
-import { saveFailedToast } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 /** Nudge shown on the Team page until you've picked a position. */
 export function PickPositionCard({ profile, onSaved }) {
   const [position, setPosition] = useState('');
   const [busy, setBusy] = useState(false);
-  const { toast } = useToast();
   if (!profile || profile.position) return null;
 
   const save = async () => {
@@ -21,8 +19,6 @@ export function PickPositionCard({ profile, onSaved }) {
     try {
       await api.entities.PlayerProfile.update(profile.id, { position: position || null });
       onSaved?.();
-    } catch (err) {
-      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }
