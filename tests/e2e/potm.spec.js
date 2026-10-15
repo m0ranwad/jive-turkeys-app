@@ -97,3 +97,20 @@ test('the winners post in Team Chat comes from the Scoreboard', async ({ page })
   await openChat(page);
   await expect(page.getByRole('log', { name: 'Messages' })).toContainText('🏆 Player of the Match, 4–1 W vs Ball Busters');
 });
+
+test('captains set game reminders: on, 6 hours before kickoff unless changed', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'Team Settings' }).click();
+  const reminders = page.getByRole('region', { name: 'Game reminders' });
+  await expect(reminders.getByRole('group', { name: 'Send game reminders' }).getByRole('button', { name: 'On' })).toHaveAttribute('aria-pressed', 'true');
+  const when = reminders.getByRole('group', { name: 'How long before kickoff' });
+  await expect(when.getByRole('button', { name: '6 hours' })).toHaveAttribute('aria-pressed', 'true');
+  await when.getByRole('button', { name: '12 hours' }).click();
+  await page.getByRole('button', { name: 'Save team settings' }).click();
+  await expect(page.getByText('Team settings saved')).toBeVisible();
+  await page.reload();
+  await expect(when.getByRole('button', { name: '12 hours' })).toHaveAttribute('aria-pressed', 'true');
+  await reminders.getByRole('group', { name: 'Send game reminders' }).getByRole('button', { name: 'Off' }).click();
+  await expect(when).toHaveCount(0);
+});

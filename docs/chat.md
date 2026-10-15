@@ -148,6 +148,7 @@ reminder and posts the winners. The database writes the words and picks who gets
 | Posting a result tells everyone on the team that voting is open, with the score and when it closes. Tapping it opens the game. Captains can turn this off. | `[db]` `[unit]` |
 | A set time before voting closes (3 hours unless changed, or off), players who played and haven't cast every vote are reminded how long is left. | `[db]` |
 | Each goes out once; correcting the score doesn't send it again. | `[db]` |
+| Game reminders ("Are you in?", "We need subs") use the same devices and the **Game alerts** switch; their rules are in `docs/games.md` section 5. | `[db]` |
 | When voting closes, the winners are posted in Team Chat by "Scoreboard" (ties and roster names included), which notifies like any Team Chat message. Captains can turn this off. | `[db]` `[browser]` |
 
 The sending keys (VAPID) are created once by `.github/workflows/functions.yml` and kept as Supabase function
