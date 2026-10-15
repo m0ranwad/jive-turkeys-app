@@ -38,13 +38,6 @@ export function potmNotification({ title, body, url }, gameId) {
 
 const POTM_KINDS = ['open', 'reminder'];
 
-/** A game reminder ("Are you in?", "We need subs"): the database writes the words. One of each per game on screen. */
-export function gameReminderNotification({ title, body, url }, gameId, kind) {
-  return { title, body: clip(String(body), 160), url, tag: `game-${gameId}-${kind}` };
-}
-
-const REMINDER_KINDS = ['rsvp', 'subs'];
-
 /**
  * Each phone's unread chat count, for the number on the app icon. If the database
  * can't say (say, the function went live before the database update), the
@@ -94,9 +87,7 @@ async function deliver(targets, messageFor, { vapid, db, fetch }) {
  * - { potm_game_id, kind }: sent by the database when Player of the Match voting
  *   opens ('open') or is about to close ('reminder'). Same rules: the database
  *   decides who, what it says, and that it goes out once.
- * - { reminder_game_id, kind }: sent by the database's timer before a game: 'rsvp'
- *   ("Are you in?") or 'subs' ("We need subs"). Same rules again.
- * deps: { vapid, db: { pushTargets, unreadCounts, potmTargets, reminderTargets, subscriptionsOf, forget }, userOf(token), fetch }
+ * deps: { vapid, db: { pushTargets, unreadCounts, potmTargets, subscriptionsOf, forget }, userOf(token), fetch }
  */
 export async function handleNotify(body, token, deps) {
   if (!deps.vapid?.publicKey || !deps.vapid?.privateKey) return [503, { error: "Notifications aren't set up yet." }];
@@ -121,11 +112,6 @@ export async function handleNotify(body, token, deps) {
     if (!UUID.test(body.potm_game_id) || !POTM_KINDS.includes(body.kind)) return [400, { error: 'Unknown game.' }];
     const targets = await deps.db.potmTargets(body.potm_game_id, body.kind);
     return [200, await deliver(targets, (t) => potmNotification(t, body.potm_game_id), deps)];
-  }
-  if (body?.reminder_game_id) {
-    if (!UUID.test(body.reminder_game_id) || !REMINDER_KINDS.includes(body.kind)) return [400, { error: 'Unknown game.' }];
-    const targets = await deps.db.reminderTargets(body.reminder_game_id, body.kind);
-    return [200, await deliver(targets, (t) => gameReminderNotification(t, body.reminder_game_id, body.kind), deps)];
   }
   return [400, { error: 'Nothing to do.' }];
 }

@@ -3,7 +3,7 @@
 import { createECDH, randomBytes } from 'node:crypto';
 import ece from 'http_ece';
 import { describe, expect, it, vi } from 'vitest';
-import { TEST_NOTIFICATION, chatNotification, gameReminderNotification, handleNotify, potmNotification } from '../../supabase/functions/_shared/notify.js';
+import { TEST_NOTIFICATION, chatNotification, handleNotify, potmNotification } from '../../supabase/functions/_shared/notify.js';
 import { b64u, generateVapidKeys } from '../../supabase/functions/_shared/webpush.js';
 
 const MESSAGE = '11111111-2222-4333-8444-555555555555';
@@ -32,7 +32,6 @@ async function setup({ targets = [], subscriptions = [], unread = async () => []
     pushTargets: vi.fn(async () => targets),
     unreadCounts: vi.fn(unread),
     potmTargets: vi.fn(async () => targets),
-    reminderTargets: vi.fn(async () => targets),
     subscriptionsOf: vi.fn(async () => subscriptions),
     forget: vi.fn(async () => {}),
   };
@@ -212,33 +211,5 @@ describe('potmNotification', () => {
     const n = potmNotification({ title: 'T', body: 'x'.repeat(300), url: '/games/g' }, 'g');
     expect(n.tag).toBe('potm-g');
     expect(n.body).toHaveLength(160);
-  });
-});
-
-describe('game reminders', () => {
-  const GAME = '77777777-2222-4333-8444-555555555555';
-
-  it('sends the reminder the database wrote, to the phones it picked, one of each kind per game on screen', async () => {
-    const row = (id) => ({
-      ...phone(id),
-      subscription_id: id,
-      title: '🆘 We need subs',
-      body: 'We need 2 more players (1 woman) for Thu 8:00 PM vs Ball Busters, Field 2. Can you play? Tap to answer.',
-      url: `/games/${GAME}`,
-    });
-    const { deps, db, delivered } = await setup({ targets: [row('a')] });
-    const [status, result] = await handleNotify({ reminder_game_id: GAME, kind: 'subs' }, '', deps);
-    expect(status).toBe(200);
-    expect(result).toMatchObject({ sent: 1 });
-    expect(db.reminderTargets).toHaveBeenCalledWith(GAME, 'subs');
-    expect(delivered[0].message).toMatchObject({ title: '🆘 We need subs', url: `/games/${GAME}`, tag: `game-${GAME}-subs` });
-    expect(gameReminderNotification({ title: 't', body: 'b', url: '/u' }, 'g', 'rsvp').tag).toBe('game-g-rsvp');
-  });
-
-  it('ignores anything that is not a real game and kind', async () => {
-    const { deps, db } = await setup();
-    expect((await handleNotify({ reminder_game_id: GAME, kind: 'open' }, '', deps))[0]).toBe(400);
-    expect((await handleNotify({ reminder_game_id: 'x', kind: 'rsvp' }, '', deps))[0]).toBe(400);
-    expect(db.reminderTargets).not.toHaveBeenCalled();
   });
 });
