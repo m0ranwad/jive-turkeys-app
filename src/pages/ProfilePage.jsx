@@ -8,6 +8,7 @@ import { NotificationSettings, usePush } from '@/components/chat/Notifications';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
+import { saveFailedToast } from '@/lib/errors';
 import { CARD, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,8 @@ export function ProfilePage() {
       else await api.entities.PlayerProfile.create({ ...values, user_id: user.id, email: user.email, status: 'active' });
       await reload();
       toast({ title: 'Profile saved' });
+    } catch (err) {
+      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }
@@ -43,6 +46,8 @@ export function ProfilePage() {
       await api.entities.PlayerProfile.update(profile.id, { status });
       await reload();
       toast({ title: `You're now ${STATUS_LABEL[status]}` });
+    } catch (err) {
+      toast(saveFailedToast(err));
     } finally {
       setBusy(false);
     }
