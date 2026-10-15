@@ -31,6 +31,10 @@ export const DEFAULT_SETTINGS = {
   potm_notify: true,
   potm_reminder_hours: 3,
   potm_announce: true,
+  // Game reminders on phones this many hours before kickoff: "Are you in?" and,
+  // when we're short, a call for subs.
+  game_reminders: true,
+  game_reminder_hours: 6,
   email_reminders: false,
   rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
   quick_hits: [],

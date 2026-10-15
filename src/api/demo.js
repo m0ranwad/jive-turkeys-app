@@ -305,6 +305,8 @@ function seed() {
         potm_notify: true,
         potm_reminder_hours: 3,
         potm_announce: true,
+        game_reminders: true,
+        game_reminder_hours: 6,
         email_reminders: false,
         rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
         quick_hits: [

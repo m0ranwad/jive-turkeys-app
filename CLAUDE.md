@@ -211,6 +211,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   (the Schedule card), `src/components/game/PotmVoting.jsx`. The database sends the "voting is open" and reminder
   notifications through `notify-chat` and posts the winners in Team Chat from a `pg_cron` timer (`potm_tick()`).
   Games whose result was posted before this have no deadline.
+- Game reminders: a captain setting (`team_settings.game_reminders`, `game_reminder_hours`, 6 by default). The database
+  timer `game_reminders_tick()` sends "Are you in?" and, when short, a call for subs through `notify-chat`; the
+  headcount behind it is `game_headcount()`, which must stay the same as `headcount()` in `src/lib/team-logic.js`
+  (`supabase/tests/reminders.test.sql`). Rules: `docs/games.md` section 5.
 - Notifications: players pick **Chat messages** and **Game alerts** separately (`player_profiles.notify_chat` /
   `notify_games`, both on by default) under the bell in Chat or on My Profile; the "turn on" offer shows on Schedule
   and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
