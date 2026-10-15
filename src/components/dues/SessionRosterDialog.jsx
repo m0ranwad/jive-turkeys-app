@@ -3,9 +3,9 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
+import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { entryFor } from '@/lib/roster';
 import { cn } from '@/lib/utils';
-import { DIALOG, DIALOG_TITLE } from './DuesParts';
 
 const CHOICES = [
   { value: 'active', label: 'Active' },

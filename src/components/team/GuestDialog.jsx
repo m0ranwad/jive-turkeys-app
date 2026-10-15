@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api';
-import { DIALOG, DIALOG_TITLE, EYEBROW } from '@/components/dues/DuesParts';
+import { EYEBROW } from '@/components/dues/DuesParts';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { POSITIONS } from '@/lib/constants';
+import { DIALOG, DIALOG_TITLE, POSITIONS } from '@/lib/constants';
 import { sameName, sortPastedNames } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 

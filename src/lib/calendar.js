@@ -12,7 +12,7 @@ dayjs.extend(timezone);
 
 const TEAM_ZONE = 'America/New_York';
 // Two 25-minute halves and halftime.
-const GAME_MINUTES = 55;
+export const GAME_MINUTES = 55;
 
 /** Start and end in UTC, or null for a game with no time yet (an all-day event instead). */
 function gameTimes(game) {

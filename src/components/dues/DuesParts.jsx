@@ -5,12 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
+import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { dollars, feeParts, feeTotal, payOptions } from '@/lib/dues';
 import { shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-export const DIALOG = 'max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto rounded-3xl p-5 sm:max-w-md';
-export const DIALOG_TITLE = 'font-display text-lg font-extrabold uppercase tracking-tight';
 export const HEADING = 'font-display text-sm font-extrabold uppercase tracking-[0.12em]';
 export const EYEBROW = 'text-[10px] font-black uppercase tracking-[0.14em]';
 
