@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import dayjs from 'dayjs';
 import { Copy, Plus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
@@ -81,7 +82,7 @@ export function AnnouncementsPage() {
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">{a.body}</p>
             <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400">
-              {a.author_name || 'Captain'} · {a.created_date ? a.created_date.slice(0, 10) : ''}
+              {a.author_name || 'Captain'} · {a.created_date ? dayjs(a.created_date).format('MMM D, YYYY') : ''}
             </p>
           </article>
         ))}

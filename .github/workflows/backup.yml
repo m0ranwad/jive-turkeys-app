@@ -1,0 +1,102 @@
+name: Nightly backup
+
+# Every night: a copy of the live database (accounts, team data, chat history),
+# checked to restore cleanly, then encrypted so only the owners can open it,
+# and kept as a download on the run for 90 days. Restoring: README, "Backups".
+#
+# The repo is public and anyone signed in to GitHub can download a public
+# repo's run downloads, so the copy is encrypted (age) before it's stored.
+#
+# Needs:
+#   - the SUPABASE_DB_URL secret (already set up for database updates);
+#   - the BACKUP_AGE_RECIPIENT repository variable: the public half of the
+#     owners' backup key ("age1..."). The private half stays with the owners,
+#     in a password manager, never in GitHub.
+#
+# GitHub turns scheduled runs off in a public repo after 60 days without a
+# change pushed to it (it emails first). Turn it back on from the Actions tab.
+
+on:
+  schedule:
+    - cron: '17 7 * * *' # 3:17 AM Eastern (2:17 AM in winter)
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # A scratch database for checking the backup restores.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Check the backup key and database connection are set up
+        env:
+          RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Add the SUPABASE_DB_URL repository secret (see database.yml)."
+            exit 1
+          fi
+          case "$RECIPIENT" in
+            age1*) ;;
+            *) echo "::error::Add the BACKUP_AGE_RECIPIENT repository variable: the public backup key (README, Backups)."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - name: Install age and psql
+        run: sudo apt-get update && sudo apt-get install -y age postgresql-client
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Copy the live database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          mkdir backup
+          supabase db dump --db-url "$SUPABASE_DB_URL" --role-only -f backup/roles.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/schema.sql
+          # Team data plus the sign-in accounts it belongs to.
+          supabase db dump --db-url "$SUPABASE_DB_URL" --data-only --use-copy -s public,auth -f backup/data.sql
+
+      - name: Check it restores
+        run: bash scripts/backup-check.sh backup
+
+      - name: Encrypt it
+        env:
+          RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          name="jive-turkeys-backup-$(date -u +%Y-%m-%d)"
+          tar -czf "$name.tar.gz" -C backup roles.sql schema.sql data.sql
+          age -r "$RECIPIENT" -o "$name.tar.gz.age" "$name.tar.gz"
+          rm -rf backup "$name.tar.gz"
+          echo "BACKUP_NAME=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_NAME }}
+          path: ${{ env.BACKUP_NAME }}.tar.gz.age
+          retention-days: 90
+          if-no-files-found: error
+
+      # Free Supabase projects pause after a week without use (say, in the
+      # off-season). A request to the site's own function counts as use.
+      - name: Keep the database awake
+        run: |
+          curl -fsS -X POST https://alsskultsdgcbxlukznv.supabase.co/functions/v1/notify-chat \
+            -H 'Content-Type: application/json' -d '{"action":"config"}' > /dev/null

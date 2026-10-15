@@ -128,6 +128,7 @@ update public.team_join_code set code = 'TURKEY42';
 select join_test.sign_in('zed');
 select join_test.ok(join_test.visible() = '', 'an account that hasn''t joined sees no team data at all, the code included');
 select join_test.ok((select count(*) = 1 from public.users where id = auth.uid()), 'but can see their own account');
+select join_test.ok(not exists (select 1 from public.chat_search('roster')), 'or find anything searching the chat');
 select join_test.refused(
   $$insert into public.player_profiles (user_id, display_name, gender) values (auth.uid(), 'Zed', 'M')$$,
   'cannot add themselves to the roster');

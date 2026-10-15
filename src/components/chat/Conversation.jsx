@@ -27,6 +27,9 @@ export function Conversation({
   onReply,
   onCopy,
   onDelete,
+  onEdit,
+  focusId,
+  onFocused,
   emptyText,
 }) {
   const scroller = useRef(null);
@@ -126,6 +129,16 @@ export function Conversation({
     setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1600);
   };
 
+  // A message picked in search: jump to it once it's on screen.
+  useEffect(() => {
+    if (!focusId) return undefined;
+    const timer = setTimeout(() => {
+      jumpTo(focusId);
+      onFocused?.();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focusId, messages]);
+
   const close =
     (fn) =>
     (...args) => {
@@ -200,6 +213,7 @@ export function Conversation({
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
               canDelete={mine || isCaptain}
+              canEdit={mine && !m.pending && !!onEdit}
               onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
               onReact={(message, emoji, fromMenu) => {
                 if (fromMenu) setSelectedId(null);
@@ -208,6 +222,7 @@ export function Conversation({
               onReply={close(onReply)}
               onCopy={close(onCopy)}
               onDelete={close(onDelete)}
+              onEdit={onEdit && close(onEdit)}
               onJumpTo={jumpTo}
             />
           );

@@ -14,6 +14,8 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.t
 | Rule | Checked by |
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
+| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. Each later upcoming game can be answered under its card in the list. | `[browser]` |
+| On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Active players who haven't answered are **No reply**; Sub Pool and On Break players who haven't are **Subs**, so reminders don't nag them. | `[unit]` |
 | A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
