@@ -11,6 +11,10 @@
 --   { id (saved ones), display_name, gender, goals, assists }.
 --   Saved ones not in the list are removed.
 -- Runs with the captain's own permissions, so the usual rules still apply.
+--
+-- owner-approved: Cory approved this on 2026-10-15. The "delete from" lines
+-- below only remove the stat lines and fill-ins a captain takes off a game's
+-- result screen, the same rows the site already removed one by one.
 
 create or replace function public.save_game_result(
   p_game_id uuid,
