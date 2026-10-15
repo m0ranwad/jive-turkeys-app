@@ -27,7 +27,7 @@ describe('add to calendar', () => {
     expect(ics.split('\r\n')[0]).toBe('BEGIN:VCALENDAR');
   });
 
-  it('uses the game id, so adding it again updates the same event', () => {
+  it("uses the game id as the event's UID", () => {
     expect(gameIcs(game, settings, link)).toContain('UID:g1@jiveturkeys.app');
   });
 
