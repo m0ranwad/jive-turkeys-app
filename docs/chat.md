@@ -62,6 +62,14 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Nobody can edit messages yet (planned: issue #6). | `[db]` |
 
+**Search** (the 🔍 in the chat header) finds messages in Team Chat and every thread:
+
+| Expected behavior | Checked by |
+|---|---|
+| Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%` is just a character. Two characters at least. | `[db]` |
+| Results show who, where (Team Chat or the thread's name), when, and the match highlighted. Tapping one opens that room and jumps to the message, loading older messages until it's there. | `[browser]` |
+| Players only find messages they can read; an account that hasn't joined the team finds nothing. | `[db]` |
+
 ## 4. Threads
 
 Side conversations, so Team Chat stays about the team. Every thread is visible to the whole team.

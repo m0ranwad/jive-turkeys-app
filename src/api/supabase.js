@@ -249,6 +249,13 @@ export function createSupabaseBackend(url, key) {
       if (error) fail(error);
     },
 
+    /** Up to 50 messages matching `q` (2+ characters), best first, each with its thread's title. */
+    async search(q) {
+      const { data, error } = await supabase.rpc('chat_search', { q });
+      if (error) fail(error);
+      return data;
+    },
+
     /** "I'm looking at this room", so this player's phone doesn't buzz for it. */
     async viewing(threadId) {
       const { error } = await supabase.rpc('chat_viewing', { p_thread_id: threadId });
