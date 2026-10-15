@@ -6,6 +6,7 @@ import { profileAsPlayer } from '@/lib/dues';
 // Signed-in user, roster and team settings are needed on almost every page,
 // so they're cached for a short time and shared between pages.
 const CACHE_MS = 20_000;
+const TEAM_CHANGED = 'jt:team-changed';
 let cache = { at: 0, promise: null, data: null };
 
 /**
@@ -69,11 +70,17 @@ export function useTeam() {
 
   useEffect(() => {
     load();
+    // Another screen saved a change (say, Team Settings): pick up the fresh copy.
+    const onChanged = () => load();
+    window.addEventListener(TEAM_CHANGED, onChanged);
+    return () => window.removeEventListener(TEAM_CHANGED, onChanged);
   }, [load]);
 
   const reload = useCallback(async () => {
     clearTeamCache();
-    return load();
+    const data = await load();
+    window.dispatchEvent(new Event(TEAM_CHANGED));
+    return data;
   }, [load]);
 
   return { ...state, isCaptain: state.user?.role === 'admin', reload };

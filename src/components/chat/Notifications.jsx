@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { phoneKind } from '@/lib/install';
-import { pushState, sendTestPush, turnOffPush, turnOnPush } from '@/lib/push';
+import { NOTIFY_CHOICES_EVENT, pushState, sendTestPush, turnOffPush, turnOnPush } from '@/lib/push';
 import { cn } from '@/lib/utils';
 
 const PROMPT_KEY = 'jt_push_prompt_dismissed';
@@ -160,6 +160,7 @@ export function NotificationChoices() {
     try {
       await api.entities.PlayerProfile.update(profile.id, { [key]: on });
       await reload();
+      window.dispatchEvent(new Event(NOTIFY_CHOICES_EVENT));
       toast({ title: `${label}: ${on ? 'on' : 'off'}` });
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });

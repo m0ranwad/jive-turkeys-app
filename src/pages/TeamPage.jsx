@@ -5,7 +5,7 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
-import { InviteDialog, PickPositionCard, RemovePlayerDialog } from '@/components/team/TeamDialogs';
+import { PickPositionCard, RemovePlayerDialog } from '@/components/team/TeamDialogs';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
@@ -37,7 +37,6 @@ function StatusButtons({ current, onPick }) {
 export function TeamPage() {
   const data = useSeasonData();
   const { toast } = useToast();
-  const [inviteOpen, setInviteOpen] = useState(false);
   // Teammates who aren't on the app: on the roster like everyone else. `guestDialog` is null, 'new' or a guest.
   const [guests, setGuests] = useState([]);
   const [guestDialog, setGuestDialog] = useState(null);
@@ -132,8 +131,10 @@ export function TeamPage() {
         joinCode
           ? `Sign up with Google or email, enter the team code ${joinCode.code}, then pick your name from the list. Your spot and dues are already there.`
           : 'Sign up with Google or email, then pick your name from the list. Your spot and dues are already there.',
-        `Still to join: ${names.join(', ')}`,
-      ].join('\n'),
+        names.length ? `Still to join: ${names.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
     );
     toast({ title: 'Invite copied', description: 'Paste it into the team group text.' });
   };
@@ -160,11 +161,12 @@ export function TeamPage() {
           totals.notJoined ? ` · ${totals.notJoined} not joined yet` : ''
         }`}
       >
+        {/* Emailed invites aren't switched on yet (idea #1), so new players get the site and the team code. */}
         <button
-          onClick={() => setInviteOpen(true)}
+          onClick={copyInvite}
           className="inline-flex items-center gap-1.5 rounded-full bg-zinc-950 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800"
         >
-          <UserPlus className="h-3.5 w-3.5" /> Invite teammate
+          <Copy className="h-3.5 w-3.5" /> Copy invite
         </button>
       </PageHeader>
 
@@ -377,7 +379,6 @@ export function TeamPage() {
         </section>
       )}
 
-      <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} isCaptain={data.isCaptain} />
       {data.isCaptain && (
         <GuestDialog
           open={!!guestDialog}

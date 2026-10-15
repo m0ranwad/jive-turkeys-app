@@ -56,7 +56,8 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
    `npm test` must pass. Check it in demo mode (`npm run dev` with no `.env.local`) when you can. If you
    touched the chat or the database, also run `npm run test:e2e` and `npm run test:db` (see
    [Tests](#tests)). If you change how the chat works on purpose, update `docs/chat.md` and its tests in
-   the same change.
+   the same change; the same goes for game day (RSVPs, results, stats, Player of the Match) and
+   `docs/games.md`.
 2. **Preview.** Push the branch and open a pull request yourself, with a plain-English title and summary.
    Use your GitHub tools or `gh api` (REST). `gh pr` doesn't work in cloud sessions.
    - Cloudflare builds the preview in about a minute. Poll the `Workers Builds: jive-turkeys-app` check
@@ -215,6 +216,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
   `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
+  The app icon shows the Chat tab's unread number: each chat notification carries it (`chat_push_unread()`), and
+  the open site keeps it in step (`setIconBadge()` in `src/lib/push.js`, called from `Layout.jsx`).
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`
   and `scripts/db-rehearsal.sh`.
 
