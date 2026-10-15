@@ -1,11 +1,6 @@
+import { AnswerButtons } from '@/components/game/AnswerButtons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-
-const CHOICES = [
-  { value: 'in', label: 'IN', active: 'border-lime-400 bg-lime-400 text-black' },
-  { value: 'maybe', label: 'MAYBE', active: 'border-amber-300 bg-amber-300 text-black' },
-  { value: 'out', label: 'OUT', active: 'border-zinc-900 bg-zinc-900 text-white' },
-];
 
 /**
  * Captains: set someone's RSVP for a game, for a teammate who texted instead
@@ -24,23 +19,7 @@ export function RsvpForDialog({ player, rsvp, busy, onSet, onToggleGk, onClose }
         <p className="-mt-2 text-sm text-zinc-500">
           {player?.guest ? "Hasn't joined the site, so you RSVP for them." : 'Set their RSVP if they told you another way.'}
         </p>
-        <div className="grid grid-cols-3 gap-2">
-          {CHOICES.map((choice) => (
-            <button
-              key={choice.value}
-              type="button"
-              disabled={busy}
-              aria-pressed={status === choice.value}
-              onClick={() => onSet(choice.value)}
-              className={cn(
-                'rounded-2xl border-2 py-3.5 font-display text-[13px] font-extrabold uppercase tracking-[0.1em] transition disabled:opacity-60',
-                status === choice.value ? choice.active : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300',
-              )}
-            >
-              {choice.label}
-            </button>
-          ))}
-        </div>
+        <AnswerButtons label={`RSVP for ${player?.display_name}`} status={status} onSet={onSet} busy={busy} />
         {status === 'in' && (
           <button
             type="button"

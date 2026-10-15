@@ -256,7 +256,7 @@ export function GameDetailPage() {
           onSet={setRsvp}
           onToggleGk={toggleGk}
           suspended={suspended.includes(data.user.id)}
-          busy={busy || rsvp.busy === game.id}
+          busy={busy || rsvp.isBusy(game)}
         />
       )}
 

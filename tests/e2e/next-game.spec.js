@@ -3,7 +3,7 @@
 // sessions folded away. docs/games.md lists the rules.
 //
 // Sample data: the next game is vs Goal Diggers (6 IN, the captain hasn't
-// answered), in session 2; session 1 is over, and last season's game is older.
+// answered), then FC Lightning, in session 2; session 1 is over, and last season's game is older.
 import { expect, signIn, test } from './helpers';
 
 const nextGame = (page) => page.getByRole('region', { name: 'Next game' });
@@ -30,13 +30,13 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
 
 test('later games can be answered from the list', async ({ page }) => {
   await signIn(page);
-  const answers = page.getByRole('group', { name: /^Your answer for vs / });
-  await expect(answers.first()).toBeVisible();
-  const first = answers.first();
-  await first.getByRole('button', { name: 'OUT', exact: true }).click();
-  await expect(first.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // The game after the next one, answered under its card in the list (not on the Next game card).
+  const later = page.getByRole('group', { name: /^Your answer for vs FC Lightning, / });
+  await later.getByRole('button', { name: 'OUT', exact: true }).click();
+  await expect(later.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
-  await expect(answers.first().getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(later.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(nextGame(page)).toContainText("You haven't answered");
 });
 
 test('sessions before the last one are folded away until you open them', async ({ page }) => {
