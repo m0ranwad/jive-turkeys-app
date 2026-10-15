@@ -1,10 +1,19 @@
 // Service worker: lets phones install Jive Turkeys as an app from the Home
-// Screen, and shows chat notifications. It deliberately caches nothing, so
-// every visit gets the latest site.
+// Screen, and shows notifications and the unread number on the app icon. It
+// deliberately caches nothing, so every visit gets the latest site.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
-// A chat notification from notify-chat: { title, body, url, tag }.
+// The number on the app icon (on an iPhone, the Home Screen app). 0 clears it.
+// Phones that can't show one skip it.
+function setIconBadge(count) {
+  const nav = self.navigator;
+  if (typeof count !== 'number' || !nav || !('setAppBadge' in nav)) return Promise.resolve();
+  return (count > 0 ? nav.setAppBadge(count) : nav.clearAppBadge()).catch(() => {});
+}
+
+// A notification from notify-chat: { title, body, url, tag }. Chat messages
+// also carry badge: the player's unread chat count, for the app icon.
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -13,14 +22,17 @@ self.addEventListener('push', (event) => {
     data = { body: event.data?.text() };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Jive Turkeys', {
-      body: data.body || 'New message',
-      icon: '/icon-192.png',
-      badge: '/badge-96.png',
-      tag: data.tag,
-      renotify: !!data.tag,
-      data: { url: data.url || '/banter' },
-    }),
+    Promise.all([
+      self.registration.showNotification(data.title || 'Jive Turkeys', {
+        body: data.body || 'New message',
+        icon: '/icon-192.png',
+        badge: '/badge-96.png',
+        tag: data.tag,
+        renotify: !!data.tag,
+        data: { url: data.url || '/banter' },
+      }),
+      setIconBadge(data.badge),
+    ]),
   );
 });
 
