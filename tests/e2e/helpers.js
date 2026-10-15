@@ -31,6 +31,22 @@ export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = 
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 
+/** Records what the site puts on the app icon (the Badging API). Call before the page loads; read it with iconBadge(). */
+export async function recordIconBadge(page) {
+  await page.addInitScript(() => {
+    window.__iconBadge = [];
+    const record = (n) => {
+      window.__iconBadge.push(n);
+      return Promise.resolve();
+    };
+    Object.defineProperty(Navigator.prototype, 'setAppBadge', { configurable: true, value: (n) => record(n) });
+    Object.defineProperty(Navigator.prototype, 'clearAppBadge', { configurable: true, value: () => record(0) });
+  });
+}
+
+/** The number on the app icon right now (0: none). */
+export const iconBadge = (page) => page.evaluate(() => window.__iconBadge.at(-1));
+
 /** The Chat tab: bottom bar on phones, top bar on computers. */
 export const chatTab = (page) => page.locator('a[href="/banter"]:visible').first();
 export const chatBadge = (page) => chatTab(page).locator('[aria-label$="unread"]');
