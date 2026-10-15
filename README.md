@@ -68,6 +68,7 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - [x] Privacy and terms pages live (required by Google)
 - [x] Google sign-in: Branding filled in, app published, client ID and secret in Supabase
 - [x] Claim captain: the owner signed up first at https://jiveturkeys.app
+- [ ] Nightly backups: the owners' backup key and the `BACKUP_AGE_RECIPIENT` variable (see [Backups](#backups))
 - [x] Phone notifications for chat: `SUPABASE_ACCESS_TOKEN` secret added. The function and its keys are set
       up automatically the first time the notifications change reaches `main`
 - [ ] Give the creator access (in progress):
@@ -145,7 +146,43 @@ For reference, in case this ever needs rebuilding:
 7. **Invite button (optional, deferred):** see [issue #1](https://github.com/m0ranwad/jive-turkeys-app/issues/1).
 
 Free Supabase projects pause after a week with no activity. Data is kept; restore the project from the
-dashboard if that happens.
+dashboard if that happens. The nightly backup also counts as activity.
+
+8. **Nightly backups:** see [Backups](#backups).
+
+## Backups
+
+Supabase's free plan has no backups to restore from, so a GitHub Action does it
+([backup.yml](.github/workflows/backup.yml)): every night it copies the live database (sign-in accounts, team
+data, chat), checks the copy restores into a scratch database with every row
+([scripts/backup-check.sh](scripts/backup-check.sh)), encrypts it, and keeps it as a download on that night's
+run for 90 days. The repo is public, so only the encrypted file is stored.
+
+**One-time setup (an owner, 5 minutes):**
+1. Install [age](https://github.com/FiloSottile/age) (`brew install age`, `winget install FiloSottile.age`) and
+   run `age-keygen -o jive-turkeys-backup.key`.
+2. Put that file in the owners' password manager. It's the only way to open a backup: don't commit it, email it
+   or paste it anywhere else, and don't lose it.
+3. Copy the line it printed, `Public key: age1...`, and add the `age1...` part as a repository **variable**
+   (not a secret) named `BACKUP_AGE_RECIPIENT`: Settings → Secrets and variables → Actions → Variables.
+4. Actions → Nightly backup → Run workflow, to check it works.
+
+**Restoring:**
+1. Actions → Nightly backup → the night you want → download the `.tar.gz.age` file.
+2. `age -d -i jive-turkeys-backup.key -o backup.tar.gz <file>.tar.gz.age && tar -xzf backup.tar.gz`
+3. Into a new Supabase project (or the same one, after checking with the other owner what will be replaced),
+   with its Session pooler connection string as `$DB`:
+   ```
+   psql "$DB" -f roles.sql
+   psql "$DB" -f schema.sql
+   PGOPTIONS='-c session_replication_role=replica' psql "$DB" -f data.sql
+   ```
+   The last line loads rows exactly as they were, with the database's own triggers (new accounts, session
+   lists) paused, so nothing is added twice.
+4. Point the site at it if it's a new project (Cloudflare build variables) and publish.
+
+GitHub turns scheduled runs off in a public repo after 60 days without a change pushed to it, and emails a
+warning first. A long off-season can hit that: turn it back on from the Actions tab.
 
 ## Captains
 
