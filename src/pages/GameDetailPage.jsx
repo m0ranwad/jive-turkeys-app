@@ -13,6 +13,7 @@ import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
+import { saveFailedToast } from '@/lib/errors';
 import { fmtDateLong, fmtTime, jerseyText } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
@@ -99,56 +100,39 @@ export function GameDetailPage() {
 
   const deleteGame = async () => {
     if (!window.confirm('Delete this game and its stats?')) return;
-    // RSVPs, stats and votes for the game are removed with it.
-    await api.entities.Game.delete(game.id);
+    try {
+      // RSVPs, stats and votes for the game are removed with it.
+      await api.entities.Game.delete(game.id);
+    } catch (err) {
+      toast(saveFailedToast(err));
+      return;
+    }
     toast({ title: 'Game deleted' });
     navigate('/');
   };
 
+  // All in one step (save_game_result in the database), so a dropped connection can't leave half a result.
   const saveResult = async ({ score_us, score_them, rows, fillIns }) => {
-    await api.entities.Game.update(game.id, { score_us, score_them, has_result: true });
-    const existing = data.stats.filter((s) => s.game_id === game.id);
-    const updates = [];
-    const creates = [];
-    const removals = [];
-    rows.forEach((row) => {
-      const current = existing.find((s) => s.user_id === row.profile.user_id);
-      const line = {
-        game_id: game.id,
+    await api.games.saveResult(game.id, {
+      scoreUs: score_us,
+      scoreThem: score_them,
+      lines: rows.map((row) => ({
         ...playerKey(row.profile),
         played: !!row.played,
         goals: row.goals || 0,
         assists: row.assists || 0,
         blue_cards: row.blue_cards || 0,
         red_cards: row.red_cards || 0,
-      };
-      const hasNumbers = line.goals + line.assists + line.blue_cards + line.red_cards > 0;
-      if (line.played || hasNumbers) {
-        if (current) updates.push({ id: current.id, ...line });
-        else creates.push(line);
-      } else if (current) {
-        removals.push(current.id);
-      }
+      })),
+      // People from outside the team who played this game for us: the whole list, saved ones keep their id.
+      fillIns: fillIns.map((f) => ({
+        ...(f.id && { id: f.id }),
+        display_name: f.display_name.trim() || null,
+        gender: f.gender,
+        goals: f.goals || 0,
+        assists: f.assists || 0,
+      })),
     });
-    if (updates.length) await api.entities.GameStat.bulkUpdate(updates);
-    if (creates.length) await api.entities.GameStat.bulkCreate(creates);
-    for (const statId of removals) await api.entities.GameStat.delete(statId);
-
-    // Fill-ins: people from outside the team who played this game for us.
-    const savedFillIns = (data.fillIns || []).filter((f) => f.game_id === game.id);
-    const fillInLine = (f) => ({
-      display_name: f.display_name.trim() || null,
-      gender: f.gender,
-      goals: f.goals || 0,
-      assists: f.assists || 0,
-    });
-    const fillInUpdates = fillIns.filter((f) => f.id).map((f) => ({ id: f.id, ...fillInLine(f) }));
-    const fillInCreates = fillIns.filter((f) => !f.id).map((f) => ({ game_id: game.id, ...fillInLine(f) }));
-    if (fillInUpdates.length) await api.entities.GameFillIn.bulkUpdate(fillInUpdates);
-    if (fillInCreates.length) await api.entities.GameFillIn.bulkCreate(fillInCreates);
-    for (const gone of savedFillIns.filter((s) => !fillIns.some((f) => f.id === s.id))) {
-      await api.entities.GameFillIn.delete(gone.id);
-    }
     await data.reload();
     toast({ title: 'Result saved' });
   };
