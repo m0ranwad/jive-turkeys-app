@@ -24,11 +24,19 @@ export function feeParts(row) {
   return { league_fee: num(row.league_fee), ref_fee: num(row.ref_fee), game_count: num(row.game_count) };
 }
 
+/** What a payment row says was paid, or null: not paid, or marked paid before amounts were recorded. */
+const recordedAmount = (payment) => (payment?.paid && payment.paid_amount != null ? Number(payment.paid_amount) : null);
+
 /**
  * Splits a session's total across the active roster: custom amounts first,
  * then an even share of what's left for everyone else, rounded up to whole
  * dollars. `active` is the active players' user ids, `payments` that
  * session's dues_payments rows.
+ *
+ * Each player's `paid_amount` is what they paid: the amount recorded when they
+ * were marked paid, or their share for payments from before amounts were
+ * recorded. If their share has gone up since, `shortBy` is the difference.
+ * A share that has gone down leaves what they paid as it is.
  */
 export function splitDues(total, active, payments) {
   const byUser = new Map(payments.map((p) => [p.user_id, p]));
@@ -43,26 +51,31 @@ export function splitDues(total, active, payments) {
 
   const players = active.map((id) => {
     const payment = byUser.get(id);
+    const amount = override(id) ?? perPlayer;
+    const paid = !!payment?.paid;
+    const recorded = recordedAmount(payment);
     return {
       user_id: id,
-      amount: override(id) ?? perPlayer,
+      amount,
       custom: override(id) != null,
-      paid: !!payment?.paid,
+      paid,
       paid_date: payment?.paid_date ?? null,
+      paid_amount: paid ? (recorded ?? amount) : null,
+      shortBy: recorded == null ? 0 : fromCents(Math.max(0, cents(amount) - cents(recorded))),
     };
   });
-  const sum = (rows) => fromCents(rows.reduce((s, p) => s + cents(p.amount), 0));
-  const owed = sum(players);
-  const collected = sum(players.filter((p) => p.paid));
+  const sum = (rows, key = 'amount') => fromCents(rows.reduce((s, p) => s + cents(p[key]), 0));
+  const paid = players.filter((p) => p.paid);
   return {
     perPlayer,
     players,
-    owed,
-    collected,
-    stillOwed: fromCents(cents(owed) - cents(collected)),
-    paidCount: players.filter((p) => p.paid).length,
+    owed: sum(players),
+    collected: sum(paid, 'paid_amount'),
+    // Unpaid shares, plus the difference for anyone whose share went up after they paid.
+    stillOwed: fromCents(cents(sum(players.filter((p) => !p.paid))) + cents(sum(paid, 'shortBy'))),
+    paidCount: paid.length,
     // Above zero: rounding up collects a little more than the fee. Below: custom amounts leave some uncovered.
-    extra: fromCents(cents(owed) - cents(total)),
+    extra: fromCents(cents(sum(players)) - cents(total)),
   };
 }
 
@@ -113,12 +126,20 @@ export function duesMembers({ profiles, guests = [], payments, history }) {
   return { members, payments: payments.map(keyed), history: history.map(keyed) };
 }
 
+const NOT_PLAYING = { on_break: 'sitting out', sub_pool: 'sub pool' };
+
+/** Why someone in `notPlaying` isn't on the session's active roster, in a couple of words. */
+export const notPlayingLabel = ({ status, player }) => NOT_PLAYING[status] ?? (player.removed ? 'off the team' : 'not on the roster');
+
 /**
  * One session's dues for the whole team: the split, active players in list
  * order (by name, couples side by side), who pays with whom, and who still owes.
- * `profiles` is the whole roster, `payments` that session's dues_payments rows.
+ * `profiles` is the session's roster, `payments` that session's dues_payments
+ * rows. `everyone` is every player and roster name (the session's roster by
+ * default), to find who paid and isn't on the active roster (`notPlaying`):
+ * they don't owe anything, and what they paid counts in `collected`.
  */
-export function teamDues(total, profiles, payments) {
+export function teamDues(total, profiles, payments, everyone = profiles) {
   const name = (p) => p.display_name || '';
   const active = profiles.filter((p) => p.status === 'active');
   const byUser = new Map(active.map((p) => [p.user_id, p]));
@@ -137,22 +158,65 @@ export function teamDues(total, profiles, payments) {
   const shareOf = (userId) => shares.get(userId) || null;
   const partnerOf = (userId) => byUser.get(partners.get(userId)) || null;
 
+  // What a player still owes: their share, or the difference if it went up after they paid.
+  const owing = (userId) => !shareOf(userId).paid || shareOf(userId).shortBy > 0;
+  const due = (userId) => (shareOf(userId).paid ? shareOf(userId).shortBy : shareOf(userId).amount);
+  // The difference for a player and their partner together, since a couple pays as one.
+  const balanceOf = (userId) => {
+    const partner = partnerOf(userId);
+    return fromCents(cents(shareOf(userId).shortBy) + (partner ? cents(shareOf(partner.user_id).shortBy) : 0));
+  };
+
   // Who still owes, with a couple who both still owe as one line and one amount.
   const stillToPay = [];
   const listed = new Set();
   for (const p of ordered) {
-    if (listed.has(p.user_id) || shareOf(p.user_id).paid) continue;
+    if (listed.has(p.user_id) || !owing(p.user_id)) continue;
     const partner = partnerOf(p.user_id);
-    const together = partner && !shareOf(partner.user_id).paid ? partner : null;
+    const together = partner && owing(partner.user_id) ? partner : null;
     listed.add(p.user_id);
     if (together) listed.add(together.user_id);
     stillToPay.push({
       name: together ? `${name(p)} & ${name(together)}` : name(p),
-      amount: fromCents(cents(shareOf(p.user_id).amount) + (together ? cents(shareOf(together.user_id).amount) : 0)),
+      amount: fromCents(cents(due(p.user_id)) + (together ? cents(due(together.user_id)) : 0)),
+      // Only the difference after their share went up.
+      more: shareOf(p.user_id).paid && (!together || shareOf(together.user_id).paid),
     });
   }
 
-  return { ...split, active: ordered, shareOf, partnerOf, stillToPay };
+  // Paid for the session, but not on its active roster (sitting out, sub pool, taken off the team).
+  const session = new Map(profiles.map((p) => [p.user_id, p]));
+  const people = new Map(everyone.map((p) => [p.user_id, p]));
+  const notPlaying = payments
+    .filter((p) => p.paid && !byUser.has(p.user_id))
+    .flatMap((payment) => {
+      const player = session.get(payment.user_id) || people.get(payment.user_id);
+      // A roster name that has joined: its payments moved to their account, so any left are repeats.
+      if (!player || (player.guest && player.linked_user_id)) return [];
+      return [{
+        user_id: payment.user_id,
+        player,
+        status: session.get(payment.user_id)?.status ?? 'off',
+        paid_amount: recordedAmount(payment),
+        paid_date: payment.paid_date ?? null,
+      }];
+    })
+    .sort((a, b) => name(a.player).localeCompare(name(b.player)));
+  const notPlayingPaid = fromCents(notPlaying.reduce((sum, p) => sum + cents(p.paid_amount), 0));
+  const notPlayingOf = (userId) => notPlaying.find((p) => p.user_id === userId) || null;
+
+  return {
+    ...split,
+    collected: fromCents(cents(split.collected) + cents(notPlayingPaid)),
+    active: ordered,
+    shareOf,
+    partnerOf,
+    balanceOf,
+    stillToPay,
+    notPlaying,
+    notPlayingPaid,
+    notPlayingOf,
+  };
 }
 
 /**
@@ -221,9 +285,15 @@ export function payOptions(settings, amount, note) {
   return options;
 }
 
-/** A nudge for the team chat or group text naming who still owes. `unpaid` is [{ name, amount }]. */
+/**
+ * A nudge for the team chat or group text naming who still owes. `unpaid` is
+ * [{ name, amount, more }], `more` for the difference after a share went up.
+ */
 export function reminderText({ session, parts, perPlayer, activeCount, unpaid, link }) {
-  const names = unpaid.map((p) => (p.amount === perPlayer ? p.name : `${p.name} (${dollars(p.amount)})`));
+  const names = unpaid.map((p) => {
+    if (p.more) return `${p.name} (${dollars(p.amount)} more)`;
+    return p.amount === perPlayer ? p.name : `${p.name} (${dollars(p.amount)})`;
+  });
   return [
     `🦃 Jive Turkeys — Session ${session} dues: ${dollars(perPlayer)} each`,
     `That's ${feeSentence(parts)}, split across ${activeCount} players.`,

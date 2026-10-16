@@ -7,7 +7,7 @@ import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveTeamSettings } from '@/lib/actions';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
-import { cleanPayHandle, dollars, feeTotal } from '@/lib/dues';
+import { cleanPayHandle, dollars, feeTotal, notPlayingLabel } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { EYEBROW, HistoryList, StatusChip, shortDate } from './DuesParts';
@@ -177,8 +177,10 @@ export function PaySettingsDialog({ open, onOpenChange, settings, onSaved }) {
 }
 
 /**
- * One player's dues for the session: status, history, who they pay with, and
- * (captains) a custom amount. Marking someone not paid takes a second tap.
+ * One player's dues for the session: status, what they paid, history, who they
+ * pay with, and (captains) a custom amount. Marking someone not paid takes a
+ * second tap. Also opens for someone who paid and isn't on the session's active
+ * roster, so they can be marked not paid.
  */
 export function PlayerSheet({ open, onOpenChange, player, team, payments, history, profiles, period, meId, isCaptain, onChanged }) {
   const { toast } = useToast();
@@ -187,7 +189,8 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
   const [busy, setBusy] = useState(false);
 
   const share = player ? team.shareOf(player.user_id) : null;
-  const partner = player ? team.partnerOf(player.user_id) : null;
+  const out = player && !share ? team.notPlayingOf(player.user_id) : null;
+  const partner = player && share ? team.partnerOf(player.user_id) : null;
   const payment = player ? payments.find((p) => p.user_id === player.user_id) : null;
   const nameOf = (userId) => profiles.find((p) => p.user_id === userId)?.display_name || '';
 
@@ -198,7 +201,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
     }
   }, [open, player?.user_id]);
 
-  if (!player || !share) return null;
+  if (!player || (!share && !out)) return null;
 
   const names = [player.display_name, partner?.display_name].filter(Boolean);
   const run = async (work, done) => {
@@ -216,17 +219,30 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
     }
   };
 
+  const ids = [player.user_id, partner?.user_id].filter(Boolean);
+  const isPaid = share ? share.paid : true;
+  // Paid, and the share has gone up since: the difference for them (and their partner) to pay.
+  const balance = share?.paid && ids.every((id) => team.shareOf(id).paid) ? team.balanceOf(player.user_id) : 0;
+  // What they paid, when it isn't simply their share.
+  const paidLine = share
+    ? share.paid &&
+      share.paid_amount !== share.amount &&
+      [`Paid ${dollars(share.paid_amount)}`, `share is now ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
+        .filter(Boolean)
+        .join(' · ')
+    : out.paid_amount != null && `Paid ${dollars(out.paid_amount)}`;
   const mark = (paid) =>
     run(
       () =>
         api.dues.markPaid({
           year: period.year,
           session: period.session,
-          userIds: [player.user_id, partner?.user_id].filter(Boolean),
+          userIds: ids,
           paid,
           paidDate: today(),
+          amounts: ids.map((id) => team.shareOf(id)?.amount ?? null),
         }),
-      `${names.join(' & ')} marked ${paid ? 'paid' : 'not paid'}`,
+      paid && balance ? `${names.join(' & ')}: ${dollars(balance)} more marked paid` : `${names.join(' & ')} marked ${paid ? 'paid' : 'not paid'}`,
     ).then(() => setConfirming(false));
 
   const saveAmount = (value) =>
@@ -258,29 +274,37 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
 
         <div className="-mt-2 flex items-center justify-between gap-3">
           <span className="text-sm font-semibold text-zinc-500">
-            {dollars(share.amount)} · {share.custom ? 'custom amount' : 'even split'}
+            {share
+              ? `${dollars(share.amount)} · ${share.custom ? 'custom amount' : 'even split'}`
+              : `Not playing · ${notPlayingLabel(out)}`}
             {player.guest && ' · not joined yet'}
           </span>
-          <StatusChip paid={share.paid} date={share.paid_date} />
+          <StatusChip paid={isPaid} date={share ? share.paid_date : out.paid_date} />
         </div>
-        {share.paid && (
+        {isPaid && (
           <p className="-mt-2 text-xs font-medium text-zinc-400">
-            Marked paid {shortDate(share.paid_date)}
-            {markedBy}.
+            {paidLine && `${paidLine}. `}
+            Marked paid {shortDate(share ? share.paid_date : out.paid_date)}
+            {markedBy}.{out && " They aren't on this session's roster, so they don't owe anything."}
           </p>
         )}
 
-        {!share.paid && (
+        {share && !share.paid && (
           <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
             {partner ? `Mark both paid` : 'Mark paid'}
           </Button>
         )}
-        {share.paid && !confirming && (
+        {balance > 0 && !confirming && (
+          <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
+            Mark {dollars(balance)} more paid
+          </Button>
+        )}
+        {isPaid && !confirming && (
           <Button variant="outline" onClick={() => setConfirming(true)} disabled={busy} className={BIG_BUTTON}>
             Mark as not paid
           </Button>
         )}
-        {share.paid && confirming && (
+        {isPaid && confirming && (
           <div className="space-y-3 rounded-2xl bg-red-50 p-4" role="alert">
             <p className="text-sm text-red-900">
               {names.join(' and ')} will show as <b>unpaid</b>. The payment stays in the history, so it can be put back.
@@ -318,7 +342,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           <p className="text-[11px] font-medium text-zinc-400">For couples who send one payment for both.</p>
         </div>
 
-        {isCaptain && (
+        {isCaptain && share && (
           <div className={SECTION}>
             <Label htmlFor="custom-amount" className={FIELD_LABEL}>
               Custom amount

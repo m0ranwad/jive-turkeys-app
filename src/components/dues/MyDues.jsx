@@ -10,24 +10,35 @@ import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PayButtons, StatusChip, shortDate } from './DuesParts';
 
-/** The signed-in player's share of one session: amount, paid or not, and their partner if they pay together. */
+const round = (value) => Math.round(value * 100) / 100;
+
+/**
+ * The signed-in player's share of one session: amount, paid or not (and how
+ * much), and their partner if they pay together. `balance` is what's left to
+ * pay after a share went up; `changed` says a share changed after it was paid.
+ */
 function myShare(data, period, userId) {
   const { row, payments, history, members } = sessionSlice(data, period);
   if (!row) return { row: null };
   // The team as it was that session, so later status changes don't rewrite it.
-  const team = teamDues(Number(row.total_fee) || 0, members, payments);
+  const team = teamDues(Number(row.total_fee) || 0, members, payments, data.profiles);
   const share = team.shareOf(userId);
   const partner = share ? team.partnerOf(userId) : null;
   const partnerShare = partner ? team.shareOf(partner.user_id) : null;
   const payment = payments.find((p) => p.user_id === userId);
+  const paidShares = [share, partnerShare].filter((s) => s?.paid);
   return {
     row,
     team,
     share,
     partner,
     partnerShare,
-    amount: share ? Math.round((share.amount + (partnerShare?.amount ?? 0)) * 100) / 100 : 0,
+    amount: share ? round(share.amount + (partnerShare?.amount ?? 0)) : 0,
     paid: !!payment?.paid,
+    // What was paid: for you and your partner, or (not on the roster) what you paid, if it was recorded.
+    paidAmount: share ? round(paidShares.reduce((sum, s) => sum + s.paid_amount, 0)) : (team.notPlayingOf(userId)?.paid_amount ?? null),
+    changed: paidShares.some((s) => s.paid_amount !== s.amount),
+    balance: share?.paid && (!partnerShare || partnerShare.paid) ? team.balanceOf(userId) : 0,
     paidDate: payment?.paid_date ?? null,
     paidBy: payment?.paid_by ?? null,
     history: history.filter((e) => e.user_id === userId),
@@ -36,7 +47,7 @@ function myShare(data, period, userId) {
 
 /** Big dark card: what you owe and how the session total adds up. */
 function ShareCard({ mine }) {
-  const { row, team, share, partner, partnerShare, amount, paid, paidDate } = mine;
+  const { row, team, share, partner, partnerShare, amount, paid, paidDate, paidAmount, changed, balance } = mine;
   const parts = feeParts(row);
   const refs = parts.ref_fee && parts.game_count ? feeTotal(parts) - parts.league_fee : 0;
   const line = (label, value, strong) => (
@@ -58,6 +69,13 @@ function ShareCard({ mine }) {
       {share ? (
         <>
           <p className="mt-2 font-display text-6xl font-extrabold leading-none tracking-tight">{dollars(amount)}</p>
+          {paid && changed && (
+            <p className="mt-2 text-sm font-semibold text-amber-300" data-testid="share-changed">
+              {balance > 0
+                ? `You paid ${dollars(paidAmount)} before your share went up, so there's ${dollars(balance)} more to pay.`
+                : `You paid ${dollars(paidAmount)} before your share went down.`}
+            </p>
+          )}
           <p className="mt-2 text-sm font-medium text-white/70">
             {partner
               ? share.amount === partnerShare.amount
@@ -71,6 +89,8 @@ function ShareCard({ mine }) {
       ) : (
         <p className="mt-2 text-sm font-medium text-white/70">
           You're not on the active roster this session, so you don't owe anything.
+          {paid && (paidAmount != null ? ` You paid ${dollars(paidAmount)} for it` : ' You were marked paid for it')}
+          {paid && ', and your captains can see that on Team dues.'}
         </p>
       )}
       <div className="mt-4 space-y-1.5 border-t border-white/10 pt-3 text-sm">
@@ -95,7 +115,7 @@ function TeamProgress({ team, onShowTeam }) {
           Team · {team.paidCount} of {team.active.length} paid
         </h3>
         <span className="text-xs font-semibold text-zinc-500">
-          {dollars(team.collected)} of {dollars(team.owed)} in
+          {dollars(team.collected)} in · {dollars(team.stillOwed)} to go
         </span>
       </div>
       <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-zinc-100" aria-hidden>
@@ -129,14 +149,17 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
     .filter((s) => s.share || s.paid);
 
   const mark = async (paid) => {
+    const ids = [user.id, mine.partner?.user_id].filter(Boolean);
     setBusy(true);
     try {
       await api.dues.markPaid({
         year: period.year,
         session: period.session,
-        userIds: [user.id, mine.partner?.user_id].filter(Boolean),
+        userIds: ids,
         paid,
         paidDate: today(),
+        // Your share right now (and your partner's): for someone already paid, that pays the difference.
+        amounts: ids.map((id) => mine.team.shareOf(id)?.amount ?? null),
       });
       await onChanged();
       toast({ title: paid ? 'Marked paid. Thanks!' : 'Marked not paid' });
@@ -161,7 +184,9 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
             <span className="flex-1 text-sm font-semibold">
               Session {s.period.session} · {s.period.year}
             </span>
-            {s.share && <span className="text-sm font-bold tabular-nums">{dollars(s.amount)}</span>}
+            {(s.paid ? s.paidAmount : s.share ? s.amount : null) != null && (
+              <span className="text-sm font-bold tabular-nums">{dollars(s.paid ? s.paidAmount : s.amount)}</span>
+            )}
             <StatusChip paid={s.paid} date={s.paidDate} />
             <ChevronRight className="h-4 w-4 text-zinc-300" />
           </button>
@@ -203,7 +228,27 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
         </section>
       )}
 
-      {mine.share && mine.paid && (
+      {mine.share && mine.paid && mine.balance > 0 && (
+        <section className={cn(CARD, 'space-y-4')} data-testid="pay-difference">
+          <h3 className={HEADING}>Pay the difference</h3>
+          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
+            <span className="text-sm font-semibold text-zinc-500">Already paid it?</span>
+            <Button onClick={() => mark(true)} disabled={busy} className="h-11 rounded-xl bg-lime-400 px-5 font-bold text-black hover:bg-lime-300">
+              Mark {dollars(mine.balance)} paid
+            </Button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="text-xs font-bold text-zinc-400 underline underline-offset-2 hover:text-zinc-700"
+          >
+            Not right? Mark as not paid
+          </button>
+        </section>
+      )}
+
+      {mine.share && mine.paid && mine.balance === 0 && (
         <section className={cn(CARD, 'space-y-3')}>
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-lime-400">

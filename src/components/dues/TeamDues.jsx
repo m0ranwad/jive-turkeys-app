@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
-import { DUES_DEFAULTS, cleanPayHandle, dollars, feeParts, feeTotal, reminderText, teamDues } from '@/lib/dues';
+import { DUES_DEFAULTS, cleanPayHandle, dollars, feeParts, feeTotal, notPlayingLabel, reminderText, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
@@ -53,6 +53,7 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
         {feeLine(row)}
         {team.extra > 0 && `. Rounding up adds ${dollars(team.extra)}.`}
         {team.extra < 0 && `. Custom amounts leave ${dollars(-team.extra)} of the ${dollars(total)} uncovered.`}
+        {team.notPlayingPaid > 0 && `. Collected includes ${dollars(team.notPlayingPaid)} from players not playing.`}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {team.stillToPay.length > 0 && (
@@ -84,7 +85,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   // The team as it was that session, so later status changes don't rewrite it.
   const { row, payments, history, members, started } = sessionSlice(data, period);
   const total = row ? Number(row.total_fee) || 0 : 0;
-  const team = teamDues(total, members, payments);
+  const team = teamDues(total, members, payments, data.profiles);
   const past = !!current && isEarlier(period, current);
   const notStarted = !started && !!current && isEarlier(current, period);
   const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid);
@@ -108,19 +109,25 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
     }
   };
 
+  // Marks a player (and their partner) paid for their share right now; for someone already paid, that's the difference.
   const markPaid = async (player) => {
     const partner = team.partnerOf(player.user_id);
+    const ids = [player.user_id, partner?.user_id].filter(Boolean);
+    // Everyone in it already paid: this pays the difference after their share went up.
+    const balance = ids.every((id) => team.shareOf(id).paid) ? team.balanceOf(player.user_id) : 0;
+    const names = [player.display_name, partner?.display_name].filter(Boolean).join(' & ');
     setBusyId(player.user_id);
     try {
       await api.dues.markPaid({
         year: period.year,
         session: period.session,
-        userIds: [player.user_id, partner?.user_id].filter(Boolean),
+        userIds: ids,
         paid: true,
         paidDate: today(),
+        amounts: ids.map((id) => team.shareOf(id).amount),
       });
       await onChanged();
-      toast({ title: `${[player.display_name, partner?.display_name].filter(Boolean).join(' & ')} marked paid` });
+      toast({ title: balance ? `${names}: ${dollars(balance)} more marked paid` : `${names} marked paid` });
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });
     } finally {
@@ -142,15 +149,23 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
     toast({ title: 'Reminder copied', description: 'Paste it into the team chat or group text.' });
   };
 
+  const markedBy = (userId) => {
+    const payment = payments.find((x) => x.user_id === userId);
+    return payment?.paid && payment.paid_by && payment.paid_by !== userId ? `marked by ${shortName(nameOf(payment.paid_by))}` : null;
+  };
+
   const playerRow = (p) => {
     const share = team.shareOf(p.user_id);
     const partner = team.partnerOf(p.user_id);
-    const payment = payments.find((x) => x.user_id === p.user_id);
+    // Paid players show what they paid, and say so if their share has changed since.
+    const changed = share.paid && share.paid_amount !== share.amount;
+    const balance = share.paid ? team.balanceOf(p.user_id) : 0;
     const details = [
       p.guest && 'not joined yet',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
-      share.paid && payment?.paid_by && payment.paid_by !== p.user_id && `marked by ${shortName(nameOf(payment.paid_by))}`,
+      changed && `share is now ${dollars(share.amount)}`,
+      share.paid && markedBy(p.user_id),
     ].filter(Boolean);
     return (
       <li key={p.user_id} className="flex items-center gap-2 py-2">
@@ -167,9 +182,19 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
           </span>
         </button>
         <span className="text-sm font-bold tabular-nums text-zinc-700" aria-label={`Amount for ${p.display_name}`}>
-          {dollars(share.amount)}
+          {dollars(share.paid ? share.paid_amount : share.amount)}
         </span>
-        {share.paid ? (
+        {balance > 0 ? (
+          <button
+            type="button"
+            onClick={() => markPaid(p)}
+            disabled={busyId === p.user_id}
+            aria-label={`Mark ${dollars(balance)} more paid for ${p.display_name}`}
+            className="h-8 min-w-[78px] shrink-0 whitespace-nowrap rounded-full bg-lime-400 px-3 text-[10px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
+          >
+            Mark {dollars(balance)} paid
+          </button>
+        ) : share.paid ? (
           <StatusChip paid date={share.paid_date} dateOnly className="h-8 w-[78px] justify-center" />
         ) : (
           <button
@@ -182,6 +207,39 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             Mark paid
           </button>
         )}
+      </li>
+    );
+  };
+
+  // Paid for the session but not on its active roster: what they paid, and why they're not on it.
+  const notPlayingRow = (entry) => {
+    const p = entry.player;
+    const details = [
+      p.guest && 'not joined yet',
+      notPlayingLabel(entry),
+      entry.paid_amount == null && 'amount not recorded',
+      markedBy(p.user_id),
+    ].filter(Boolean);
+    return (
+      <li key={p.user_id} className="flex items-center gap-2 py-2">
+        <button
+          type="button"
+          onClick={() => setSheetFor(p.user_id)}
+          aria-label={`Details for ${p.display_name}`}
+          className="-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-left transition hover:bg-zinc-50"
+        >
+          <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{p.display_name}</span>
+            <span className="block truncate text-[11px] font-medium text-zinc-400">{details.join(' · ')}</span>
+          </span>
+        </button>
+        {entry.paid_amount != null && (
+          <span className="text-sm font-bold tabular-nums text-zinc-700" aria-label={`Amount for ${p.display_name}`}>
+            {dollars(entry.paid_amount)}
+          </span>
+        )}
+        <StatusChip paid date={entry.paid_date} dateOnly className="h-8 w-[78px] justify-center" />
       </li>
     );
   };
@@ -292,6 +350,16 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
           <div data-testid="dues-paid" className={cn(unpaid.length > 0 && 'mt-4')}>
             <h3 className={cn(EYEBROW, 'text-zinc-400')}>Paid · {paid.length}</h3>
             <ul className="divide-y divide-zinc-100">{paid.map(playerRow)}</ul>
+          </div>
+        )}
+        {team.notPlaying.length > 0 && (
+          <div data-testid="dues-not-playing" className={cn((unpaid.length > 0 || paid.length > 0) && 'mt-4')}>
+            <h3 className={cn(EYEBROW, 'text-zinc-400')}>Paid, not playing · {team.notPlaying.length}</h3>
+            <ul className="divide-y divide-zinc-100">{team.notPlaying.map(notPlayingRow)}</ul>
+            <p className="text-[11px] font-medium text-zinc-400">
+              They paid for this session but aren't on its roster, so they don't owe anything. What they paid counts in
+              Collected.
+            </p>
           </div>
         )}
         {team.active.length === 0 && (

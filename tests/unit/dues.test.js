@@ -1,5 +1,5 @@
-// Dues math and pay links (src/lib/dues.js). The database's my_dues() splits
-// the same way; supabase/tests/dues.test.sql checks it with the same numbers.
+// Dues math and pay links (src/lib/dues.js). supabase/tests/dues.test.sql uses
+// the same numbers for what the database records.
 import { describe, expect, it } from 'vitest';
 import {
   DUES_DEFAULTS,
@@ -10,6 +10,7 @@ import {
   feeParts,
   feeSentence,
   feeTotal,
+  notPlayingLabel,
   payNote,
   payOptions,
   reminderText,
@@ -59,11 +60,13 @@ describe('splitting the fee', () => {
     ];
     const split = splitDues(721, ['kim', 'dana', 'dex', 'dot'], payments);
     expect(split.perPlayer).toBe(227);
+    const unpaid = { custom: false, paid: false, paid_date: null, paid_amount: null, shortBy: 0 };
     expect(split.players).toEqual([
-      { user_id: 'kim', amount: 227, custom: false, paid: false, paid_date: null },
-      { user_id: 'dana', amount: 227, custom: false, paid: false, paid_date: null },
-      { user_id: 'dex', amount: 40, custom: true, paid: false, paid_date: null },
-      { user_id: 'dot', amount: 227, custom: false, paid: true, paid_date: '2026-10-03' },
+      { ...unpaid, user_id: 'kim', amount: 227 },
+      { ...unpaid, user_id: 'dana', amount: 227 },
+      { ...unpaid, user_id: 'dex', amount: 40, custom: true },
+      // Marked paid before amounts were recorded: their share counts as what they paid.
+      { user_id: 'dot', amount: 227, custom: false, paid: true, paid_date: '2026-10-03', paid_amount: 227, shortBy: 0 },
     ]);
     expect(split).toMatchObject({ owed: 721, collected: 227, stillOwed: 494, paidCount: 1, extra: 0 });
   });
@@ -88,6 +91,113 @@ describe('splitting the fee', () => {
   });
 });
 
+describe('what paid players paid', () => {
+  // A $721 session across 12 players is $61 each. The fee went up to $735 ($62 each) after some had paid.
+  const twelve = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+  const paidAt = (user_id, paid_amount) => ({ user_id, paid: true, paid_date: '2026-10-03', paid_amount, override_amount: null });
+
+  it('keeps what they paid when the fee goes up, and counts the difference as still to collect', () => {
+    const split = splitDues(735, twelve, [paidAt('a', 61), paidAt('b', '61.00'), paidAt('c', 62)]);
+    expect(split.perPlayer).toBe(62);
+    expect(split.players.slice(0, 4).map((p) => [p.user_id, p.amount, p.paid_amount, p.shortBy])).toEqual([
+      ['a', 62, 61, 1],
+      ['b', 62, 61, 1],
+      ['c', 62, 62, 0],
+      ['d', 62, null, 0],
+    ]);
+    // Collected is what was paid; still to collect is the 9 unpaid shares plus the two $1 differences.
+    expect(split).toMatchObject({ owed: 744, collected: 184, stillOwed: 560, paidCount: 3 });
+  });
+
+  it('keeps what they paid when the fee goes down, without counting it against anyone else', () => {
+    const split = splitDues(600, twelve, [paidAt('a', 61), paidAt('b', 50)]);
+    expect(split.perPlayer).toBe(50);
+    expect(split.players.slice(0, 2).map((p) => [p.paid_amount, p.shortBy])).toEqual([
+      [61, 0],
+      [50, 0],
+    ]);
+    expect(split).toMatchObject({ owed: 600, collected: 111, stillOwed: 500 });
+  });
+
+  it('counts the share for payments from before amounts were recorded', () => {
+    const split = splitDues(735, twelve, [paidAt('a', null), { user_id: 'b', paid: true }]);
+    expect(split.players.slice(0, 2).map((p) => [p.paid_amount, p.shortBy])).toEqual([
+      [62, 0],
+      [62, 0],
+    ]);
+    expect(split).toMatchObject({ collected: 124, stillOwed: 620 });
+  });
+
+  it('works in cents', () => {
+    const split = splitDues(100, ['a', 'b'], [{ ...paidAt('a', 40.1), override_amount: 40.3 }, paidAt('b', 59.9)]);
+    expect(split.players.map((p) => p.shortBy)).toEqual([0.2, 0.1]);
+    expect(split).toMatchObject({ collected: 100, stillOwed: 0.3 });
+  });
+
+  it('puts the difference in the reminder, a couple together', () => {
+    const profile = (name, extra = {}) => ({ user_id: name.toLowerCase(), display_name: name, status: 'active', ...extra });
+    const profiles = [profile('Alex', { pays_with: 'riley' }), profile('Riley', { pays_with: 'alex' }), profile('Morgan'), profile('Sam')];
+    const team = teamDues(400, profiles, [paidAt('alex', 90), paidAt('riley', 95), paidAt('sam', 100)]);
+    expect(team.stillToPay).toEqual([
+      { name: 'Alex & Riley', amount: 15, more: true },
+      { name: 'Morgan', amount: 100, more: false },
+    ]);
+    expect(team.balanceOf('alex')).toBe(15);
+    expect(team.balanceOf('sam')).toBe(0);
+    expect(team.stillOwed).toBe(115);
+
+    // One partner paid in full, the other hasn't paid: that's still one line, for the unpaid share.
+    const mixed = teamDues(400, profiles, [paidAt('alex', 100), paidAt('sam', 100), paidAt('morgan', 100)]);
+    expect(mixed.stillToPay).toEqual([{ name: 'Riley', amount: 100, more: false }]);
+  });
+});
+
+describe('players who paid and are not playing', () => {
+  const people = [
+    { user_id: 'kim', display_name: 'Kim', status: 'active' },
+    { user_id: 'sam', display_name: 'Sam', status: 'active' },
+    { user_id: 'jo', display_name: 'Jo', status: 'on_break' },
+    { user_id: 'pat', display_name: 'Pat', status: 'sub_pool' },
+  ];
+  // Off the session's list, so not among the session's players at all.
+  const everyone = [
+    ...people,
+    { user_id: 'lee', display_name: 'Lee', status: 'inactive', removed: true },
+    { user_id: 'g1', display_name: 'Rosa (roster name)', status: 'inactive', guest: true, linked_user_id: 'kim' },
+    { user_id: 'max', display_name: 'Max', status: 'active' },
+  ];
+  const payments = [
+    { user_id: 'kim', paid: true, paid_amount: 50, paid_date: '2026-10-01' },
+    { user_id: 'jo', paid: true, paid_amount: 50, paid_date: '2026-10-02' },
+    { user_id: 'pat', paid: true, paid_amount: null, paid_date: '2026-10-03' },
+    { user_id: 'pat', paid: false },
+    { user_id: 'lee', paid: true, paid_amount: 45.5, paid_date: '2026-10-04' },
+    // A roster name's payment that moved to Kim's account when she picked it: a repeat.
+    { user_id: 'g1', paid: true, paid_amount: 50, paid_date: '2026-10-01' },
+    { user_id: 'max', paid: false, override_amount: 10 },
+  ];
+
+  it('are listed with what they paid, and it counts in Collected', () => {
+    const team = teamDues(100, people, payments, everyone);
+    expect(team.active.map((p) => p.user_id)).toEqual(['kim', 'sam']);
+    expect(team.notPlaying.map((p) => [p.player.display_name, p.status, p.paid_amount, p.paid_date])).toEqual([
+      ['Jo', 'on_break', 50, '2026-10-02'],
+      ['Lee', 'off', 45.5, '2026-10-04'],
+      ['Pat', 'sub_pool', null, '2026-10-03'],
+    ]);
+    expect(team.notPlaying.map(notPlayingLabel)).toEqual(['sitting out', 'off the team', 'sub pool']);
+    // Kim's $50, plus Jo's $50 and Lee's $45.50. Pat's amount wasn't recorded.
+    expect(team).toMatchObject({ collected: 145.5, notPlayingPaid: 95.5, stillOwed: 50, paidCount: 1 });
+    expect(team.notPlayingOf('jo').paid_amount).toBe(50);
+    expect(team.notPlayingOf('kim')).toBeNull();
+    expect(notPlayingLabel({ status: 'off', player: { removed: false } })).toBe('not on the roster');
+  });
+
+  it('are found among the session players alone when that is all there is', () => {
+    expect(teamDues(100, people, payments).notPlaying.map((p) => p.user_id)).toEqual(['jo', 'pat']);
+  });
+});
+
 describe('couples who pay together', () => {
   const profile = (name, extra = {}) => ({ user_id: name.toLowerCase(), display_name: name, status: 'active', ...extra });
   const profiles = [
@@ -108,9 +218,9 @@ describe('couples who pay together', () => {
 
   it('show up in the reminder as one line with one amount while both still owe', () => {
     expect(teamDues(400, profiles, []).stillToPay).toEqual([
-      { name: 'Alex & Riley', amount: 200 },
-      { name: 'Casey', amount: 100 },
-      { name: 'Morgan', amount: 100 },
+      { name: 'Alex & Riley', amount: 200, more: false },
+      { name: 'Casey', amount: 100, more: false },
+      { name: 'Morgan', amount: 100, more: false },
     ]);
     const oneMarked = teamDues(400, profiles, [{ user_id: 'riley', paid: true }]);
     expect(oneMarked.stillToPay.map((p) => p.name)).toEqual(['Alex', 'Casey', 'Morgan']);
@@ -155,7 +265,7 @@ describe('teammates who are not on the app', () => {
     const team = teamDues(100, members, payments);
     expect(team.perPlayer).toBe(50);
     expect(team.partnerOf('u1').display_name).toBe('Mike');
-    expect(team.stillToPay).toEqual([{ name: 'Kelly & Mike', amount: 100 }]);
+    expect(team.stillToPay).toEqual([{ name: 'Kelly & Mike', amount: 100, more: false }]);
   });
 });
 
@@ -231,7 +341,7 @@ describe('pasted payment links', () => {
 });
 
 describe('the reminder', () => {
-  it('names who still owes, with amounts for anyone not on the even split', () => {
+  it('names who still owes, with amounts for anyone not on the even split or paying a difference', () => {
     const text = reminderText({
       session: 2,
       parts: DUES_DEFAULTS,
@@ -240,6 +350,7 @@ describe('the reminder', () => {
       unpaid: [
         { name: 'Alex Chen', amount: 73 },
         { name: 'Kelly Moss', amount: 40 },
+        { name: 'Sam Okafor', amount: 11, more: true },
       ],
       link: 'https://jiveturkeys.app/dues',
     });
@@ -247,7 +358,7 @@ describe('the reminder', () => {
       [
         '🦃 Jive Turkeys — Session 2 dues: $73 each',
         "That's the $595 league fee plus $18 refs × 7 games = $721, split across 10 players.",
-        'Still to pay: Alex Chen, Kelly Moss ($40)',
+        'Still to pay: Alex Chen, Kelly Moss ($40), Sam Okafor ($11 more)',
         'See your amount and pay: https://jiveturkeys.app/dues',
       ].join('\n'),
     );

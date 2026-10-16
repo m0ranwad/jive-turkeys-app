@@ -301,15 +301,21 @@ export function createSupabaseBackend(url, key) {
   };
 
   const dues = {
-    /** Marks players paid (or unpaid again) for a session. Any player can, for anyone. */
-    async markPaid({ year, session, userIds, paid, paidDate }) {
-      const { error } = await supabase.rpc('mark_dues_paid', {
+    /**
+     * Marks players paid (or unpaid again) for a session. Any player can, for anyone. `amounts` is what
+     * each one pays, in the same order as `userIds`: their share right now.
+     */
+    async markPaid({ year, session, userIds, paid, paidDate, amounts }) {
+      const params = {
         p_season_year: Number(year),
         p_session: Number(session),
         p_user_ids: userIds,
         p_paid: paid,
         p_paid_date: paid ? paidDate : null,
-      });
+      };
+      let { error } = await supabase.rpc('mark_dues_paid', { ...params, p_amounts: paid ? amounts ?? null : null });
+      // The site can go live a few minutes before the database update that records amounts.
+      if (error?.code === 'PGRST202') ({ error } = await supabase.rpc('mark_dues_paid', params));
       if (error) fail(error);
     },
     /** Links two players who pay together (either can be a guest); a null partner unlinks. */

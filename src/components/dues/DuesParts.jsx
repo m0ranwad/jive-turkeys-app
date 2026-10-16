@@ -79,8 +79,12 @@ export function feeLine(row) {
   return `${dollars(parts.league_fee)} league + ${parts.game_count} × ${dollars(parts.ref_fee)} refs = ${total}`;
 }
 
-/** One line of the paid / not paid history: who marked whom, and when. */
-export function historyLine(event, nameOf, meId) {
+/**
+ * One line of the paid / not paid history: who marked whom, how much, and when.
+ * `before` is the same player's change before this one: paid then too means this
+ * paid the difference after their share went up.
+ */
+export function historyLine(event, nameOf, meId, before = null) {
   const actor = !event.changed_by ? 'Someone' : event.changed_by === meId ? 'You' : shortName(nameOf(event.changed_by));
   const subject =
     event.user_id === event.changed_by
@@ -90,8 +94,23 @@ export function historyLine(event, nameOf, meId) {
       : event.user_id === meId
         ? 'you'
         : shortName(nameOf(event.user_id));
-  return `${actor} marked ${subject} ${event.paid ? 'paid' : 'not paid'}`;
+  const line = `${actor} marked ${subject} ${event.paid ? 'paid' : 'not paid'}`;
+  // Payments marked before amounts were recorded have none.
+  if (!event.paid || event.paid_amount == null) return line;
+  const earlier = before?.paid && before.paid_amount != null ? Number(before.paid_amount) : null;
+  if (earlier == null) return `${line} ${dollars(event.paid_amount)}`;
+  return `${line} ${dollars(Math.round((Number(event.paid_amount) - earlier) * 100) / 100)} more`;
 }
+
+/** The change before `events[index]` for the same player and session. `events` is newest first. */
+const changeBefore = (events, index) => {
+  const event = events[index];
+  return (
+    events
+      .slice(index + 1)
+      .find((e) => e.user_id === event.user_id && e.season_year === event.season_year && e.session === event.session) || null
+  );
+};
 
 export function HistoryList({ events, nameOf, meId, limit }) {
   const [all, setAll] = useState(false);
@@ -99,14 +118,16 @@ export function HistoryList({ events, nameOf, meId, limit }) {
   return (
     <div>
       <ul className="space-y-2.5">
-        {shown.map((event) => (
+        {shown.map((event, index) => (
           <li key={event.id} className="flex gap-3">
             <span
               className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', event.paid ? 'bg-lime-400' : 'bg-amber-400')}
               aria-hidden
             />
             <span className="min-w-0">
-              <span className="block text-sm font-semibold text-zinc-800">{historyLine(event, nameOf, meId)}</span>
+              <span className="block text-sm font-semibold text-zinc-800">
+                {historyLine(event, nameOf, meId, changeBefore(events, index))}
+              </span>
               <span className="block text-[11px] font-medium text-zinc-400">
                 {dayjs(event.created_date).format('ddd, MMM D · h:mm A')}
               </span>
