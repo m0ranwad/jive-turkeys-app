@@ -59,9 +59,12 @@ test('the app icon (Home Screen app) shows the same number, and clears as you re
   await expect.poll(() => iconBadge(page)).toBe(0);
 });
 
-test('the menu shows the same count', async ({ page }) => {
+test('the menu shows the same count, and its Team Chat opens Team Chat', async ({ page }) => {
   await page.getByRole('button', { name: 'Menu' }).click();
-  await expect(page.getByRole('link', { name: /Team Chat/ }).getByLabel('6 unread')).toBeVisible();
+  const link = page.getByRole('link', { name: /Team Chat/ });
+  await expect(link.getByLabel('6 unread')).toBeVisible();
+  await link.click();
+  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
 });
 
 test('the Chat tab link still goes to the chat', async ({ page }) => {

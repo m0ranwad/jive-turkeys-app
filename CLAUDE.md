@@ -29,7 +29,7 @@ README.md has the service inventory and the current setup status.
   the icons in `public/`, `public/sw.js`, and the guide in `src/components/InstallApp.jsx`). The service
   worker caches nothing on purpose, so every visit gets the latest site. Don't add caching to it without
   a plan for updates. It also shows chat notifications.
-- **Chat notifications** (Web Push, no email) are turned on with the bell in the chat header. On an iPhone
+- **Chat notifications** (Web Push, no email) are turned on with the bell at the top of the chat's room list. On an iPhone
   they need the Home Screen app. The database decides who gets each one and calls the `notify-chat`
   Supabase function, which `.github/workflows/functions.yml` deploys when `supabase/functions/` changes
   on `main`, using the `SUPABASE_ACCESS_TOKEN` secret. The workflow made the sending keys (`VAPID_*`

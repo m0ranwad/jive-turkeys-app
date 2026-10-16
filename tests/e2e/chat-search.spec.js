@@ -1,14 +1,14 @@
 // Searching the chat: results from Team Chat and threads, and tapping one
 // jumps to that message, loading further back if it's old. What the database
 // search matches is checked in supabase/tests/chat.test.sql.
-import { expect, message, openChat, signIn, test } from './helpers';
+import { expect, message, openChat, openSearch, signIn, test } from './helpers';
 
 const searchBox = (page) => page.getByRole('searchbox', { name: 'Search the chat' });
 
 test('find a message in a thread and jump to it', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await page.getByRole('button', { name: 'Search the chat' }).click();
+  await openSearch(page);
   await searchBox(page).fill('fantasy');
   const result = page.getByRole('dialog', { name: 'Search the chat' }).getByRole('button', { name: /Starting a team fantasy league/ });
   await expect(result).toContainText('🏈 Fantasy football league');
@@ -36,7 +36,7 @@ test('an old message is loaded and shown', async ({ page }) => {
   });
   await page.reload();
   await openChat(page);
-  await page.getByRole('button', { name: 'Search the chat' }).click();
+  await openSearch(page);
   await searchBox(page).fill('gate code');
   await page.getByRole('dialog', { name: 'Search the chat' }).getByRole('button', { name: /The gate code is 4417/ }).click();
   await expect(message(page, 'The gate code is 4417')).toBeInViewport();
@@ -45,7 +45,7 @@ test('an old message is loaded and shown', async ({ page }) => {
 test('nothing found says so', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await page.getByRole('button', { name: 'Search the chat' }).click();
+  await openSearch(page);
   await searchBox(page).fill('zzzz');
   await expect(page.getByText('Nothing found.')).toBeVisible();
 });

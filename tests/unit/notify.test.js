@@ -44,7 +44,8 @@ describe('chatNotification', () => {
     expect(chatNotification({ thread_id: null, author_name: 'Jordan Rivera', body: 'Who has pinnies?' })).toEqual({
       title: 'Team Chat',
       body: 'Jordan R.: Who has pinnies?',
-      url: '/banter',
+      // Team Chat's own address: on phones, plain /banter is the room list.
+      url: '/banter?room=team',
       tag: 'chat-team',
     });
     expect(chatNotification({ thread_id: 't1', thread_title: '⚽ Sunday pickup', author_name: 'Sam', body: 'Field 3' })).toEqual({
@@ -105,7 +106,7 @@ describe('handleNotify', () => {
     expect(result).toMatchObject({ sent: 2, forgotten: 0, failed: 0 });
     expect(db.pushTargets).toHaveBeenCalledWith(MESSAGE);
     expect(delivered.map((d) => d.to).sort()).toEqual(['a', 'b']);
-    expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'Jordan R.: In', url: '/banter', tag: 'chat-team' });
+    expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'Jordan R.: In', url: '/banter?room=team', tag: 'chat-team' });
   });
 
   it("puts each player's unread chat count on their app icon", async () => {
@@ -138,7 +139,7 @@ describe('handleNotify', () => {
     const [status, result] = await handleNotify({ message_id: MESSAGE }, '', deps);
     expect(status).toBe(200);
     expect(result).toMatchObject({ sent: 1, failed: 0 });
-    expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'A: x', url: '/banter', tag: 'chat-team' });
+    expect(delivered[0].message).toEqual({ title: 'Team Chat', body: 'A: x', url: '/banter?room=team', tag: 'chat-team' });
   });
 
   it('forgets phones that unsubscribed, and keeps going past failures', async () => {

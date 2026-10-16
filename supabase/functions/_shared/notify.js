@@ -14,12 +14,15 @@ function shortName(name) {
 
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
-/** What a chat notification says, and where tapping it goes. One per room is kept on screen (tag). */
+/**
+ * What a chat notification says, and where tapping it goes (that room: on phones
+ * plain /banter is the room list). One per room is kept on screen (tag).
+ */
 export function chatNotification({ thread_id, thread_title, author_name, body }) {
   return {
     title: thread_id ? thread_title || 'Thread' : 'Team Chat',
     body: clip(`${shortName(author_name)}: ${String(body).replace(/\s+/g, ' ').trim()}`, 160),
-    url: thread_id ? `/banter?thread=${thread_id}` : '/banter',
+    url: thread_id ? `/banter?thread=${thread_id}` : '/banter?room=team',
     tag: `chat-${thread_id || 'team'}`,
   };
 }
