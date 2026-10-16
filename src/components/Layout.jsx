@@ -23,6 +23,7 @@ import { Walkthrough } from '@/components/Walkthrough';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
+import { lastChatRoom } from '@/lib/chat';
 import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
 import { DEFAULT_SETTINGS, STATUS_LABEL } from '@/lib/constants';
 import { initials } from '@/lib/format';
@@ -74,6 +75,9 @@ export function Layout() {
   const { offer: offerInstall } = useInstall();
   const { pathname } = useLocation();
   const onChat = pathname === CHAT_PATH;
+  // The Chat tab brings you back to the room you were in during this visit; tapped while you're in the
+  // chat, it goes to the room list. Like a phone app's tabs.
+  const linkTo = (to) => (to === CHAT_PATH && !onChat ? `${CHAT_PATH}${lastChatRoom()}` : to);
   const chatUnread = useChatUnread(!!user);
   // No badges while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.unread : 0);
@@ -155,7 +159,7 @@ export function Layout() {
             {TABS.map((tab) => (
               <NavLink
                 key={tab.to}
-                to={tab.to}
+                to={linkTo(tab.to)}
                 end={tab.to === '/'}
                 className={({ isActive }) =>
                   cn(
@@ -219,7 +223,7 @@ export function Layout() {
           {TABS.map((tab) => (
             <NavLink
               key={tab.to}
-              to={tab.to}
+              to={linkTo(tab.to)}
               end={tab.to === '/'}
               className={({ isActive }) =>
                 cn(
@@ -282,7 +286,8 @@ export function Layout() {
                 .map((item) => (
                   <Link
                     key={item.to}
-                    to={item.to}
+                    // Says Team Chat, so it opens Team Chat (the Chat tab opens the room list on phones).
+                    to={item.to === CHAT_PATH ? `${CHAT_PATH}?room=team` : item.to}
                     onClick={() => setMenuOpen(false)}
                     className="flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold transition hover:bg-white/5"
                   >

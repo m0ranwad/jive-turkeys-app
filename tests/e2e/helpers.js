@@ -47,8 +47,8 @@ export async function recordIconBadge(page) {
 /** The number on the app icon right now (0: none). */
 export const iconBadge = (page) => page.evaluate(() => window.__iconBadge.at(-1));
 
-/** The Chat tab: bottom bar on phones, top bar on computers. */
-export const chatTab = (page) => page.locator('a[href="/banter"]:visible').first();
+/** The Chat tab: bottom bar on phones, top bar on computers. It links to the room you were last in, if any. */
+export const chatTab = (page) => page.locator('a[href^="/banter"]:visible').first();
 export const chatBadge = (page) => chatTab(page).locator('[aria-label$="unread"]');
 
 export const isPhone = (testInfo) => testInfo.project.name === 'phone';
@@ -56,12 +56,10 @@ export const isPhone = (testInfo) => testInfo.project.name === 'phone';
 /** Phones show the room list or a room; computers show both side by side. */
 export const phoneLayout = (page) => page.viewportSize().width < 768;
 
-/** Taps the Chat tab and opens Team Chat (phones start on the room list). */
+/** Taps the Chat tab (the room list, or the room you were last in) and opens Team Chat. */
 export async function openChat(page) {
   await chatTab(page).click();
-  const teamChat = page.locator('[data-room="team"]');
-  await expect(teamChat).toBeVisible();
-  if (phoneLayout(page)) await teamChat.click();
+  await openTeamChat(page);
   await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();
 }
 
@@ -76,7 +74,7 @@ export async function expectChatStart(page) {
 export async function showRooms(page) {
   const list = page.locator('[data-room="team"]');
   // Wait for the chat to be on screen (say, after a reload): the list, or a room with its back arrow.
-  await expect(page.locator('[data-room="team"]:visible, [aria-label="All chats"]:visible').first()).toBeVisible();
+  await expect(page.locator('[data-room="team"]:visible, [aria-label^="All chats"]:visible').first()).toBeVisible();
   // Phones: the back arrow in a room.
   if (!(await list.isVisible())) await page.getByRole('button', { name: 'All chats' }).click();
   await expect(list).toBeVisible();

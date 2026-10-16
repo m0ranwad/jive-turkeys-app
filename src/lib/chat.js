@@ -147,6 +147,29 @@ export const roomOf = (message) => message.thread_id ?? null;
 /** Fired after a room is marked read, so the unread badge refreshes. */
 export const CHAT_READ_EVENT = 'jt:chat-read';
 
+const LAST_ROOM_KEY = 'jt_chat_last_room';
+
+/**
+ * The room the player was last in during this visit ('?thread=…' or '?room=team'; '' for the room
+ * list), so the Chat tab brings them back to it, as a phone app's tab does.
+ */
+export function lastChatRoom() {
+  try {
+    return sessionStorage.getItem(LAST_ROOM_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function rememberChatRoom(search) {
+  try {
+    if (search) sessionStorage.setItem(LAST_ROOM_KEY, search);
+    else sessionStorage.removeItem(LAST_ROOM_KEY);
+  } catch {
+    // Private mode: the Chat tab opens the room list.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Kinds of room (chat_threads.visibility): threads are for the whole team,
 // private chats for the teammates in them, and the Captains' Lounge for

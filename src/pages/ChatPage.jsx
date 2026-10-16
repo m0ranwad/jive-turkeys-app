@@ -40,6 +40,7 @@ import {
   privateChatTitle,
   roomOf,
   roomTitle,
+  rememberChatRoom,
   splitLeadingEmoji,
   upsertMember,
   upsertThread,
@@ -76,7 +77,8 @@ function ChatTip() {
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-lime-50 py-2.5 pl-3 pr-2 text-xs font-medium leading-relaxed text-lime-900 ring-1 ring-lime-200">
       <span className="flex-1">
-        <b>Tip:</b> tap any message to react, reply or copy it. Tap <b>New</b> to start a thread or a private chat.
+        <b>Tip:</b> in a chat, tap any message to react, reply or copy it. Tap <b>New</b> to start a thread or a
+        private chat.
       </span>
       <button
         onClick={dismiss}
@@ -495,6 +497,11 @@ export function ChatPage() {
 
   const thread = room ? shownThreads?.find((t) => t.id === room) : null;
   const threadMissing = !!room && !!threads && !thread;
+
+  // For the Chat tab: the room on screen, or nothing (the list, or a room that's gone).
+  useEffect(() => {
+    rememberChatRoom(room === undefined || threadMissing ? '' : room ? `?thread=${room}` : '?room=team');
+  }, [room, threadMissing]);
   const privateRoom = isPrivate(thread);
   const lounge = isLounge(thread);
   const canManage = canManageRoom(thread, me, isCaptain);
@@ -860,6 +867,16 @@ export function ChatPage() {
       : `Everyone · ${teamSize} players`;
 
   const waiting = room === undefined ? null : waitingElsewhere(rooms, room);
+  const backLabel = waiting
+    ? [
+        'All chats',
+        waiting.mentions > 0 && `${waiting.mentions} ${waiting.mentions === 1 ? 'mention' : 'mentions'}`,
+        waiting.unread > 0 && `${waiting.unread} unread`,
+        !waiting.mentions && !waiting.unread && waiting.fresh && 'new threads',
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : '';
   const hasOptions = canManage || privateRoom;
   const closeMenuAnd = (next) => () => {
     setMenuOpen(false);
@@ -915,19 +932,17 @@ export function ChatPage() {
       {!listOnly && (
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <header className="flex items-center gap-2.5 border-b border-black/5 px-3 py-2.5">
-            {/* Phones: back to the list, with what's waiting in the other rooms. Mentions first, like the Chat tab. */}
+            {/* Phones: back to the list, with what's waiting in the other rooms, counted like the list rows. */}
             <button
               onClick={showList}
-              aria-label="All chats"
-              className="-ml-1 inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full pr-0.5 text-zinc-500 transition hover:bg-zinc-100 md:hidden"
+              aria-label={backLabel}
+              className="-ml-1 inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-0.5 rounded-full pr-0.5 text-zinc-500 transition hover:bg-zinc-100 md:hidden"
             >
               <ChevronLeft className="h-5 w-5 shrink-0" />
-              {waiting.mentions > 0 ? (
-                <MentionCount n={waiting.mentions} />
-              ) : waiting.unread > 0 ? (
-                <UnreadCount n={waiting.unread} />
-              ) : (
-                waiting.fresh && <span className="mr-1 h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
+              {waiting.mentions > 0 && <MentionCount n={waiting.mentions} />}
+              {waiting.unread > 0 && <UnreadCount n={waiting.unread} />}
+              {!waiting.mentions && !waiting.unread && waiting.fresh && (
+                <span className="mr-1 h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
               )}
             </button>
             {/* The room's icon on computers; phones keep the space for its name. */}
@@ -939,7 +954,8 @@ export function ChatPage() {
               </span>
             )}
             <div className="min-w-0 flex-1 leading-tight">
-              <h1 className="truncate font-display text-base font-extrabold uppercase tracking-tight">
+              {/* Not in capitals like other headings: a room's name is often long, and wide capitals cut it short. */}
+              <h1 className="truncate font-display text-base font-extrabold tracking-tight">
                 {threadMissing ? 'Thread' : title}
               </h1>
               <p className="truncate text-[11px] font-semibold text-zinc-400">{subtitle}</p>

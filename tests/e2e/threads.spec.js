@@ -6,6 +6,7 @@ import {
   composer,
   expect,
   expectChatStart,
+  goToSchedule,
   isPhone,
   message,
   openChat,
@@ -50,16 +51,18 @@ test('threads show unread counts, and New for ones never opened', async ({ page 
   await expect(roomRow(page, 'Post-game food spot').getByLabel(/unread/)).toHaveCount(0);
 });
 
-test("on phones, the back arrow counts what's waiting in the other rooms, mentions of you first", async ({ page }, testInfo) => {
+test("on phones, the back arrow counts what's waiting in the other rooms, like the list does", async ({ page }, testInfo) => {
   test.skip(!isPhone(testInfo), 'phones only; computers show the list beside the chat');
-  const back = page.getByRole('button', { name: 'All chats' });
-  // In Team Chat: the fantasy thread (never opened) mentions you, which shows in place of the unread number.
+  const back = page.getByRole('button', { name: /^All chats/ });
+  // In Team Chat: the fantasy thread (never opened) mentions you, and Sunday pickup has 3 unread.
   await expect(back.getByLabel('1 mention')).toBeVisible();
-  await expect(back.getByLabel(/unread/)).toHaveCount(0);
+  await expect(back.getByLabel('3 unread')).toBeVisible();
+  // Screen readers hear the counts too.
+  await expect(back).toHaveAccessibleName('All chats, 1 mention, 3 unread');
   await openRoom(page, 'Fantasy football league');
   await expect(message(page, 'Count me in')).toBeVisible();
   await openTeamChat(page);
-  // Sunday pickup's 3, now that the mention is read.
+  // The mention is read now.
   await expect(back.getByLabel('3 unread')).toBeVisible();
   await expect(back.getByLabel(/mention/)).toHaveCount(0);
   await openRoom(page, 'Sunday pickup?');
@@ -202,6 +205,7 @@ test.describe('on phones', () => {
   });
 
   test('Chat opens on the room list; a room fills the screen, and ‹ goes back to the list', async ({ page }) => {
+    // Tapping Chat while in the chat goes to the list, as phone apps do.
     await chatTab(page).click();
     await expectChatStart(page);
     await expect(page).toHaveURL(/\/banter$/);
@@ -218,6 +222,20 @@ test.describe('on phones', () => {
     await roomRow(page, 'Sunday pickup?').click();
     await expect(page.getByRole('heading', { name: 'Sunday pickup?' })).toBeVisible();
     await page.goBack();
+    await expectChatStart(page);
+  });
+
+  test('the Chat tab brings you back to the room you were in; from the list, back to the list', async ({ page }) => {
+    await openRoom(page, 'Sunday pickup?');
+    await goToSchedule(page);
+    await chatTab(page).click();
+    await expect(page.getByRole('heading', { name: 'Sunday pickup?' })).toBeVisible();
+    await expect(message(page, "Can't this week")).toBeVisible();
+    // Tapped again while in the chat: the list.
+    await chatTab(page).click();
+    await expectChatStart(page);
+    await goToSchedule(page);
+    await chatTab(page).click();
     await expectChatStart(page);
   });
 
