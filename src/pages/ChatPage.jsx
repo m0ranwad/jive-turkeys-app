@@ -10,8 +10,10 @@ import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush 
 import { Conversation } from '@/components/chat/Conversation';
 import { MentionCount, ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
 import { useToast } from '@/components/ui/toast';
+import { rememberPhotoUrl } from '@/hooks/usePhotoUrl';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
+import { friendlyError } from '@/lib/errors';
 import {
   CHAT_READ_EVENT,
   addReaction,
@@ -25,6 +27,7 @@ import {
 } from '@/lib/chat';
 import { shortName } from '@/lib/format';
 import { findMentions, mentionPeople, mentionsMe } from '@/lib/mentions';
+import { photosOf } from '@/lib/photos';
 import { cn } from '@/lib/utils';
 
 const PAGE = 60;
@@ -389,7 +392,9 @@ export function ChatPage() {
   // Keeps the open room loaded underneath the list on phones.
   const showThreads = () => setParams(room ? { thread: room, view: 'threads' } : { view: 'threads' });
 
-  const send = async (body) => {
+  // Sends a message, with photos (from the Composer) uploaded first: the message shows right
+  // away from the photos on this device, with a progress bar until they're up.
+  const send = async (body, photos = []) => {
     if (!me) return false;
     const target = room;
     const reply = replyTo;
@@ -402,13 +407,31 @@ export function ChatPage() {
       thread_id: target,
       reply_to_id: reply?.id ?? null,
       ...mentionFields(body),
+      ...(photos.length && {
+        attachments: photos.map((p) => ({ type: 'image', width: p.width, height: p.height, gif: p.gif, preview: p.preview })),
+        progress: 0,
+      }),
       created_date: new Date().toISOString(),
     };
     setReplyTo(null);
     setLoaded((current) =>
       current && current.room === target ? { ...current, messages: [...current.messages, pending] } : current,
     );
+    const showProgress = (progress) =>
+      setLoaded((current) => current && { ...current, messages: current.messages.map((m) => (m.id === pending.id ? { ...m, progress } : m)) });
+    const uploaded = [];
     try {
+      const total = photos.reduce((n, p) => n + p.blob.size, 0) || 1;
+      let done = 0;
+      for (const photo of photos) {
+        const path = await api.chat.uploadPhoto(photo.blob, {
+          onProgress: (part) => showProgress((done + part * photo.blob.size) / total),
+        });
+        done += photo.blob.size;
+        uploaded.push({ type: 'image', path, width: photo.width, height: photo.height });
+        // The sent message shows the copy on this device instead of downloading it again.
+        rememberPhotoUrl(path, photo.preview);
+      }
       const created = await api.entities.Message.create({
         user_id: me,
         author_name: myName,
@@ -416,6 +439,7 @@ export function ChatPage() {
         thread_id: target,
         reply_to_id: pending.reply_to_id,
         ...mentionFields(body),
+        ...(uploaded.length && { attachments: uploaded }),
       });
       setLoaded((current) =>
         current && current.room === target
@@ -433,7 +457,8 @@ export function ChatPage() {
     } catch (err) {
       setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== pending.id) });
       setReplyTo(reply);
-      toast({ title: "That didn't send", description: err.message });
+      if (uploaded.length) api.chat.removePhotos(uploaded.map((p) => p.path)).catch(() => {});
+      toast({ title: "That didn't send", description: friendlyError(err) });
       return false;
     }
   };
@@ -581,15 +606,24 @@ export function ChatPage() {
     }
   };
 
+  // Photo files go once nothing shows them; if that fails, they just take up space.
+  const removePhotos = (messages) => {
+    const paths = messages.flatMap((m) => photosOf(m).map((p) => p.path));
+    if (paths.length) api.chat.removePhotos(paths).catch(() => {});
+  };
+
   const confirmDelete = async () => {
     try {
       if (dialog.kind === 'deleteThread') {
+        const inThread = await api.entities.Message.filter({ thread_id: dialog.thread.id }).catch(() => []);
         await api.entities.ChatThread.delete(dialog.thread.id);
+        removePhotos(inThread);
         setThreads((list) => list.filter((t) => t.id !== dialog.thread.id));
         openRoom(null);
         toast({ title: 'Thread deleted' });
       } else {
         await api.entities.Message.delete(dialog.message.id);
+        removePhotos([dialog.message]);
         setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== dialog.message.id) });
         refreshOverview();
       }

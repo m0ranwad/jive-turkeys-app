@@ -4,10 +4,13 @@
 import dayjs from 'dayjs';
 import { currentSession } from '@/lib/dues';
 import { today } from '@/lib/format';
+import { MAX_PHOTOS, photoExtension } from '@/lib/photos';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v16';
+const DB_KEY = 'jt_demo_db_v17';
+// Photos sent in the preview, kept apart from the rest so a few big ones can't stop the chat saving.
+const PHOTOS_KEY = 'jt_demo_photos_v1';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -160,10 +163,13 @@ function seed() {
     people.forEach((p) => reactions.push({ id: uid(), message_id: messageId, user_id: p.user_id, emoji, created_date: now(), updated_date: now() }));
   const readUpTo = (threadId, ago) =>
     reads.push({ id: uid(), user_id: me.user_id, thread_id: threadId, last_read_at: minutesAgo(ago), created_date: now(), updated_date: now() });
+  // A sample picture from public/chat-samples/, as if this player had posted it.
+  const photo = (p, file, width, height) => ({ type: 'image', path: `${p.user_id}/sample-${file}`, width, height });
 
   const win = say(null, profiles[1], 'Great win last night! That second-half comeback 🔥', 1560);
   react(win, '🔥', [profiles[2], profiles[3], me]);
   react(win, '💪', [profiles[4]]);
+  react(say(null, profiles[1], '🎞️ GIF', 1559, null, { attachments: [photo(profiles[1], 'goal.gif', 360, 270)] }), '😂', [profiles[4]]);
   say(null, profiles[2], 'Defense was locked in', 1556);
   // What the site posts when Player of the Match voting closes (potm_tick() in the database).
   const potmGame = games.filter((g) => g.has_result && g.season_year === year).sort((a, b) => (a.date < b.date ? 1 : -1))[1];
@@ -175,6 +181,10 @@ function seed() {
   });
   const bottle = say(null, profiles[2], 'Also, who grabbed my water bottle? Blue Hydro Flask', 1555);
   say(null, profiles[3], 'I have it! Bringing it Thursday', 1500, bottle);
+  const standings = say(null, profiles[4], 'Standings after week 4 👀 2nd place, 3 points back', 200, null, {
+    attachments: [photo(profiles[4], 'standings.jpg', 1200, 980)],
+  });
+  react(standings, '🔥', [profiles[1], profiles[6]]);
   const pinnies = say(null, profiles[1], 'Who is bringing the pinnies this week?', 180);
   react(say(null, profiles[4], 'I got them 👍', 170, pinnies), '🙏', [profiles[1]]);
   react(say(null, profiles[6], 'Running 10 min late, start without me in goal', 60), '😂', [profiles[4], profiles[5]]);
@@ -403,6 +413,31 @@ function save(db) {
   }
 }
 
+// Photos sent in the preview, as data: links by path. The browser only has room for a
+// handful, so when it's full a photo stays in memory and shows until the page is reloaded.
+function loadPhotos() {
+  try {
+    return new Map(Object.entries(JSON.parse(localStorage.getItem(PHOTOS_KEY) || '{}')));
+  } catch {
+    return new Map();
+  }
+}
+
+function savePhotos(photos) {
+  try {
+    localStorage.setItem(PHOTOS_KEY, JSON.stringify(Object.fromEntries(photos)));
+  } catch {
+    // Full: the newest photos are kept in memory only.
+  }
+}
+
+async function dataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${blob.type};base64,${btoa(binary)}`;
+}
+
 const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), 120));
 
 /**
@@ -411,6 +446,7 @@ const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(struc
  */
 export function createDemoBackend({ autoSignIn = false } = {}) {
   let db = load();
+  const photos = loadPhotos();
   const listeners = {};
   const authListeners = new Set();
 
@@ -531,6 +567,16 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (game?.potm_closes_at && !dayjs(game.potm_closes_at).isAfter(dayjs())) throw new Error('Voting has closed for this game.');
   };
 
+  // Same as the database's message_attachments(): 1 to 4 images, each the author's own upload, with its size.
+  const checkAttachments = (message) => {
+    const list = message.attachments;
+    if (list == null) return;
+    const own = new RegExp(`^${message.user_id}/[A-Za-z0-9_-]{1,64}\\.(jpg|png|gif|webp)$`);
+    if (!Array.isArray(list) || list.length < 1 || list.length > MAX_PHOTOS) throw new Error(`A message can have 1 to ${MAX_PHOTOS} photos`);
+    const ok = (a) => a?.type === 'image' && own.test(a.path || '') && a.width >= 1 && a.width <= 10000 && a.height >= 1 && a.height <= 10000;
+    if (!list.every(ok)) throw new Error('A message can only show photos its author uploaded');
+  };
+
   // Same as the database's message_mentions(): only teammates on the site, each once and never
   // the author, and only a captain's message mentions @team.
   const cleanMentions = (message) => {
@@ -563,6 +609,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...row };
+        if (table === 'messages') checkAttachments(record);
         if (table === 'messages') cleanMentions(record);
         db[table].push(record);
         if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
@@ -856,6 +903,41 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     async viewing() {
       requireUser();
     },
+    // Like the real one: into the player's own folder, with progress along the way.
+    async uploadPhoto(blob, { onProgress } = {}) {
+      requireUser();
+      failIfOffline();
+      const path = `${currentUser().id}/${uid()}.${photoExtension(blob.type)}`;
+      for (const step of [0.2, 0.6]) {
+        onProgress?.(step);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+      photos.set(path, await dataUrl(blob));
+      savePhotos(photos);
+      onProgress?.(1);
+      return path;
+    },
+    // Sample pictures come from public/chat-samples/; a photo that didn't fit in the browser's storage is gone after a reload.
+    async photoUrls(paths) {
+      requireUser();
+      const sample = (path) => path.split('/')[1]?.match(/^sample-(.+)$/)?.[1];
+      return delay(
+        Object.fromEntries(
+          paths.map((path) => [path, photos.get(path) ?? (sample(path) ? `${import.meta.env.BASE_URL}chat-samples/${sample(path)}` : null)]),
+        ),
+      );
+    },
+    // Same rules as the storage policies: your own, any as a captain, or any no message shows anymore.
+    async removePhotos(paths) {
+      requireUser();
+      failIfOffline();
+      const me = currentUser();
+      const shown = (path) => db.messages.some((m) => m.attachments?.some((a) => a.path === path));
+      for (const path of paths) {
+        if (path.startsWith(`${me.id}/`) || me.role === 'admin' || !shown(path)) photos.delete(path);
+      }
+      savePhotos(photos);
+    },
   };
 
   // Same as the database functions mark_dues_paid(), set_dues_partner() and
@@ -986,6 +1068,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     resetDemo() {
       db = seed();
       save(db);
+      photos.clear();
+      savePhotos(photos);
     },
   };
 }

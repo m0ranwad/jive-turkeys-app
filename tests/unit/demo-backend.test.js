@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v16';
+const DB_KEY = 'jt_demo_db_v17';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -237,6 +237,69 @@ describe('live updates', () => {
     await flush();
     expect(onInsert).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('photos', () => {
+  const jpeg = () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' });
+  const photo = (path) => ({ type: 'image', path, width: 1600, height: 1200 });
+
+  it('has sample photos in Team Chat: a GIF without a caption and a captioned screenshot', async () => {
+    const { api } = await signedIn();
+    const team = await api.chat.history(null);
+    const withPhotos = team.filter((m) => m.attachments);
+    expect(withPhotos.map((m) => m.body)).toEqual(['🎞️ GIF', 'Standings after week 4 👀 2nd place, 3 points back']);
+    const urls = await api.chat.photoUrls(withPhotos.map((m) => m.attachments[0].path));
+    expect(Object.values(urls)).toEqual(['/chat-samples/goal.gif', '/chat-samples/standings.jpg']);
+  });
+
+  it('uploads into your own folder with progress, and shows it after a reload', async () => {
+    const { api, me } = await signedIn();
+    const progress = [];
+    const path = await api.chat.uploadPhoto(jpeg(), { onProgress: (p) => progress.push(p) });
+    expect(path).toMatch(new RegExp(`^${me.id}/[0-9a-f-]+\\.jpg$`));
+    expect(progress.at(-1)).toBe(1);
+    expect(progress).toEqual([...progress].sort((a, b) => a - b));
+
+    const reloaded = createDemoBackend();
+    expect((await reloaded.chat.photoUrls([path, `${me.id}/gone.jpg`]))).toEqual({
+      [path]: 'data:image/jpeg;base64,/9j/2Q==',
+      [`${me.id}/gone.jpg`]: null,
+    });
+  });
+
+  it('posts 1 to 4 of your own photos, like the database', async () => {
+    const { api, me } = await signedIn();
+    const mine = await api.chat.uploadPhoto(jpeg());
+    const post = (attachments) => api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: '📷 Photo', thread_id: null, attachments });
+    await expect(post([photo(mine)])).resolves.toMatchObject({ attachments: [photo(mine)] });
+    await expect(post([photo('someone-else/x.jpg')])).rejects.toThrow('only show photos its author uploaded');
+    await expect(post([])).rejects.toThrow('1 to 4 photos');
+    await expect(post(Array(5).fill(photo(mine)))).rejects.toThrow('1 to 4 photos');
+  });
+
+  it('removes photos like the storage rules: your own, any as a captain, or any no message shows', async () => {
+    const { api } = await signedIn();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const jordan = await api.auth.me();
+    const shown = await api.chat.uploadPhoto(jpeg());
+    const loose = await api.chat.uploadPhoto(jpeg());
+    await api.entities.Message.create({ user_id: jordan.id, author_name: 'Jordan', body: '📷 Photo', thread_id: null, attachments: [photo(shown)] });
+
+    await api.auth.signIn('sam@demo.test', 'demo1234');
+    await api.chat.removePhotos([shown, loose]);
+    expect(await api.chat.photoUrls([shown, loose])).toEqual({ [shown]: expect.stringMatching(/^data:/), [loose]: null });
+
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    await api.chat.removePhotos([shown]);
+    expect((await api.chat.photoUrls([shown]))[shown]).toBeNull();
+  });
+
+  it("doesn't upload without a connection", async () => {
+    const { api } = await signedIn();
+    localStorage.setItem('jt_demo_offline', '1');
+    await expect(api.chat.uploadPhoto(jpeg())).rejects.toThrow('Failed to fetch');
+    localStorage.removeItem('jt_demo_offline');
   });
 });
 

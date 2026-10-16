@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { photoExtension } from '@/lib/photos';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
 const PAGE_SIZE = 1000;
+// Chat photos: a private storage bucket, shown through links that last a day.
+const PHOTO_BUCKET = 'chat-media';
+const PHOTO_LINK_SECONDS = 24 * 60 * 60;
 
 // Each live subscription gets its own channel: supabase-js hands back the
 // existing channel for a repeated name, and that one is already subscribed.
@@ -22,6 +26,20 @@ function fail(error) {
   throw new Error(error.message || 'Something went wrong');
 }
 
+/** What a failed photo upload means, in plain words. */
+function uploadError(xhr) {
+  let message = '';
+  try {
+    message = JSON.parse(xhr.responseText).message || '';
+  } catch {
+    // Not JSON: go by the status alone.
+  }
+  if (xhr.status === 413 || /size/i.test(message)) return 'That photo is too big.';
+  if (xhr.status === 415 || /mime/i.test(message)) return "That kind of file can't be shared in the chat.";
+  if (xhr.status === 401 || xhr.status === 403 || /security policy/i.test(message)) return "You don't have permission to do that.";
+  return message || "The photo didn't upload.";
+}
+
 export function createSupabaseBackend(url, key) {
   const supabase = createClient(url, key, {
     auth: {
@@ -35,6 +53,7 @@ export function createSupabaseBackend(url, key) {
   });
 
   const origin = () => window.location.origin;
+  const storageUrl = `${url.replace(/\/+$/, '')}/storage/v1`;
 
   /** Reads every row, a page at a time (Supabase caps a response at 1000). */
   async function fetchAll(build, limit) {
@@ -259,6 +278,49 @@ export function createSupabaseBackend(url, key) {
     /** "I'm looking at this room", so this player's phone doesn't buzz for it. */
     async viewing(threadId) {
       const { error } = await supabase.rpc('chat_viewing', { p_thread_id: threadId });
+      if (error) fail(error);
+    },
+
+    /**
+     * Uploads a photo (from preparePhoto) into the signed-in player's folder, calling
+     * onProgress with 0 to 1 as it goes. Resolves to its path, for the message's attachments.
+     * (supabase-js can't report upload progress, hence the plain request.)
+     */
+    async uploadPhoto(blob, { onProgress } = {}) {
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      if (!session) throw new Error('Not signed in');
+      const path = `${session.user.id}/${crypto.randomUUID()}.${photoExtension(blob.type)}`;
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${storageUrl}/object/${PHOTO_BUCKET}/${path}`);
+        xhr.setRequestHeader('authorization', `Bearer ${session.access_token}`);
+        xhr.setRequestHeader('apikey', key);
+        xhr.setRequestHeader('content-type', blob.type);
+        xhr.setRequestHeader('cache-control', `max-age=${PHOTO_LINK_SECONDS}`);
+        xhr.setRequestHeader('x-upsert', 'false');
+        xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(uploadError(xhr))));
+        // The same error a fetch gives with no signal, so it reads the same to the player.
+        xhr.onerror = () => reject(new TypeError('Failed to fetch'));
+        xhr.send(blob);
+      });
+      onProgress?.(1);
+      return path;
+    },
+
+    /** Links to show photos by their paths: { path: url }, null for any that's gone. */
+    async photoUrls(paths) {
+      if (!paths.length) return {};
+      const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, PHOTO_LINK_SECONDS);
+      if (error) fail(error);
+      return Object.fromEntries(data.map((d) => [d.path, d.error ? null : d.signedUrl]));
+    },
+
+    /** Removes photo files, after the message (or thread) that showed them is deleted. */
+    async removePhotos(paths) {
+      if (!paths.length) return;
+      const { error } = await supabase.storage.from(PHOTO_BUCKET).remove(paths);
       if (error) fail(error);
     },
   };
