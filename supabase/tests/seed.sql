@@ -67,6 +67,19 @@ begin
 end;
 $$;
 
+-- A photo in Team Chat (once messages can have photos).
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'messages' and column_name = 'attachments') then
+    execute $sql$
+      insert into public.messages (id, user_id, author_name, body, attachments, created_date) values
+        ('c7777777-7777-4777-8777-777777777777', '22222222-2222-4222-8222-222222222222', 'Jordan Rivera', 'Team pic!',
+         '[{"type": "image", "path": "22222222-2222-4222-8222-222222222222/team.jpg", "width": 1600, "height": 1200}]', '2026-10-04 20:00+00');
+    $sql$;
+  end if;
+end;
+$$;
+
 -- Devices signed up for notifications (once that exists).
 do $$
 begin

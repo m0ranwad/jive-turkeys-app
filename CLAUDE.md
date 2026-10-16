@@ -172,6 +172,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   buttons (`src/components/AuthShell.jsx`). The demo password for every sample account is `demo1234`.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, `src/lib/mentions.js` (@mentions), and
   `src/hooks/useChatUnread.js` (the Chat tab badge and its @ count). `docs/chat.md` is the expected behavior.
+  Photos: `messages.attachments` and the private `chat-media` storage bucket; `src/lib/photos.js` (shrinking, the
+  "📷 Photo" text), `src/components/chat/ChatPhotos.jsx` (grid and full screen), `src/hooks/usePhotoUrl.js` (signed links).
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid

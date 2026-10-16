@@ -27,6 +27,9 @@ The team's chat history is the one thing a site update must never lose.
 Deleting in the app is permanent: there's no trash or undo. Supabase's free plan has no backups we can
 restore from, so a deleted message or thread is gone for good.
 
+Photos are files in Supabase Storage, not database rows. The rehearsal and the nightly backup keep the
+messages that show them, but not the pictures themselves.
+
 ## 2. Team Chat
 
 The one room everyone is in. In the database it's the messages with no thread (`thread_id` is null).
@@ -73,6 +76,21 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%`, a leading `-` or the word "or" are just text. Two characters at least. | `[db]` |
 | Results show who, where (Team Chat or the thread's name), when, and the match highlighted. Tapping one opens that room and jumps to the message, loading older messages until it's there. | `[browser]` |
 | Players only find messages they can read; an account that hasn't joined the team finds nothing. | `[db]` |
+
+**Photos** (the photo button next to the emoji button) for team pics, the standings board, a screenshot of the
+schedule, or a GIF saved on the phone. There's no GIF search: that needs an outside service and its key.
+
+| Expected behavior | Checked by |
+|---|---|
+| The photo button (or pasting a picture into the message box) adds up to 4 photos to a message. Anything that isn't a picture is turned away. | `[browser]` `[unit]` |
+| Photos are shrunk on the phone before they upload: 1600 pixels on the longest side, as a JPEG (which also drops the photo's location and camera details). GIFs go up as they are, so they keep moving, up to 5 MB. | `[unit]` |
+| The photos wait above the message box, each with ✕ to take it out, and what's typed becomes their caption. Sending shows the message right away, with a progress bar until the photos are up. | `[browser]` |
+| If sending fails, the photos and caption go back in the box, and nothing is left half-posted (any photo already uploaded is removed). | `[browser]` |
+| One photo shows at its own shape (very tall ones are cropped until opened); 2 to 4 show as a grid; GIFs are labeled. A photo sent without a caption has no bubble, and its text is "📷 Photo" ("🎞️ GIF", "📷 3 photos"): that's what the room list, notifications, reply quotes and search show. | `[browser]` `[unit]` |
+| Tapping a photo opens it full screen: the arrows (or a swipe, or ← and →) go between a message's photos, and the message's reactions, Reply and Delete are along the bottom. Escape or ✕ closes it. | `[browser]` |
+| Photos are fixed once posted; only the caption can be edited. Deleting the message (the poster's own, or any as a captain) removes its photo files too, and so does deleting a thread. | `[browser]` `[db]` |
+| Photos are kept in a private storage bucket (`chat-media`), one folder per player. Only team members can see them, through links that last a day. Players upload only into their own folder, and a message can only show 1 to 4 of its author's own uploads. The poster or a captain can remove a photo, and anyone can remove one no message shows anymore (what deleting a message or thread leaves behind). | `[db]` |
+| Previews keep sent photos in the browser. Only a handful fit; after that, new ones show until the page is reloaded. The sample pictures are in `public/chat-samples/` (made by `scripts/make-chat-samples.py`). | `[unit]` |
 
 ## 4. Threads
 
@@ -182,6 +200,9 @@ devices signed in as different players:
    2. Open the app and read Team Chat, then close it: the number is gone.
 7. @mentions (after a change to them): from one device, @mention the other player in a thread they've never
    opened. Their phone gets the notification, and their Chat tab shows "@1" until they open that thread.
+8. Photos (after a change to them): on a phone, tap the photo button, take a photo, add a caption and send. A
+   progress bar, then the photo. It shows on the other device; tap it to see it full screen. Send a photo from
+   an iPhone's library (they're HEIC there) and a GIF too. Delete one: it goes on both devices.
 
 ## Running the tests
 

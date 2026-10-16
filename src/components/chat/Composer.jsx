@@ -1,15 +1,19 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
+import { Check, CornerUpLeft, ImagePlus, LoaderCircle, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
+import { useToast } from '@/components/ui/toast';
 import { initials } from '@/lib/format';
 import { TEAM, mentionChoices, mentionQuery } from '@/lib/mentions';
+import { MAX_PHOTOS, photoBody, pickImages, preparePhoto, previewText } from '@/lib/photos';
 import { cn } from '@/lib/utils';
 
 const MAX_LENGTH = 2000;
 // Tapping Send or an emoji keeps the cursor in the message box, so a phone's keyboard stays open.
 const keepTyping = (e) => e.preventDefault();
-// Unsent text per room, kept while moving between rooms.
+// Unsent text and photos per room, kept while moving between rooms.
 const drafts = new Map();
+const photoDrafts = new Map();
+let photoCount = 0;
 
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
@@ -17,6 +21,10 @@ const drafts = new Map();
  * @ (`people`, from mentionPeople(); @team too with `canMentionTeam`). With
  * `editing` (one of your messages), it holds that message's text and saves the
  * change instead of sending.
+ *
+ * Photos (up to MAX_PHOTOS, from the photo button or pasted) are shrunk right
+ * away and wait above the box, with the text as their caption. onSend(body,
+ * photos) gets them; a photo without a caption is sent as "📷 Photo".
  */
 export const Composer = forwardRef(function Composer(
   {
@@ -38,6 +46,56 @@ export const Composer = forwardRef(function Composer(
   const [draft, setDraft] = useState(() => drafts.get(room) || '');
   const [emojiOpen, setEmojiOpen] = useState(false);
   const box = useRef(null);
+  const picker = useRef(null);
+  const { toast } = useToast();
+
+  // Photos waiting to send. The per-room list is the record, so a photo that finishes
+  // getting ready after you've switched rooms still lands in the right one.
+  const [photos, setPhotos] = useState(() => photoDrafts.get(room) || []);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const changePhotos = (change) => {
+    const next = change(photoDrafts.get(room) || []);
+    photoDrafts.set(room, next);
+    if (mounted.current) setPhotos(next);
+  };
+  const preparing = photos.some((p) => !p.preview);
+
+  const addPhotos = (files) => {
+    const images = pickImages(files);
+    if (!images.length) {
+      if (files?.length) toast({ title: "That isn't a photo", description: 'Only photos and GIFs can be shared in the chat.' });
+      return;
+    }
+    const space = MAX_PHOTOS - (photoDrafts.get(room) || []).length;
+    if (images.length > space) toast({ title: `Up to ${MAX_PHOTOS} photos in one message` });
+    for (const file of images.slice(0, Math.max(0, space))) {
+      const id = ++photoCount;
+      changePhotos((list) => [...list, { id }]);
+      preparePhoto(file).then(
+        (ready) =>
+          changePhotos((list) => {
+            if (list.some((p) => p.id === id)) return list.map((p) => (p.id === id ? { id, ...ready } : p));
+            URL.revokeObjectURL(ready.preview);
+            return list;
+          }),
+        (err) => {
+          changePhotos((list) => list.filter((p) => p.id !== id));
+          toast({ title: "Couldn't add that photo", description: err.message });
+        },
+      );
+    }
+  };
+
+  const removePhoto = (photo) => {
+    if (photo.preview) URL.revokeObjectURL(photo.preview);
+    changePhotos((list) => list.filter((p) => p.id !== photo.id));
+  };
 
   // The @mention list: shown while the cursor is in a name typed after @.
   const [caret, setCaret] = useState(null);
@@ -103,17 +161,24 @@ export const Composer = forwardRef(function Composer(
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body) return;
     if (editing) {
+      if (!body) return undefined;
       if (body === editing.body) return stopEditing();
       const saved = await onSaveEdit(editing, body);
       if (saved) setDraft(draftBeforeEdit.current);
       return undefined;
     }
+    if (preparing || (!body && !photos.length)) return undefined;
+    const sending = photos;
     setDraft('');
     setEmojiOpen(false);
-    const sent = await onSend(body);
-    if (!sent) setDraft((current) => current || body);
+    changePhotos(() => []);
+    const sent = await onSend(body || photoBody(sending), sending);
+    if (!sent) {
+      setDraft((current) => current || body);
+      changePhotos((list) => [...sending, ...list].slice(0, MAX_PHOTOS));
+    }
+    return undefined;
   };
 
   const onKeyDown = (e) => {
@@ -223,7 +288,7 @@ export const Composer = forwardRef(function Composer(
           <CornerUpLeft className="h-4 w-4 shrink-0 text-lime-700" />
           <div className="min-w-0 flex-1 leading-tight">
             <div className="text-[10px] font-black uppercase tracking-[0.1em] text-lime-800">Replying to {replyName}</div>
-            <div className="truncate text-xs text-zinc-600">{replyTo.body}</div>
+            <div className="truncate text-xs text-zinc-600">{previewText(replyTo)}</div>
           </div>
           <button
             type="button"
@@ -235,12 +300,40 @@ export const Composer = forwardRef(function Composer(
           </button>
         </div>
       )}
+      {photos.length > 0 && !editing && (
+        <ul aria-label="Photos to send" className="mb-2 flex gap-2 overflow-x-auto">
+          {photos.map((photo) => (
+            <li key={photo.id} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-100 ring-1 ring-black/5">
+              {photo.preview ? (
+                <img src={photo.preview} alt="Photo to send" className="h-full w-full object-cover" />
+              ) : (
+                <span className="grid h-full place-items-center" aria-label="Getting the photo ready">
+                  <LoaderCircle className="h-5 w-5 animate-spin text-zinc-400" />
+                </span>
+              )}
+              {photo.gif && (
+                <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-black tracking-wider text-white">
+                  GIF
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => removePhoto(photo)}
+                aria-label="Remove photo"
+                className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white transition hover:bg-black/80"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
-        className="flex items-end gap-2"
+        className="flex items-end gap-1.5"
       >
         <button
           type="button"
@@ -249,12 +342,38 @@ export const Composer = forwardRef(function Composer(
           aria-label="Emoji"
           aria-pressed={emojiOpen}
           className={cn(
-            'grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
+            'grid h-11 w-10 shrink-0 place-items-center rounded-full transition',
             emojiOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700',
           )}
         >
           <Smile className="h-6 w-6" />
         </button>
+        {!editing && (
+          <>
+            <button
+              type="button"
+              onClick={() => picker.current?.click()}
+              disabled={photos.length >= MAX_PHOTOS}
+              aria-label="Add photos"
+              className="grid h-11 w-10 shrink-0 place-items-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30"
+            >
+              <ImagePlus className="h-6 w-6" />
+            </button>
+            <input
+              ref={picker}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              data-testid="photo-picker"
+              onChange={(e) => {
+                addPhotos(e.target.files);
+                // So picking the same photo again still counts.
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
         <textarea
           ref={box}
           rows={1}
@@ -266,17 +385,23 @@ export const Composer = forwardRef(function Composer(
           onSelect={trackCaret}
           onBlur={() => setCaret(null)}
           onKeyDown={onKeyDown}
+          onPaste={(e) => {
+            const images = editing ? [] : pickImages(e.clipboardData?.files);
+            if (!images.length) return;
+            e.preventDefault();
+            addPhotos(images);
+          }}
           aria-autocomplete="list"
           aria-controls={picking ? `mentions-${room}` : undefined}
           aria-activedescendant={picking ? `mention-${room}-${picked.id}` : undefined}
-          placeholder={placeholder}
+          placeholder={photos.length && !editing ? 'Add a caption (optional)' : placeholder}
           maxLength={MAX_LENGTH}
           aria-label="Message"
           className="block max-h-36 min-h-11 flex-1 resize-none rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-400 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
         />
         <button
           type="submit"
-          disabled={!draft.trim()}
+          disabled={editing ? !draft.trim() : preparing || (!draft.trim() && !photos.length)}
           onMouseDown={keepTyping}
           aria-label={editing ? 'Save edit' : 'Send'}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-zinc-950 text-lime-400 transition hover:bg-zinc-800 active:scale-95 disabled:opacity-30"

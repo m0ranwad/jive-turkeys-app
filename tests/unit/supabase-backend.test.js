@@ -7,6 +7,8 @@ const channels = [];
 let result = { data: [], error: null };
 // The signed-in session the stand-in client reports (auth.getSession).
 let session = null;
+// What the stand-in storage calls resolve to.
+let storageResult = { data: [], error: null };
 
 // A chainable stand-in for supabase.from(...): records each call, resolves to `result`.
 function query(table) {
@@ -61,6 +63,18 @@ vi.mock('@supabase/supabase-js', () => ({
       return channel;
     },
     removeChannel: (channel) => calls.push(['removeChannel', channel.name]),
+    storage: {
+      from: (bucket) => ({
+        createSignedUrls: async (paths, seconds) => {
+          calls.push(['storage', bucket, 'createSignedUrls', paths, seconds]);
+          return storageResult;
+        },
+        remove: async (paths) => {
+          calls.push(['storage', bucket, 'remove', paths]);
+          return storageResult;
+        },
+      }),
+    },
   }),
 }));
 
@@ -72,6 +86,7 @@ beforeEach(() => {
   channels.length = 0;
   result = { data: [], error: null };
   session = null;
+  storageResult = { data: [], error: null };
 });
 
 describe('chat.history', () => {
@@ -249,5 +264,95 @@ describe('the team code', () => {
     await expect(api.users.joinTeam('NOPE')).rejects.toThrow("That code isn't right");
     result = { data: 'blocked', error: null };
     await expect(api.users.joinTeam('NOPE')).rejects.toThrow('Too many tries. Try again in an hour.');
+  });
+});
+
+describe('chat photos', () => {
+  // A stand-in for the upload request: records it, then answers the way the test says.
+  let requests = [];
+  let answer = (xhr) => xhr.finish(200, '{}');
+  class FakeXHR {
+    headers = {};
+    upload = {};
+    open(method, url) {
+      Object.assign(this, { method, url });
+    }
+    setRequestHeader(name, value) {
+      this.headers[name] = value;
+    }
+    send(body) {
+      this.body = body;
+      requests.push(this);
+      answer(this);
+    }
+    finish(status, responseText) {
+      Object.assign(this, { status, responseText });
+      this.onload();
+    }
+  }
+
+  beforeEach(() => {
+    requests = [];
+    answer = (xhr) => {
+      xhr.upload.onprogress({ lengthComputable: true, loaded: 2, total: 4 });
+      xhr.finish(200, '{}');
+    };
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+  });
+
+  const jpeg = new Blob(['x'], { type: 'image/jpeg' });
+
+  it("uploads into the player's own folder, reporting progress", async () => {
+    session = { access_token: 'token-1', user: { id: 'u1' } };
+    const progress = [];
+    const path = await api.chat.uploadPhoto(jpeg, { onProgress: (p) => progress.push(p) });
+    expect(path).toMatch(/^u1\/[0-9a-f-]{36}\.jpg$/);
+    const [request] = requests;
+    expect(request.method).toBe('POST');
+    expect(request.url).toBe(`https://example.supabase.co/storage/v1/object/chat-media/${path}`);
+    expect(request.headers).toMatchObject({
+      authorization: 'Bearer token-1',
+      apikey: 'sb_publishable_test',
+      'content-type': 'image/jpeg',
+      'x-upsert': 'false',
+    });
+    expect(request.body).toBe(jpeg);
+    expect(progress).toEqual([0.5, 1]);
+  });
+
+  it('says why an upload failed, in plain words', async () => {
+    session = { access_token: 'token-1', user: { id: 'u1' } };
+    answer = (xhr) => xhr.finish(413, JSON.stringify({ message: 'The object exceeded the maximum allowed size' }));
+    await expect(api.chat.uploadPhoto(jpeg)).rejects.toThrow('That photo is too big.');
+    answer = (xhr) => xhr.finish(400, JSON.stringify({ message: 'new row violates row-level security policy' }));
+    await expect(api.chat.uploadPhoto(jpeg)).rejects.toThrow("You don't have permission to do that.");
+    answer = (xhr) => xhr.onerror();
+    await expect(api.chat.uploadPhoto(jpeg)).rejects.toThrow('Failed to fetch');
+    session = null;
+    await expect(api.chat.uploadPhoto(jpeg)).rejects.toThrow('Not signed in');
+  });
+
+  it('asks for links that last a day, all at once, and marks missing photos', async () => {
+    storageResult = {
+      data: [
+        { path: 'u1/a.jpg', signedUrl: 'https://example.supabase.co/storage/v1/object/sign/chat-media/u1/a.jpg?token=t', error: null },
+        { path: 'u1/b.jpg', signedUrl: null, error: 'Either the object does not exist or you do not have access to it' },
+      ],
+      error: null,
+    };
+    expect(await api.chat.photoUrls(['u1/a.jpg', 'u1/b.jpg'])).toEqual({
+      'u1/a.jpg': 'https://example.supabase.co/storage/v1/object/sign/chat-media/u1/a.jpg?token=t',
+      'u1/b.jpg': null,
+    });
+    expect(calls).toEqual([['storage', 'chat-media', 'createSignedUrls', ['u1/a.jpg', 'u1/b.jpg'], 86400]]);
+    expect(await api.chat.photoUrls([])).toEqual({});
+    expect(calls).toHaveLength(1);
+  });
+
+  it('removes photo files from the chat bucket', async () => {
+    await api.chat.removePhotos(['u1/a.jpg']);
+    expect(calls).toEqual([['storage', 'chat-media', 'remove', ['u1/a.jpg']]]);
+    storageResult = { data: null, error: { message: 'boom' } };
+    await expect(api.chat.removePhotos(['u1/a.jpg'])).rejects.toThrow('boom');
   });
 });

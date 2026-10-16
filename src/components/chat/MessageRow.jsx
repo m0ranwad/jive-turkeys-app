@@ -1,9 +1,11 @@
 import { Fragment, useState } from 'react';
 import { Copy, CornerUpLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { MessagePhotos, PhotoViewer } from './ChatPhotos';
 import { EmojiPicker } from './EmojiPicker';
 import { QUICK_REACTIONS, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
 import { initials, shortName } from '@/lib/format';
 import { TEAM, mentionParts } from '@/lib/mentions';
+import { captionOf, photosOf, previewText } from '@/lib/photos';
 import { cn } from '@/lib/utils';
 
 /** The message text: links can be tapped, and the people it @mentions stand out (you most of all). */
@@ -45,7 +47,11 @@ function Body({ message, mine, me, people }) {
   });
 }
 
-/** One chat message: name, reply quote, bubble, reactions, and its actions when tapped. */
+/**
+ * One chat message: name, reply quote, photos, bubble, reactions, and its actions when
+ * tapped. A photo opens full screen instead, with the message's actions there; a photo
+ * sent without a caption has no bubble.
+ */
 export function MessageRow({
   message: m,
   first,
@@ -72,7 +78,10 @@ export function MessageRow({
   onJumpTo,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const big = isEmojiOnly(m.body);
+  const [viewing, setViewing] = useState(null);
+  const photos = photosOf(m);
+  const caption = captionOf(m);
+  const big = isEmojiOnly(caption);
 
   const bubble = cn(
     'rounded-[20px] px-3.5 py-2 text-[15px] font-medium leading-snug md:text-sm',
@@ -116,7 +125,7 @@ export function MessageRow({
               {replyTarget ? (
                 <span className="min-w-0">
                   <span className="font-bold text-zinc-700">{shortName(replyAuthor)}</span>{' '}
-                  <span className="line-clamp-2 break-words">{replyTarget.body}</span>
+                  <span className="line-clamp-2 break-words">{previewText(replyTarget)}</span>
                 </span>
               ) : (
                 <span className="italic">Original message was deleted</span>
@@ -124,33 +133,45 @@ export function MessageRow({
             </button>
           )}
 
+          {photos.length > 0 && (
+            <MessagePhotos
+              message={m}
+              photos={photos}
+              onOpen={setViewing}
+              className={cn(highlighted && !caption && 'ring-2 ring-amber-300 ring-offset-1')}
+            />
+          )}
+
           {/* A div, not a button, because the message can contain links. */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => !m.pending && onSelect(m.id)}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && !m.pending) {
-                e.preventDefault();
-                onSelect(m.id);
-              }
-            }}
-            aria-expanded={selected}
-            className={cn(
-              'max-w-full cursor-pointer text-left outline-none transition focus-visible:ring-2 focus-visible:ring-lime-400',
-              big ? 'px-1 text-4xl leading-tight' : bubble,
-              selected && (big ? 'rounded-2xl bg-lime-100' : 'ring-2 ring-lime-400 ring-offset-1'),
-              highlighted && 'ring-2 ring-amber-300 ring-offset-1',
-              m.pending && 'opacity-60',
-            )}
-          >
-            <span className="whitespace-pre-wrap break-words">
-              <Body message={m} mine={mine && !big} me={me} people={people} />
-            </span>
-            {m.edited_date && (
-              <span className={cn('ml-1.5 align-baseline text-[10px] font-semibold', big ? 'text-zinc-400' : 'opacity-60')}>edited</span>
-            )}
-          </div>
+          {caption && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => !m.pending && onSelect(m.id)}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget && !m.pending) {
+                  e.preventDefault();
+                  onSelect(m.id);
+                }
+              }}
+              aria-expanded={selected}
+              className={cn(
+                'max-w-full cursor-pointer text-left outline-none transition focus-visible:ring-2 focus-visible:ring-lime-400',
+                big ? 'px-1 text-4xl leading-tight' : bubble,
+                photos.length > 0 && 'mt-0.5',
+                selected && (big ? 'rounded-2xl bg-lime-100' : 'ring-2 ring-lime-400 ring-offset-1'),
+                highlighted && 'ring-2 ring-amber-300 ring-offset-1',
+                m.pending && 'opacity-60',
+              )}
+            >
+              <span className="whitespace-pre-wrap break-words">
+                <Body message={m} mine={mine && !big} me={me} people={people} />
+              </span>
+              {m.edited_date && (
+                <span className={cn('ml-1.5 align-baseline text-[10px] font-semibold', big ? 'text-zinc-400' : 'opacity-60')}>edited</span>
+              )}
+            </div>
+          )}
 
           {reactions.length > 0 && (
             <div className={cn('-mt-1 flex flex-wrap gap-1', mine ? 'mr-2 justify-end' : 'ml-2')}>
@@ -183,6 +204,23 @@ export function MessageRow({
           )}
         </div>
       </div>
+
+      {photos.length > 0 && !m.pending && (
+        <PhotoViewer
+          message={m}
+          photos={photos}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+          author={author}
+          caption={caption}
+          reactions={reactions}
+          canDelete={canDelete}
+          onReact={onReact}
+          onReply={onReply}
+          onDelete={onDelete}
+        />
+      )}
 
       {selected && (
         <div
