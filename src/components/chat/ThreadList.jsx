@@ -167,7 +167,8 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, notes }) {
         onClick={() => onOpen(null)}
       />
       {others.map((room) => item(room))}
-      {others.length === 0 && (
+      {/* No threads or private chats yet (the Lounge doesn't count): how to start one. */}
+      {others.every((room) => isLounge(room.thread)) && (
         <p className="px-2.5 py-3 text-xs leading-relaxed text-zinc-400">
           Tap <b className="text-zinc-600">New</b> for a thread the whole team can join (carpools, pickup games, the
           fantasy league), or a private chat with teammates you pick.
