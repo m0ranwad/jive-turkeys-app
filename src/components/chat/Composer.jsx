@@ -11,6 +11,9 @@ const keepTyping = (e) => e.preventDefault();
 // Unsent text per room, kept while moving between rooms.
 const drafts = new Map();
 
+/** Puts text in a room's message box for when it opens (say, a first message that didn't send). */
+export const keepDraft = (room, text) => drafts.set(room, text);
+
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
  * reply preview, and a list of teammates to @mention while typing a name after
@@ -288,11 +291,11 @@ export const Composer = forwardRef(function Composer(
   );
 });
 
-export function ClosedNotice({ canReopen, onReopen }) {
+export function ClosedNotice({ canReopen, onReopen, label = 'This thread is closed.' }) {
   return (
     <div className="flex items-center justify-center gap-3 border-t border-black/5 bg-zinc-50 px-4 py-3.5 text-sm font-semibold text-zinc-500">
       <Lock className="h-4 w-4" />
-      This thread is closed.
+      {label}
       {canReopen && (
         <button
           onClick={onReopen}

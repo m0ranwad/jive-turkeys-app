@@ -280,13 +280,14 @@ select test.ok(
       from pg_constraint c
       join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
       where c.contype = 'f'
-        and (c.conrelid::regclass::text in ('messages', 'chat_threads', 'message_reactions', 'chat_reads')
+        and (c.conrelid::regclass::text in ('messages', 'chat_threads', 'message_reactions', 'chat_reads', 'chat_thread_members')
           or c.confrelid::regclass::text in ('messages', 'chat_threads'))
     ) links
-  ) = 'chat_reads.thread_id->chat_threads:c, chat_reads.user_id->users:c, chat_threads.created_by->users:n, '
+  ) = 'chat_reads.thread_id->chat_threads:c, chat_reads.user_id->users:c, chat_thread_members.added_by->users:n, '
+      'chat_thread_members.thread_id->chat_threads:c, chat_thread_members.user_id->users:c, chat_threads.created_by->users:n, '
       'message_reactions.message_id->messages:c, message_reactions.user_id->users:c, messages.reply_to_id->messages:n, '
       'messages.thread_id->chat_threads:c, messages.user_id->users:n, push_log.message_id->messages:c',
-  'chat links keep their delete rules (messages and threads outlive accounts; only deleting a thread removes its messages)'
+  'chat links keep their delete rules (messages and threads outlive accounts; only deleting a thread removes its messages and member list)'
 );
 
 select test.ok(
@@ -306,8 +307,8 @@ select test.ok(
 
 select test.ok(
   (select array_agg(tablename::text order by tablename) from pg_publication_tables where pubname = 'supabase_realtime')
-    @> array['chat_threads', 'message_reactions', 'messages'],
-  'messages, threads and reactions are live (in the realtime publication)'
+    @> array['chat_thread_members', 'chat_threads', 'message_reactions', 'messages'],
+  'messages, threads, reactions and who''s in each private chat are live (in the realtime publication)'
 );
 
 select test.ok(
@@ -417,13 +418,16 @@ select test.ok((select thread_title from public.chat_push_targets(gen_random_uui
 reset role;
 
 -- The number on the app icon: each notification carries the player's Chat tab number
--- (unreadTotal in src/lib/chat.js: Team Chat plus threads they've opened).
+-- (unreadTotal in src/lib/chat.js: Team Chat, private chats and the Captains' Lounge,
+-- plus threads they've opened).
 create table test.chat_tab (name text primary key, n bigint not null);
 grant insert on test.chat_tab to authenticated;
 grant select on test.chat_tab to service_role;
 create function test.note_chat_tab(who text) returns void language sql as $$
   insert into test.chat_tab
-  select who, coalesce(sum(o.unread) filter (where o.thread_id is null or o.last_read_at is not null), 0)
+  select who, coalesce(sum(o.unread) filter (
+    where o.thread_id is null or o.visibility is distinct from 'team' or o.last_read_at is not null
+  ), 0)
   from public.chat_overview() o;
 $$;
 grant execute on function test.note_chat_tab(text) to authenticated;
@@ -603,6 +607,352 @@ reset role;
 select test.sign_in('cy');
 select test.touches($$update public.player_profiles set notify_mentions = true where user_id = auth.uid()$$, 1, 'a player sets their own @mentions choice');
 select test.touches($$update public.player_profiles set notify_mentions = false where user_id <> auth.uid()$$, 0, 'and nobody else''s');
+reset role;
+
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- Private chats and the Captains' Lounge (rolled back at the end, like
+-- @mentions). Everything in a transaction happens at the same now(), so
+-- messages here are stamped with clock_timestamp() to keep their order.
+-- ---------------------------------------------------------------------------
+
+begin;
+
+-- Cap2 is a second captain, Eve a player, Dee signed up without the team code.
+insert into test.people values
+  ('cap2', '00000000-0000-4000-8000-0000000000a2'),
+  ('eve', '00000000-0000-4000-8000-00000000000f'),
+  ('dee', '00000000-0000-4000-8000-00000000000e');
+insert into auth.users (id, email) select id, name || '@test.local' from test.people where name in ('cap2', 'eve', 'dee');
+update public.users set joined_team_at = now(), role = 'admin' where id = test.id('cap2');
+-- Eve joined a while ago (so her places in chats can start before today).
+update public.users set joined_team_at = now() - interval '1 day' where id = test.id('eve');
+insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values
+  (test.id('cap2'), 'https://push.test/cap2', 'k', 'a'),
+  (test.id('eve'), 'https://push.test/eve', 'k', 'a');
+update public.chat_reads set viewing_at = null;
+
+-- Rooms and messages by name, whoever is signed in (these skip the policies).
+create function test.room_id(name text) returns uuid language sql security definer as $$
+  select id from public.chat_threads where title = name;
+$$;
+create function test.message_id(text_ text) returns uuid language sql security definer as $$
+  select id from public.messages where body = text_ order by created_date desc limit 1;
+$$;
+create function test.mentions_of(message text) returns uuid[] language sql security definer as $$
+  select mentions from public.messages where body = message order by created_date desc limit 1;
+$$;
+grant execute on function test.room_id(text) to authenticated, service_role;
+grant execute on function test.message_id(text) to authenticated, service_role;
+grant execute on function test.mentions_of(text) to authenticated, service_role;
+
+-- The Captains' Lounge --------------------------------------------------------
+
+select test.ok((select count(*) from public.chat_threads where visibility = 'captains' and title = 'Captains'' Lounge') = 1,
+  'the Captains'' Lounge is built in');
+
+select test.sign_in('cap');
+select test.ok(exists (select 1 from public.chat_threads where title = 'Captains'' Lounge'), 'captains see the Lounge');
+select test.touches($$insert into public.messages (user_id, author_name, body, thread_id, created_date) values (test.id('cap'), 'Cap', 'Lineup: Eve in goal?', test.room_id('Captains'' Lounge'), clock_timestamp())$$, 1,
+  'a captain posts in the Lounge');
+select test.touches($$delete from public.chat_threads where title = 'Captains'' Lounge'$$, 0, 'nobody can delete the Lounge, captains included');
+select test.touches($$update public.chat_threads set archived = true where title = 'Captains'' Lounge'$$, 0, 'or close it');
+select test.refused($$insert into public.chat_threads (title, created_by, visibility) values ('Second lounge', test.id('cap'), 'captains')$$,
+  'there''s only the one Lounge');
+
+select test.sign_in('ann');
+select test.ok(not exists (select 1 from public.chat_threads where visibility = 'captains'), 'players don''t see the Lounge');
+select test.ok(not exists (select 1 from public.messages where body = 'Lineup: Eve in goal?'), 'or its messages');
+select test.ok(not exists (select 1 from public.chat_search('Lineup')), 'or find them in search');
+select test.ok(not exists (select 1 from public.chat_overview() where thread_id = test.room_id('Captains'' Lounge')), 'or get its unread count');
+select test.refused($$insert into public.messages (user_id, author_name, body, thread_id) values (test.id('ann'), 'Ann', 'Let me in', test.room_id('Captains'' Lounge'))$$,
+  'players can''t post in the Lounge');
+select test.refused($$insert into public.message_reactions (message_id, user_id, emoji) values (test.message_id('Lineup: Eve in goal?'), test.id('ann'), '👍')$$,
+  'or react in it');
+
+select test.sign_in('cap2');
+select test.ok(exists (select 1 from public.messages where body = 'Lineup: Eve in goal?'), 'every captain sees what''s in the Lounge');
+reset role;
+update public.users set role = 'user' where id = test.id('cap2');
+select test.sign_in('cap2');
+select test.ok(not exists (select 1 from public.messages where body = 'Lineup: Eve in goal?'), 'a captain who goes back to being a player loses it');
+reset role;
+update public.users set role = 'admin' where id = test.id('cap2');
+
+set role service_role;
+select test.ok(test.push_targets('Lineup: Eve in goal?') = 'https://push.test/cap2',
+  'Lounge messages notify the captains (even ones who never opened it), and no players');
+reset role;
+
+select test.sign_in('cap');
+insert into public.messages (user_id, author_name, body, thread_id, mentions, mentions_team, created_date)
+  values (test.id('cap'), 'Cap', '@team @Ann @Cap2 subs?', test.room_id('Captains'' Lounge'), array[test.id('ann'), test.id('cap2')], true, clock_timestamp());
+select test.ok((select mentions = array[test.id('cap2')] and not mentions_team from public.messages where body = '@team @Ann @Cap2 subs?'),
+  'in the Lounge, only captains can be mentioned, and @team pings nobody');
+reset role;
+
+-- Starting a private chat ------------------------------------------------------
+
+select test.sign_in('ann');
+select test.ok(
+  (select visibility = 'private' and created_by = test.id('ann')
+     from public.chat_start_private('🚗 Ride Thursday', array[test.id('cy'), test.id('dee'), gen_random_uuid(), test.id('cy')])),
+  'a player starts a private chat'
+);
+reset role;
+select test.ok(
+  (select array_agg(p.name order by p.name) = array['ann', 'cy']
+     from public.chat_thread_members tm join test.people p on p.id = tm.user_id where tm.thread_id = test.room_id('🚗 Ride Thursday')),
+  'it has the starter and the teammates picked (each once, only teammates on the site)'
+);
+
+select test.sign_in('ann');
+select test.refused($$select public.chat_start_private('Just me', array[test.id('ann')])$$, 'a private chat needs at least one other teammate');
+select test.refused($$select public.chat_start_private('Dee?', array[test.id('dee')])$$, 'who is on the team');
+select test.refused($$select public.chat_start_private('', array[test.id('cy')])$$, 'and a name');
+select test.refused($$insert into public.chat_threads (title, created_by, author_name, visibility) values ('Sneaky', test.id('ann'), 'Ann', 'private')$$,
+  'private chats only start with their people (not as an empty room)');
+select test.refused($$insert into public.chat_thread_members (thread_id, user_id) values (test.room_id('🚗 Ride Thursday'), test.id('eve'))$$,
+  'nobody adds people by writing to the member list directly');
+select test.touches($$insert into public.messages (user_id, author_name, body, thread_id, created_date) values (test.id('ann'), 'Ann', 'Leaving at 6, room for one', test.room_id('🚗 Ride Thursday'), clock_timestamp())$$, 1,
+  'people in a private chat post in it');
+
+select test.sign_in('cy');
+select test.ok(exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'and read it');
+select test.ok((select count(*) from public.chat_thread_members where thread_id = test.room_id('🚗 Ride Thursday')) = 2, 'and see who''s in it');
+select test.ok((select unread = 1 and visibility = 'private' from public.chat_overview() where thread_id = test.room_id('🚗 Ride Thursday')),
+  'it counts as unread even before they open it');
+select test.ok(exists (select 1 from public.chat_search('room for one') where thread_title = '🚗 Ride Thursday'), 'and shows up in their search');
+select test.touches($$insert into public.message_reactions (message_id, user_id, emoji) values (test.message_id('Leaving at 6, room for one'), test.id('cy'), '🙏')$$, 1,
+  'and they react in it');
+
+-- Captains can't read private chats ----------------------------------------------
+
+select test.sign_in('cap');
+select test.ok(not exists (select 1 from public.chat_threads where visibility = 'private'), 'captains don''t see private chats they aren''t in');
+select test.ok(not exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'or their messages');
+select test.ok(not exists (select 1 from public.message_reactions where emoji = '🙏'), 'or reactions');
+select test.ok(not exists (select 1 from public.chat_thread_members), 'or who''s in them');
+select test.ok(not exists (select 1 from public.chat_search('room for one')), 'or find them in search');
+select test.ok(not exists (select 1 from public.chat_overview() where thread_id = test.room_id('🚗 Ride Thursday')), 'or get their unread count');
+select test.refused($$insert into public.messages (user_id, author_name, body, thread_id) values (test.id('cap'), 'Cap', 'Hi', test.room_id('🚗 Ride Thursday'))$$,
+  'captains can''t post in them');
+select test.touches($$delete from public.messages where id = test.message_id('Leaving at 6, room for one')$$, 0, 'or delete messages in them');
+select test.touches($$delete from public.message_reactions where emoji = '🙏'$$, 0, 'or remove reactions');
+select test.touches($$update public.chat_threads set title = 'Mine now' where id = test.room_id('🚗 Ride Thursday')$$, 0, 'or rename them');
+select test.touches($$delete from public.chat_threads where id = test.room_id('🚗 Ride Thursday')$$, 0, 'or delete them');
+select test.refused($$select public.chat_add_members(test.room_id('🚗 Ride Thursday'), array[test.id('cap')])$$, 'or add themselves');
+
+select test.sign_in('eve');
+select test.ok(not exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'other players don''t see them either');
+
+-- Notifications and mentions follow who's in it.
+set role service_role;
+select test.ok(test.push_targets('Leaving at 6, room for one') = 'https://push.test/cy',
+  'private chat messages notify everyone in it (even before they open it), and nobody else');
+reset role;
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id, mentions, created_date)
+  values (test.id('ann'), 'Ann', '@Cap @Cy who drives?', test.room_id('🚗 Ride Thursday'), array[test.id('cap'), test.id('cy')], clock_timestamp());
+select test.ok(test.mentions_of('@Cap @Cy who drives?') = array[test.id('cy')], 'a private chat only mentions people in it');
+set role service_role;
+select test.ok(test.push_targets('@Cap @Cy who drives?') = 'https://push.test/cy', 'so a mention can''t notify anyone outside it');
+reset role;
+
+-- Managing a private chat ----------------------------------------------------------
+
+select test.sign_in('ann');
+select test.refused($$update public.chat_threads set visibility = 'team' where id = test.room_id('🚗 Ride Thursday')$$,
+  'a private chat can never be opened up to the team');
+select test.touches($$update public.chat_threads set title = '🚗 Ride Friday' where id = test.room_id('🚗 Ride Thursday')$$, 1, 'the starter renames it');
+select test.sign_in('cy');
+select test.touches($$update public.chat_threads set title = 'Cy''s now' where id = test.room_id('🚗 Ride Friday')$$, 0, 'others in it can''t');
+select test.touches($$delete from public.chat_threads where id = test.room_id('🚗 Ride Friday')$$, 0, 'or delete it');
+select test.refused($$update public.chat_threads set visibility = 'team' where id = test.room_id('Captains'' Lounge')$$,
+  'and no room changes kind');
+
+-- Adding people: they see the whole chat, but what came before isn't unread for them.
+select public.chat_add_members(test.room_id('🚗 Ride Friday'), array[test.id('eve'), test.id('dee')]);
+reset role;
+update public.chat_thread_members set created_date = clock_timestamp() where user_id = test.id('eve');
+select test.ok((select count(*) from public.chat_thread_members where thread_id = test.room_id('🚗 Ride Friday')) = 3,
+  'anyone in a private chat adds teammates (only ones on the site)');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'Welcome Eve', test.room_id('🚗 Ride Friday'), clock_timestamp());
+select test.sign_in('eve');
+select test.ok(exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'someone added sees the earlier messages');
+select test.ok((select unread from public.chat_overview() where thread_id = test.room_id('🚗 Ride Friday')) = 1,
+  'but only what came after they were added counts as unread');
+
+-- The app icon matches each player's Chat tab, private chats and the Lounge included.
+reset role;
+truncate test.chat_tab;
+select test.sign_in('eve');
+select test.note_chat_tab('eve');
+select test.sign_in('cy');
+select test.note_chat_tab('cy');
+select test.sign_in('cap2');
+select test.note_chat_tab('cap2');
+reset role;
+set role service_role;
+select test.ok(
+  (select count(*) = 3 and bool_and(i.n = t.n) from test.icon_numbers() i join test.chat_tab t using (name))
+    and (select n from test.chat_tab where name = 'eve') = 1
+    and (select n from test.chat_tab where name = 'cap2') >= 2,
+  'the app icon counts private chats and the Lounge like the Chat tab does'
+);
+reset role;
+
+-- Taking people out, and leaving.
+select test.sign_in('cy');
+select test.touches($$delete from public.chat_thread_members where user_id = test.id('eve')$$, 0, 'only the starter takes someone out');
+select test.sign_in('ann');
+select test.touches($$delete from public.chat_thread_members where user_id = test.id('eve')$$, 1, 'the starter takes someone out');
+select test.sign_in('eve');
+select test.ok(not exists (select 1 from public.messages where body = 'Welcome Eve'), 'and they can''t read it anymore');
+select test.sign_in('cy');
+select test.touches($$delete from public.chat_thread_members where user_id = auth.uid()$$, 1, 'anyone can leave a private chat');
+select test.ok(not exists (select 1 from public.chat_threads where title = '🚗 Ride Friday'), 'and then it''s gone from their list');
+reset role;
+select test.ok(exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'leaving keeps the messages for the others');
+
+-- Closing.
+select test.sign_in('ann');
+select public.chat_add_members(test.room_id('🚗 Ride Friday'), array[test.id('cy')]);
+select test.touches($$update public.chat_threads set archived = true where id = test.room_id('🚗 Ride Friday')$$, 1, 'the starter closes it');
+select test.refused($$select public.chat_add_members(test.room_id('🚗 Ride Friday'), array[test.id('eve')])$$, 'nobody adds people to a closed chat');
+select test.sign_in('cy');
+select test.refused($$insert into public.messages (user_id, author_name, body, thread_id) values (test.id('cy'), 'Cy', 'Late', test.room_id('🚗 Ride Friday'))$$,
+  'or posts in it');
+
+-- Taken off the team: out of every private chat. Added back to the team, still
+-- out of them, until someone in a chat adds them again.
+select test.sign_in('ann');
+select public.chat_start_private('Team dinner', array[test.id('cy'), test.id('eve')]);
+reset role;
+update public.chat_thread_members set created_date = now() - interval '1 hour'
+  where thread_id = test.room_id('Team dinner') and user_id = test.id('eve');
+select test.sign_in('eve');
+select public.chat_mark_read(test.room_id('Team dinner'), clock_timestamp());
+select test.sign_in('cap');
+select public.set_team_member_removed(test.id('eve'), true);
+select test.sign_in('eve');
+select test.touches($$delete from public.chat_thread_members where user_id = auth.uid()$$, 0,
+  'a player off the team can''t change private chats');
+select test.sign_in('ann');
+select test.ok((select count(*) from public.chat_thread_members where thread_id = test.room_id('Team dinner')) = 2,
+  'a player taken off the team drops out of their private chats');
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'While Eve was away', test.room_id('Team dinner'), clock_timestamp());
+set role service_role;
+select test.ok(test.push_targets('While Eve was away') = 'https://push.test/cy', 'and isn''t notified');
+reset role;
+select test.sign_in('cap');
+select public.set_team_member_removed(test.id('eve'), false);
+select test.sign_in('eve');
+select test.ok(not exists (select 1 from public.chat_threads where title = 'Team dinner'),
+  'adding them back to the team doesn''t bring their private chats back');
+select test.sign_in('ann');
+select test.ok((select count(*) from public.chat_thread_members where thread_id = test.room_id('Team dinner')) = 2,
+  'or put them back on the list');
+select public.chat_add_members(test.room_id('Team dinner'), array[test.id('eve')]);
+reset role;
+select test.ok(
+  (select created_date > now() - interval '1 minute' from public.chat_thread_members
+    where thread_id = test.room_id('Team dinner') and user_id = test.id('eve')),
+  'someone in it adds them again, from now'
+);
+-- (Later than everything above, as it would be.)
+update public.chat_thread_members set created_date = clock_timestamp()
+  where thread_id = test.room_id('Team dinner') and user_id = test.id('eve');
+select test.sign_in('ann');
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'Welcome back Eve', test.room_id('Team dinner'), clock_timestamp());
+select test.sign_in('eve');
+select test.ok(exists (select 1 from public.messages where body = 'While Eve was away'), 'they see the whole chat again');
+select test.ok((select unread from public.chat_overview() where thread_id = test.room_id('Team dinner')) = 1,
+  'but only what came after they were added back is unread, even though they''d read further back before');
+reset role;
+truncate test.chat_tab;
+select test.sign_in('eve');
+select test.note_chat_tab('eve');
+reset role;
+set role service_role;
+select test.ok((select i.n = t.n from test.icon_numbers() i join test.chat_tab t using (name) where name = 'eve'),
+  'and the app icon agrees');
+reset role;
+
+-- A private chat nobody named shows the other people in it now, in notifications too.
+insert into public.player_profiles (user_id, display_name) values
+  (test.id('ann'), 'Ann Lee'), (test.id('cy'), 'Cy Twombly'), (test.id('eve'), 'Eve Park');
+create function test.push_titles(message text) returns text language sql as $$
+  select coalesce(string_agg(t.endpoint || '=' || t.thread_title, ',' order by t.endpoint), '')
+  from public.chat_push_targets((select id from public.messages where body = message order by created_date desc limit 1)) t;
+$$;
+grant execute on function test.push_titles(text) to service_role;
+select test.sign_in('ann');
+select public.chat_start_private('Ann L. & Cy T.', array[test.id('cy')], false);
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'Just us', test.room_id('Ann L. & Cy T.'), clock_timestamp());
+set role service_role;
+select test.ok(test.push_titles('Just us') = 'https://push.test/cy=Ann L.', 'a private chat nobody named is called after the other people in it');
+reset role;
+select test.sign_in('ann');
+select public.chat_add_members(test.room_id('Ann L. & Cy T.'), array[test.id('eve')]);
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'Eve joined', test.room_id('Ann L. & Cy T.'), clock_timestamp());
+set role service_role;
+select test.ok(test.push_titles('Eve joined') = 'https://push.test/cy=Ann L. & Eve P.,https://push.test/eve=Ann L. & Cy T.',
+  'which follows who''s in it');
+reset role;
+select test.sign_in('ann');
+update public.chat_threads set title = '🍝 Pasta night' where id = test.room_id('Ann L. & Cy T.');
+select test.ok((select named from public.chat_threads where title = '🍝 Pasta night'), 'renaming it gives it that name');
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('ann'), 'Ann', 'Renamed', test.room_id('🍝 Pasta night'), clock_timestamp());
+set role service_role;
+select test.ok(test.push_titles('Renamed') = 'https://push.test/cy=🍝 Pasta night,https://push.test/eve=🍝 Pasta night', 'and notifications use it');
+reset role;
+select test.sign_in('ann');
+select test.refused($$update public.chat_threads set named = false where title = '🍝 Pasta night'$$, 'nobody unnames a chat by hand');
+reset role;
+
+-- A captain in a private chat is just one of its people.
+select test.sign_in('cap');
+select test.ok((select id from public.chat_start_private('Dues question', array[test.id('cy')])) is not null, 'captains start private chats too');
+select test.sign_in('cy');
+insert into public.messages (user_id, author_name, body, thread_id, created_date)
+  values (test.id('cy'), 'Cy', 'Can I pay next week?', test.room_id('Dues question'), clock_timestamp());
+select test.sign_in('cap');
+insert into public.messages (user_id, author_name, body, thread_id, mentions_team, created_date)
+  values (test.id('cap'), 'Cap', '@team sure', test.room_id('Dues question'), true, clock_timestamp());
+select test.ok((select not mentions_team from public.messages where body = '@team sure'), 'their @team pings nobody there');
+select test.touches($$delete from public.messages where body = 'Can I pay next week?'$$, 0, 'and they delete only their own messages there');
+select test.touches($$delete from public.messages where body = '@team sure'$$, 1, 'like everyone else');
+select test.touches($$delete from public.chat_thread_members where user_id = auth.uid() and thread_id = test.room_id('Dues question')$$, 1,
+  'a starter can leave too');
+select test.touches($$update public.chat_threads set title = 'Back' where id = test.room_id('Dues question')$$, 0,
+  'and then has no say over it');
+
+-- Deleting: the starter deletes it, with its messages and who was in it.
+select test.sign_in('ann');
+select test.touches($$delete from public.chat_threads where id = test.room_id('🚗 Ride Friday')$$, 1, 'the starter deletes a private chat');
+reset role;
+select test.ok(not exists (select 1 from public.messages where body = 'Leaving at 6, room for one'), 'its messages go with it');
+select test.ok(not exists (select 1 from public.chat_thread_members m left join public.chat_threads t on t.id = m.thread_id where t.id is null),
+  'and its member list');
+
+-- A deleted account leaves its private chats; their messages stay.
+delete from auth.users where id = test.id('cy');
+select test.ok(not exists (select 1 from public.chat_thread_members where user_id = test.id('cy')), 'a deleted account leaves its private chats');
+select test.ok(exists (select 1 from public.messages where body = 'Can I pay next week?' and user_id is null), 'their messages there stay');
+
+reset role;
+set role anon;
+select test.refused($$select * from public.chat_thread_members$$, 'signed-out visitors can''t see who''s in private chats');
+select test.refused($$select public.chat_start_private('x', array[gen_random_uuid()])$$, 'or start one');
 reset role;
 
 rollback;

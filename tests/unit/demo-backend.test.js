@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v16';
+const DB_KEY = 'jt_demo_db_v18';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -55,8 +55,16 @@ describe('sample chat data', () => {
   it('has a Team Chat, open threads with unread, a never-opened thread and a closed one', async () => {
     const { api } = await signedIn();
     const threads = await api.entities.ChatThread.list('-created_date');
+    // Plus the Captains' Lounge and the captain's private chat with Jordan.
     expect(threads.map((t) => t.title).sort()).toEqual(
-      ['⚽ Sunday pickup?', '🍕 Post-game food spot', '🎽 Jersey order', '🏈 Fantasy football league'].sort(),
+      [
+        '⚽ Sunday pickup?',
+        '🍕 Post-game food spot',
+        '🎽 Jersey order',
+        '🏈 Fantasy football league',
+        "Captains' Lounge",
+        'Casey C. & Jordan R.',
+      ].sort(),
     );
     expect(threads.find((t) => t.title === '🎽 Jersey order').archived).toBe(true);
 
@@ -86,6 +94,153 @@ describe('sample chat data', () => {
     expect(overview.reduce((n, o) => n + o.mentions, 0)).toBe(2);
     const food = threads.find((t) => t.title === '🍕 Post-game food spot');
     expect((await api.chat.history(food.id)).some((m) => m.mentions_team)).toBe(true);
+  });
+});
+
+describe('private chats and the Captains\' Lounge', () => {
+  const titles = async (api) => (await api.entities.ChatThread.list()).map((t) => t.title).sort();
+  const asJordan = async (api) => {
+    await api.auth.signIn(DEMO_PLAYER_LOGIN.email, DEMO_PLAYER_LOGIN.password);
+    return api.auth.me();
+  };
+  const idOf = async (api, title) => (await api.entities.ChatThread.filter({ title }))[0]?.id;
+  const userId = async (api, name) => (await api.entities.PlayerProfile.list()).find((p) => p.display_name === name).user_id;
+
+  it('shows captains the Lounge and their own private chats, never anyone else\'s', async () => {
+    const { api } = await signedIn();
+    const mine = await titles(api);
+    expect(mine).toContain("Captains' Lounge");
+    expect(mine).toContain('Casey C. & Jordan R.');
+    expect(mine).not.toContain("🚗 Ride to Thursday's game");
+    expect((await api.chat.search('ride Thursday')).length).toBe(0);
+    const dm = await idOf(api, 'Casey C. & Jordan R.');
+    expect((await api.chat.overview()).filter((o) => o.visibility === 'private').map((o) => o.thread_id)).toEqual([dm]);
+  });
+
+  it('shows players their private chats, but not the Lounge', async () => {
+    const { api } = await signedIn();
+    const lounge = await idOf(api, "Captains' Lounge");
+    await asJordan(api);
+    const theirs = await titles(api);
+    expect(theirs).not.toContain("Captains' Lounge");
+    expect(theirs).toContain("🚗 Ride to Thursday's game");
+    expect(await api.chat.history(lounge)).toEqual([]);
+    expect((await api.entities.Message.filter({ thread_id: lounge })).length).toBe(0);
+    expect((await api.chat.search('Lineup idea')).length).toBe(0);
+    // Their private chats count like Team Chat, from when they were added.
+    const rideId = await idOf(api, "🚗 Ride to Thursday's game");
+    const ride = (await api.chat.overview()).find((o) => o.thread_id === rideId);
+    expect(ride).toMatchObject({ visibility: 'private', unread: 2, last_read_at: null });
+    await expect(
+      api.entities.Message.create({ user_id: (await api.auth.me()).id, author_name: 'Jordan', body: 'hi', thread_id: lounge }),
+    ).rejects.toThrow('permission');
+  });
+
+  it('starts a private chat with teammates on the site, the starter included', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const nia = JSON.parse(localStorage.getItem(DB_KEY)).users.find((u) => u.email === 'nia@demo.test').id;
+    await expect(api.chat.startPrivate('Just me', [me.id, nia])).rejects.toThrow('Pick at least one teammate');
+    const chat = await api.chat.startPrivate('Lineup chat', [sam, nia, sam]);
+    expect(chat).toMatchObject({ title: 'Lineup chat', visibility: 'private', created_by: me.id });
+    const members = await api.entities.ChatThreadMember.filter({ thread_id: chat.id });
+    expect(members.map((m) => m.user_id).sort()).toEqual([me.id, sam].sort());
+    await expect(api.entities.ChatThread.update(chat.id, { visibility: 'team' })).rejects.toThrow('permission');
+    await expect(api.entities.ChatThread.create({ title: 'Sneaky', created_by: me.id, visibility: 'private' })).rejects.toThrow('permission');
+  });
+
+  it('adds people (who see the whole chat, unread only from then), and lets anyone leave', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const jordan = await userId(api, 'Jordan Rivera');
+    const chat = await api.chat.startPrivate('Subs', [sam]);
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'Before Jordan', thread_id: chat.id });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await api.chat.addMembers(chat.id, [jordan]);
+    await asJordan(api);
+    expect((await api.chat.history(chat.id)).map((m) => m.body)).toEqual(['Before Jordan']);
+    expect((await api.chat.overview()).find((o) => o.thread_id === chat.id).unread).toBe(0);
+    // Only the starter takes people out; anyone leaves.
+    const rows = await api.entities.ChatThreadMember.filter({ thread_id: chat.id });
+    await expect(api.entities.ChatThreadMember.delete(rows.find((r) => r.user_id === sam).id)).rejects.toThrow('permission');
+    await api.entities.ChatThreadMember.delete(rows.find((r) => r.user_id === jordan).id);
+    expect(await titles(api)).not.toContain('Subs');
+  });
+
+  it('mentions only people in the chat, never @team, and captains delete only their own messages there', async () => {
+    const { api, me } = await signedIn();
+    const jordan = await userId(api, 'Jordan Rivera');
+    const sam = await userId(api, 'Sam Okafor');
+    const dm = await idOf(api, 'Casey C. & Jordan R.');
+    const sent = await api.entities.Message.create({
+      user_id: me.id, author_name: 'Casey', body: '@team @Jordan R. @Sam O.', thread_id: dm, mentions: [jordan, sam], mentions_team: true,
+    });
+    expect(sent).toMatchObject({ mentions: [jordan], mentions_team: false });
+    const theirs = (await api.chat.history(dm)).find((m) => m.user_id === jordan);
+    await expect(api.entities.Message.delete(theirs.id)).rejects.toThrow('permission');
+    await api.entities.Message.delete(sent.id);
+  });
+
+  it('takes a removed player out of their private chats, and adding them back does not bring them back', async () => {
+    const { api } = await signedIn();
+    const jordan = await userId(api, 'Jordan Rivera');
+    await api.users.setRemoved(jordan, true);
+    expect((await api.entities.ChatThreadMember.list()).some((m) => m.user_id === jordan)).toBe(false);
+    await api.users.setRemoved(jordan, false);
+    await asJordan(api);
+    expect(await titles(api)).not.toContain("🚗 Ride to Thursday's game");
+    expect(await titles(api)).not.toContain('Casey C. & Jordan R.');
+  });
+
+  it('counts unread from when you were added back, even if you had read further back before leaving', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const chat = await api.chat.startPrivate('Carpool', [sam]);
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+    await api.auth.signIn('sam@demo.test', 'demo1234');
+    await api.chat.markRead(chat.id, new Date().toISOString());
+    await api.chat.leave(chat.id);
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    await wait();
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'While Sam was out', thread_id: chat.id });
+    await wait();
+    await api.chat.addMembers(chat.id, [sam]);
+    await wait();
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'Welcome back', thread_id: chat.id });
+    await api.auth.signIn('sam@demo.test', 'demo1234');
+    expect((await api.chat.history(chat.id)).map((m) => m.body)).toEqual(['While Sam was out', 'Welcome back']);
+    expect((await api.chat.overview()).find((o) => o.thread_id === chat.id).unread).toBe(1);
+  });
+
+  it('only says someone left or was taken out when it happened', async () => {
+    const { api } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const dm = await idOf(api, 'Casey C. & Jordan R.');
+    // Jordan started it, so Casey (a captain) can't take Jordan out.
+    await expect(api.chat.removeMember(dm, await userId(api, 'Jordan Rivera'))).rejects.toThrow('permission');
+    // Sam isn't in it, so there's nobody to take out.
+    await expect(api.chat.removeMember(dm, sam)).rejects.toThrow('permission');
+    await api.chat.leave(dm);
+    await expect(api.chat.leave(dm)).rejects.toThrow('permission');
+    expect(await titles(api)).not.toContain('Casey C. & Jordan R.');
+  });
+
+  it('a chat nobody named gets a name when renamed, and nobody unnames it', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const chat = await api.chat.startPrivate('Casey C. & Sam O.', [sam], { named: false });
+    expect(chat.named).toBe(false);
+    expect((await api.entities.ChatThread.update(chat.id, { title: '🥅 Goalies' })).named).toBe(true);
+    await expect(api.entities.ChatThread.update(chat.id, { named: false })).rejects.toThrow('permission');
+    expect((await api.entities.ChatThread.filter({ id: chat.id }))[0]).toMatchObject({ created_by: me.id, named: true });
+  });
+
+  it('shows nothing of the chat to an account that has not entered the team code', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('nia@demo.test', 'demo1234');
+    expect(await api.entities.ChatThread.list()).toEqual([]);
+    expect(await api.chat.history(null)).toEqual([]);
+    expect(await api.chat.search('pinnies')).toEqual([]);
   });
 });
 

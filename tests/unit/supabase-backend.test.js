@@ -114,6 +114,45 @@ describe('chat.overview and markRead', () => {
   });
 });
 
+describe('private chats', () => {
+  it('starts one and adds people through the database functions', async () => {
+    result = { data: { id: 't1', title: 'Ride', visibility: 'private' }, error: null };
+    expect(await api.chat.startPrivate('Ride', ['a', 'b'])).toEqual({ id: 't1', title: 'Ride', visibility: 'private' });
+    await api.chat.startPrivate('Ann L. & Bo C.', ['b'], { named: false });
+    await api.chat.addMembers('t1', ['c']);
+    expect(calls).toEqual([
+      ['rpc', 'chat_start_private', { p_title: 'Ride', p_user_ids: ['a', 'b'], p_named: true }],
+      ['rpc', 'chat_start_private', { p_title: 'Ann L. & Bo C.', p_user_ids: ['b'], p_named: false }],
+      ['rpc', 'chat_add_members', { p_thread_id: 't1', p_user_ids: ['c'] }],
+    ]);
+  });
+
+  it('leaves or takes someone out, and only says it worked when a row really went', async () => {
+    session = { user: { id: 'me' } };
+    result = { data: [{ id: 'm1' }], error: null };
+    await api.chat.leave('t1');
+    await api.chat.removeMember('t1', 'sam');
+    expect(calls).toEqual([
+      ['chat_thread_members', 'delete'],
+      ['chat_thread_members', 'eq', 'thread_id', 't1'],
+      ['chat_thread_members', 'eq', 'user_id', 'me'],
+      ['chat_thread_members', 'select', 'id'],
+      ['chat_thread_members', 'delete'],
+      ['chat_thread_members', 'eq', 'thread_id', 't1'],
+      ['chat_thread_members', 'eq', 'user_id', 'sam'],
+      ['chat_thread_members', 'select', 'id'],
+    ]);
+    // Refused (or nothing there): the database removes nothing and says nothing.
+    result = { data: [], error: null };
+    await expect(api.chat.leave('t1')).rejects.toThrow("You don't have permission to do that.");
+  });
+
+  it('reports why it could not', async () => {
+    result = { data: null, error: { message: 'Pick at least one teammate' } };
+    await expect(api.chat.startPrivate('Just me', [])).rejects.toThrow('Pick at least one teammate');
+  });
+});
+
 describe('filter', () => {
   it('uses "is null" for null and "in" for lists', async () => {
     await api.entities.Message.filter({ thread_id: null, id: ['a', 'b'], user_id: 'u' });
