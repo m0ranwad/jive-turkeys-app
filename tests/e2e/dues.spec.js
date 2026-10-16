@@ -8,6 +8,7 @@ import { expect, signIn, test } from './helpers';
 // Alex Chen and Riley Novak are a couple who pay together and haven't paid this session in the sample data.
 const ALEX = 'alex@demo.test';
 const JORDAN = 'jordan@demo.test'; // paid two days ago, and marked it herself
+const SAM = 'sam@demo.test'; // paid $50 before the ref fees were added; the share is now $61
 const PAYPAL_QR = 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ';
 
 /** The Dues tab: bottom bar on phones, top bar on computers. */
@@ -54,7 +55,8 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
   // Everyone sees how the team is doing, and who has and hasn't paid.
   const progress = page.getByTestId('team-progress');
   await expect(progress).toContainText('Team · 6 of 12 paid');
-  await expect(progress).toContainText('$366 of $732 in');
+  // Six of the twelve paid $61 (Sam $50), and Jamie, who is sitting out, paid too.
+  await expect(progress).toContainText('$416 in · $377 to go');
   await progress.getByRole('button', { name: "See who has and hasn't paid" }).click();
   await expect(page.getByRole('tab', { name: 'Team dues' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('dues-unpaid')).toContainText('Alex Chen');
@@ -165,7 +167,7 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   const reminder = await page.evaluate(() => navigator.clipboard.readText());
   expect(reminder).toContain('Session 2 dues: $61 each');
   expect(reminder).toContain("That's the $595 league fee plus $18 refs × 7 games = $721, split across 12 players.");
-  expect(reminder).toContain('Still to pay: Alex Chen & Riley Novak ($122), Casey Captain, Chris Dunn, Kelly Moss, Mike Russo');
+  expect(reminder).toContain('Still to pay: Alex Chen & Riley Novak ($122), Casey Captain, Chris Dunn, Kelly Moss, Mike Russo, Sam Okafor ($11 more)');
 
   await page.getByRole('button', { name: 'Edit fee' }).click();
   const dialog = page.getByRole('dialog', { name: 'Session 2 fee' });
@@ -180,6 +182,95 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await page.getByRole('tab', { name: 'My dues' }).click();
   await expect(page.getByTestId('my-dues')).toContainText('$62');
   await expect(page.getByTestId('my-dues')).toContainText('Refs · 7 games × $20$140');
+});
+
+test('players keep what they paid when the fee changes, and the difference can be marked paid', async ({ page }) => {
+  await signIn(page);
+  await openDues(page);
+  const paid = page.getByTestId('dues-paid');
+  const summary = page.locator('section', { hasText: 'Still to collect' });
+
+  // Sam paid $50 before the ref fees were added.
+  await expect(page.getByLabel('Amount for Sam Okafor')).toHaveText('$50');
+  await expect(paid).toContainText('share is now $61');
+  await expect(summary).toContainText('$416Collected');
+  await expect(summary).toContainText('$377Still to collect');
+  await expect(summary).toContainText('$595 league + 7 × $18 refs = $721. Rounding up adds $11. Collected includes $61 from players not playing.');
+
+  // Jamie paid, then decided to sit this session out: she's listed, and owes nothing.
+  const notPlaying = page.getByTestId('dues-not-playing');
+  await expect(notPlaying).toContainText('Paid, not playing · 1');
+  await expect(notPlaying).toContainText('Jamie Foxsitting out');
+  await expect(page.getByLabel('Amount for Jamie Fox')).toHaveText('$61');
+
+  // The refs go up to $20 a game: $735, $62 each. Everyone who paid keeps what they paid.
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Session 2 fee' });
+  await dialog.getByLabel('Ref fee / game').fill('20');
+  await dialog.getByRole('button', { name: 'Save fee' }).click();
+  await expect(page.getByText('$62 each')).toBeVisible();
+  await expect(page.getByLabel('Amount for Jordan Rivera')).toHaveText('$61');
+  await expect(page.getByLabel('Amount for Sam Okafor')).toHaveText('$50');
+  await expect(paidHeading(page, '6 of 12 paid')).toBeVisible();
+  // Collected stays what was paid; still to collect gains the differences ($1 each for five, and Sam's $12).
+  await expect(summary).toContainText('$416Collected');
+  await expect(summary).toContainText('$389Still to collect');
+
+  await page.getByRole('button', { name: 'Mark $1 more paid for Jordan Rivera' }).click();
+  await expect(page.getByText('Jordan Rivera: $1 more marked paid')).toBeVisible();
+  await expect(page.getByLabel('Amount for Jordan Rivera')).toHaveText('$62');
+  await expect(page.getByRole('button', { name: 'Mark $1 more paid for Jordan Rivera' })).toHaveCount(0);
+  await expect(summary).toContainText('$417Collected');
+  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Jordan R. paid $1 more');
+
+  await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
+  await expect(sheet).toContainText('Paid $50 · share is now $62 · $12 more to pay.');
+  await expect(sheet).toContainText('Sam O. marked themselves paid $50');
+  await page.keyboard.press('Escape');
+
+  // Jamie's sheet: what she paid, and she can be marked not paid (say, once she has her money back).
+  await page.getByRole('button', { name: 'Details for Jamie Fox' }).click();
+  const jamie = page.getByRole('dialog', { name: 'Jamie Fox' });
+  await expect(jamie).toContainText('Not playing · sitting out');
+  await expect(jamie).toContainText("Paid $61. Marked paid Sep 28. They aren't on this session's roster");
+  await expect(jamie.getByLabel('Custom amount')).toHaveCount(0);
+  await jamie.getByRole('button', { name: 'Mark as not paid' }).click();
+  await jamie.getByRole('button', { name: 'Mark not paid' }).click();
+  await expect(page.getByText('Jamie Fox marked not paid')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('dues-not-playing')).toHaveCount(0);
+  await expect(summary).toContainText('$356Collected');
+});
+
+test('a player whose share went up after they paid sees the difference and pays it', async ({ page }) => {
+  await signIn(page, SAM);
+  await openDues(page);
+  const card = page.getByTestId('my-dues');
+  await expect(card).toContainText('$61');
+  await expect(card).toContainText('Paid Oct 5');
+  await expect(card).toContainText("You paid $50 before your share went up, so there's $11 more to pay.");
+  const difference = page.getByTestId('pay-difference');
+  await expect(difference).toContainText('Pay the difference');
+  await expect(page.getByRole('link', { name: 'Pay $11 with Venmo' })).toHaveAttribute('href', /amount=11&/);
+  await expect(page.getByText("You're paid up")).toHaveCount(0);
+
+  await difference.getByRole('button', { name: 'Mark $11 paid' }).click();
+  await expect(page.getByText("You're paid up")).toBeVisible();
+  await expect(page.getByTestId('pay-difference')).toHaveCount(0);
+  await expect(card).not.toContainText('more to pay');
+  const history = page.locator('section', { hasText: 'Your history' });
+  await expect(history).toContainText('You marked yourself paid $11 more');
+  await expect(history).toContainText('You marked yourself paid $50');
+});
+
+test('a player who paid and is sitting out the session sees that they owe nothing', async ({ page }) => {
+  await signIn(page, 'jamie@demo.test');
+  await openDues(page);
+  const card = page.getByTestId('my-dues');
+  await expect(card).toContainText('Not on the roster');
+  await expect(card).toContainText("so you don't owe anything. You paid $61 for it, and your captains can see that on Team dues.");
+  await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
 });
 
 test('a captain pastes payment links, and players get the buttons', async ({ page }) => {

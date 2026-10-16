@@ -53,7 +53,8 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
         {feeLine(row)}
         {team.extra > 0 && `. Rounding up adds ${dollars(team.extra)}.`}
         {team.extra < 0 && `. Custom amounts leave ${dollars(-team.extra)} of the ${dollars(total)} uncovered.`}
-        {team.notPlayingPaid > 0 && `. Collected includes ${dollars(team.notPlayingPaid)} from players not playing.`}
+        {team.notPlayingPaid > 0 &&
+          `${team.extra ? ' ' : '. '}Collected includes ${dollars(team.notPlayingPaid)} from players not playing.`}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {team.stillToPay.length > 0 && (
