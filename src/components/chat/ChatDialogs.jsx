@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Lock, LogOut, Search, UserPlus } from 'lucide-react';
+import { Check, ChevronRight, Hash, Lock, LogOut, Search, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
@@ -8,6 +8,53 @@ import { initials, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const TITLE = 'font-display text-lg font-extrabold uppercase tracking-tight';
+
+const NEW_KINDS = [
+  {
+    kind: 'new',
+    icon: Hash,
+    label: 'Thread for everyone',
+    hint: 'The whole team can see and join it: carpools, pickup games, the fantasy league.',
+  },
+  {
+    kind: 'private',
+    icon: Lock,
+    label: 'Private chat',
+    hint: 'Just you and the teammates you pick. Nobody else sees it, captains included.',
+  },
+];
+
+/** The room list's New button: a thread for the whole team, or a private chat. `onPick('new' | 'private')`. */
+export function NewRoomDialog({ open, onOpenChange, onPick }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>Start a chat</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          {NEW_KINDS.map(({ kind, icon: Icon, label, hint }) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => onPick(kind)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-zinc-50 px-3.5 py-3 text-left transition hover:bg-lime-100/70"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-zinc-600 ring-1 ring-black/5">
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-zinc-900">{label}</span>
+                <span className="block text-[11px] font-medium leading-snug text-zinc-500">{hint}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300" />
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /** Start a thread (title plus an optional first message), or rename one (or a private chat). */
 export function ThreadDialog({ open, onOpenChange, thread, onSave }) {

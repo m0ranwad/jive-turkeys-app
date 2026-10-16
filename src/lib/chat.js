@@ -275,14 +275,10 @@ export function bumpOverview(list, message, countsAsUnread, mentionsMe = false) 
 const NEW_THREAD_DAYS = 3;
 
 /**
- * Team Chat, the Captains' Lounge (for captains), open threads and open private
- * chats (each latest activity first), and closed ones, with each room's summary
- * from chat overview. `unreadInThreads` counts every room but Team Chat that
- * adds to the Chat tab (threads the player has opened, private chats, the
- * Lounge, closed or not; `unreadInClosed` the closed ones among them);
- * `mentionsInThreads` counts unread mentions in all of them;
- * `freshThreads` is true when a thread they've never opened got messages in
- * the last few days.
+ * Team Chat, then every other open room in one list (the Captains' Lounge for
+ * captains, threads and private chats), latest activity first, and closed ones,
+ * with each room's summary from chat overview. `unreadInClosed` counts what the
+ * closed rooms still add to the Chat tab (what came in before they closed).
  */
 export function organizeRooms(threads, overview, now = Date.now()) {
   const summaries = new Map(overview.map((o) => [o.thread_id, o]));
@@ -304,22 +300,28 @@ export function organizeRooms(threads, overview, now = Date.now()) {
   });
   list.sort((a, b) => MS(b.at) - MS(a.at));
   const team = summaries.get(null);
-  const lounge = list.find((r) => isLounge(r.thread)) || null;
-  const rooms = list.filter((r) => !isLounge(r.thread));
-  const open = rooms.filter((r) => !r.thread.archived && !isPrivate(r.thread));
-  const privateChats = rooms.filter((r) => !r.thread.archived && isPrivate(r.thread));
-  const closed = rooms.filter((r) => r.thread.archived);
-  // What the Chat tab counts, outside Team Chat (closed rooms too: what came in before they closed).
-  const followed = [lounge, ...open, ...privateChats, ...closed].filter((r) => r && r.followed);
+  const others = list.filter((r) => isLounge(r.thread) || !r.thread.archived);
+  const closed = list.filter((r) => !isLounge(r.thread) && r.thread.archived);
   return {
     team: { summary: team, unread: team?.unread || 0, mentions: team?.mentions || 0 },
-    lounge,
-    open,
-    privateChats,
+    others,
     closed,
     unreadInClosed: closed.reduce((n, r) => (r.followed ? n + r.unread : n), 0),
-    unreadInThreads: followed.reduce((n, r) => n + r.unread, 0),
-    mentionsInThreads: list.reduce((n, r) => n + r.mentions, 0),
-    freshThreads: open.some((r) => r.isNew && r.recent),
+  };
+}
+
+/**
+ * What's waiting outside the room on screen (`active`: a thread's id, or null
+ * for Team Chat), for the back button on phones: unread messages the way the
+ * Chat tab counts them, unread @mentions (threads never opened included), and
+ * whether a thread never opened got messages from others in the last few days.
+ */
+export function waitingElsewhere(rooms, active) {
+  const elsewhere = [...rooms.others, ...rooms.closed].filter((r) => r.thread.id !== active);
+  const team = active === null ? { unread: 0, mentions: 0 } : rooms.team;
+  return {
+    unread: elsewhere.reduce((n, r) => (r.followed ? n + r.unread : n), team.unread),
+    mentions: elsewhere.reduce((n, r) => n + r.mentions, team.mentions),
+    fresh: elsewhere.some((r) => r.isNew && r.recent && !r.thread.archived),
   };
 }

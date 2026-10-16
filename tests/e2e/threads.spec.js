@@ -1,9 +1,11 @@
-// Threads: the room list, and starting, renaming, closing, reopening and
-// deleting a thread. See docs/chat.md for the expected behavior.
+// Threads: the room list (where the chat starts on phones), New, and starting,
+// renaming, closing, reopening and deleting a thread. See docs/chat.md for the
+// expected behavior.
 import {
+  chatTab,
   composer,
   expect,
-  goToSchedule,
+  expectChatStart,
   isPhone,
   message,
   openChat,
@@ -13,6 +15,7 @@ import {
   send,
   showRooms,
   signIn,
+  startNew,
   test,
 } from './helpers';
 
@@ -21,18 +24,21 @@ test.beforeEach(async ({ page }) => {
   await openChat(page);
 });
 
-test('the room list shows Team Chat first, the Lounge, threads by latest activity, then private chats', async ({ page }) => {
+test('the room list shows Team Chat first, then every other room in one list by latest activity', async ({ page }) => {
   await showRooms(page);
   const rooms = page.locator('[data-room]:visible');
   await expect(rooms).toHaveCount(6);
   await expect(rooms.nth(0)).toContainText('Team Chat');
-  await expect(rooms.nth(1)).toContainText("Captains' Lounge");
-  await expect(rooms.nth(2)).toContainText('Sunday pickup?');
+  await expect(rooms.nth(1)).toContainText('Sunday pickup?');
+  await expect(rooms.nth(2)).toContainText("Captains' Lounge");
   await expect(rooms.nth(3)).toContainText('Fantasy football league');
-  await expect(rooms.nth(4)).toContainText('Post-game food spot');
-  await expect(rooms.nth(5)).toContainText('Jordan R.'); // Casey's private chat with Jordan, named after them
+  await expect(rooms.nth(4)).toContainText('Jordan R.'); // Casey's private chat with Jordan, named after them
+  await expect(rooms.nth(4).getByLabel('Private')).toBeVisible();
+  await expect(rooms.nth(5)).toContainText('Post-game food spot');
   // Previews show who said what last.
-  await expect(rooms.nth(2)).toContainText("Riley N.: Can't this week");
+  await expect(rooms.nth(1)).toContainText("Riley N.: Can't this week");
+  // No sections: threads and private chats share the list.
+  await expect(page.getByText('Private chats', { exact: true })).toHaveCount(0);
 });
 
 test('threads show unread counts, and New for ones never opened', async ({ page }) => {
@@ -44,16 +50,21 @@ test('threads show unread counts, and New for ones never opened', async ({ page 
   await expect(roomRow(page, 'Post-game food spot').getByLabel(/unread/)).toHaveCount(0);
 });
 
-test('the Threads button on phones counts unread in threads you follow, or mentions of you first', async ({ page }, testInfo) => {
+test("on phones, the back arrow counts what's waiting in the other rooms, mentions of you first", async ({ page }, testInfo) => {
   test.skip(!isPhone(testInfo), 'phones only; computers show the list beside the chat');
-  const threads = page.getByRole('button', { name: /^Threads/ });
-  // The fantasy thread (never opened) mentions you: that shows in place of the unread number.
-  await expect(threads.getByLabel('1 mention')).toBeVisible();
-  await expect(threads.getByLabel(/unread/)).toHaveCount(0);
+  const back = page.getByRole('button', { name: 'All chats' });
+  // In Team Chat: the fantasy thread (never opened) mentions you, which shows in place of the unread number.
+  await expect(back.getByLabel('1 mention')).toBeVisible();
+  await expect(back.getByLabel(/unread/)).toHaveCount(0);
   await openRoom(page, 'Fantasy football league');
   await expect(message(page, 'Count me in')).toBeVisible();
   await openTeamChat(page);
-  await expect(threads.getByLabel('3 unread')).toBeVisible();
+  // Sunday pickup's 3, now that the mention is read.
+  await expect(back.getByLabel('3 unread')).toBeVisible();
+  await expect(back.getByLabel(/mention/)).toHaveCount(0);
+  await openRoom(page, 'Sunday pickup?');
+  await expect(message(page, "Can't this week")).toBeVisible();
+  await expect(back.getByLabel(/unread|mention/)).toHaveCount(0);
 });
 
 test('opening a thread clears its unread count and New label', async ({ page }) => {
@@ -78,9 +89,17 @@ test('closed threads are tucked away and read-only', async ({ page }) => {
   await expect(message(page, 'Order placed, thanks all.')).toBeVisible();
 });
 
+test('New asks whether it is a thread for everyone or a private chat', async ({ page }) => {
+  await startNew(page, 'private');
+  await expect(page.getByRole('dialog', { name: 'New private chat' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await startNew(page, 'thread');
+  await expect(page.getByRole('dialog', { name: 'New thread' })).toBeVisible();
+});
+
 test('start a thread, rename it, close it, reopen it and delete it', async ({ page }) => {
-  await showRooms(page);
-  await page.getByRole('button', { name: 'New thread' }).click();
+  await startNew(page, 'thread');
   const dialog = page.getByRole('dialog', { name: 'New thread' });
   await expect(dialog.getByRole('button', { name: 'Start thread' })).toBeDisabled();
   await dialog.locator('#thread-title').fill('🚗 Carpool Thursday');
@@ -93,7 +112,7 @@ test('start a thread, rename it, close it, reopen it and delete it', async ({ pa
   await send(page, 'Anyone else?');
 
   // Rename
-  await page.getByRole('button', { name: 'Thread options' }).click();
+  await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'Rename' }).click();
   const rename = page.getByRole('dialog', { name: 'Rename thread' });
   await expect(rename.locator('#thread-title')).toHaveValue('🚗 Carpool Thursday');
@@ -102,7 +121,7 @@ test('start a thread, rename it, close it, reopen it and delete it', async ({ pa
   await expect(page.getByRole('heading', { name: 'Carpool Friday' })).toBeVisible();
 
   // Close, then reopen
-  await page.getByRole('button', { name: 'Thread options' }).click();
+  await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'Close thread' }).click();
   await expect(page.getByText('This thread is closed.')).toBeVisible();
   await expect(composer(page)).toHaveCount(0);
@@ -114,13 +133,13 @@ test('start a thread, rename it, close it, reopen it and delete it', async ({ pa
   await expect(message(page, 'Anyone else?')).toBeVisible();
 
   // Delete
-  await page.getByRole('button', { name: 'Thread options' }).click();
+  await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'Delete thread' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete thread?' });
   await expect(confirm).toContainText('all its messages will be removed for everyone');
   await confirm.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
-  await showRooms(page);
+  // Back to the room list on phones, Team Chat on computers.
+  await expectChatStart(page);
   await expect(roomRow(page, 'Carpool')).toHaveCount(0);
   // Team Chat is untouched.
   await openTeamChat(page);
@@ -136,7 +155,7 @@ test('a thread link for a deleted thread says so', async ({ page }) => {
 
 test('closing a thread can be undone from the closed list', async ({ page }) => {
   await openRoom(page, 'Post-game food spot');
-  await page.getByRole('button', { name: 'Thread options' }).click();
+  await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'Close thread' }).click();
   await showRooms(page);
   await expect(page.getByRole('button', { name: /Closed \(2\)/ })).toBeVisible();
@@ -163,86 +182,63 @@ test('an unsent message waits in its room while you look at another', async ({ p
   await expect(composer(page)).toHaveValue('Half-typed thought');
 });
 
-test.describe('the thread row on phones', () => {
+test('with no threads or private chats yet, the list says how to start one', async ({ page }) => {
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    db.chat_threads = db.chat_threads.filter((t) => t.visibility === 'captains');
+    db.messages = db.messages.filter((m) => !m.thread_id || db.chat_threads.some((t) => t.id === m.thread_id));
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  await showRooms(page);
+  await expect(page.locator('[data-room]:visible')).toHaveCount(2); // Team Chat and the Lounge
+  await expect(page.getByText(/Tap New for a thread the whole team can join/)).toBeVisible();
+});
+
+test.describe('on phones', () => {
   test.beforeEach(async ({}, testInfo) => {
     test.skip(!isPhone(testInfo), 'phones only; computers show the list beside the chat');
   });
 
-  const chips = (page) => page.getByRole('navigation', { name: 'Rooms' });
-
-  test('shows Team Chat, the Lounge, open threads by latest activity, then private chats, with unread counts', async ({ page }) => {
-    const row = chips(page);
-    await expect(row).toBeVisible();
-    const rooms = row.locator('[data-strip-room]');
-    await expect(rooms).toHaveCount(6);
-    await expect(rooms.nth(0)).toHaveText(/Team Chat/);
-    await expect(rooms.nth(0)).toHaveAttribute('aria-current', 'page');
-    await expect(rooms.nth(1)).toContainText("Captains' Lounge");
-    await expect(rooms.nth(2)).toContainText('Sunday pickup?');
-    await expect(rooms.nth(2).getByLabel('3 unread')).toBeVisible();
-    await expect(rooms.nth(3)).toContainText('Fantasy football league');
-    await expect(rooms.nth(3).getByLabel('New')).toBeVisible();
-    await expect(rooms.nth(4)).toContainText('Post-game food spot');
-    await expect(rooms.nth(5)).toContainText('Jordan R.'); // Casey's private chat with Jordan, named after them
-    await expect(rooms.nth(5).getByLabel('Private')).toBeVisible();
-    // Closed threads stay in the full list only.
-    await expect(row).not.toContainText('Jersey order');
-  });
-
-  test('tapping a thread opens it, and Team Chat is one tap back', async ({ page }) => {
-    await chips(page).locator('[data-strip-room]', { hasText: 'Fantasy football league' }).click();
+  test('Chat opens on the room list; a room fills the screen, and ‹ goes back to the list', async ({ page }) => {
+    await chatTab(page).click();
+    await expectChatStart(page);
+    await expect(page).toHaveURL(/\/banter$/);
+    await roomRow(page, 'Fantasy football league').click();
     await expect(page.getByRole('heading', { name: 'Fantasy football league' })).toBeVisible();
-    await expect(message(page, 'Count me in')).toBeVisible();
-    const current = chips(page).locator('[aria-current="page"]');
-    await expect(current).toContainText('Fantasy football league');
-    await expect(current).toBeInViewport();
-    await expect(chips(page).locator('[data-strip-room]', { hasText: 'Fantasy football league' }).getByLabel('New')).toHaveCount(
-      0,
-    );
+    await expect(page.locator('[data-room="team"]')).toBeHidden();
+    // Search and notifications are on the list, not in each room.
+    await expect(page.getByRole('button', { name: 'Search the chat' })).toBeHidden();
+    await page.getByRole('button', { name: 'All chats' }).click();
+    await expectChatStart(page);
+    await expect(page).toHaveURL(/\/banter$/);
 
-    await chips(page).locator('[data-strip-room="team"]').click();
-    await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+    // The phone's own back button does the same.
+    await roomRow(page, 'Sunday pickup?').click();
+    await expect(page.getByRole('heading', { name: 'Sunday pickup?' })).toBeVisible();
+    await page.goBack();
+    await expectChatStart(page);
   });
 
-  test('New in the row starts a thread', async ({ page }) => {
-    await chips(page).getByRole('button', { name: 'New thread' }).click();
+  test('Team Chat has its own address (what its notifications open), and ‹ from there shows the list', async ({ page }) => {
+    await page.goto('/banter?room=team');
+    await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+    await expect(message(page, 'Paid 💸')).toBeVisible();
+    await page.getByRole('button', { name: 'All chats' }).click();
+    await expectChatStart(page);
+    await expect(page).toHaveURL(/\/banter$/);
+  });
+
+  test('a new thread opens full screen, and ‹ goes back to the list', async ({ page }) => {
+    await startNew(page, 'thread');
     const dialog = page.getByRole('dialog', { name: 'New thread' });
     await dialog.locator('#thread-title').fill('🚗 Carpool');
     await dialog.getByRole('button', { name: 'Start thread' }).click();
     await expect(page.getByRole('heading', { name: 'Carpool' })).toBeVisible();
-    await expect(chips(page).locator('[aria-current="page"]')).toContainText('Carpool');
-  });
-
-  test('says "Start a thread" when there are none yet', async ({ page }) => {
-    await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem('jt_demo_db_v18'));
-      db.chat_threads = [];
-      db.messages = db.messages.filter((m) => !m.thread_id);
-      localStorage.setItem('jt_demo_db_v18', JSON.stringify(db));
-    });
-    await page.reload();
-    await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);
-  });
-
-  test('steps aside while typing, so the keyboard has room', async ({ page }) => {
-    // Stand in for the iPhone keyboard (see phone-keyboard.spec.js).
-    await page.evaluate(() => {
-      const fake = new EventTarget();
-      Object.assign(fake, { width: innerWidth, height: innerHeight, offsetTop: 0, offsetLeft: 0, scale: 1 });
-      Object.defineProperty(window, 'visualViewport', { configurable: true, value: fake });
-      window.keyboard = (height) => {
-        fake.height = innerHeight - height;
-        fake.dispatchEvent(new Event('resize'));
-      };
-    });
-    // Reopen the chat in-app so it picks up the stand-in (a reload would remove it).
-    await goToSchedule(page);
-    await openChat(page);
-    await composer(page).click();
-    await page.evaluate(() => window.keyboard(330));
-    await expect(chips(page)).toHaveCount(0);
-    await composer(page).blur();
-    await page.evaluate(() => window.keyboard(0));
-    await expect(chips(page)).toBeVisible();
+    await page.getByRole('button', { name: 'All chats' }).click();
+    await expectChatStart(page);
+    // The newest room, right under Team Chat.
+    await expect(page.locator('[data-room]:visible').nth(1)).toContainText('Carpool');
   });
 });

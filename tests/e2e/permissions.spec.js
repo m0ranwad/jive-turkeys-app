@@ -12,6 +12,7 @@ import {
   send,
   showRooms,
   signIn,
+  startNew,
   tapMessage,
   test,
 } from './helpers';
@@ -35,7 +36,7 @@ test.describe('a regular player', () => {
   test("can't rename, close or delete someone else's thread", async ({ page }) => {
     await openRoom(page, 'Sunday pickup?');
     await expect(page.getByText('Started by Sam O.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Thread options' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Chat options' })).toHaveCount(0);
     await send(page, 'Count me in too');
   });
 
@@ -49,13 +50,12 @@ test.describe('a regular player', () => {
   });
 
   test('manages threads they start', async ({ page }) => {
-    await showRooms(page);
-    await page.getByRole('button', { name: 'New thread' }).click();
+    await startNew(page, 'thread');
     await page.locator('#thread-title').fill('Rides from Akron');
     await page.getByRole('button', { name: 'Start thread' }).click();
     await expect(page.getByText('Started by you')).toBeVisible();
     await expect(page.getByText('Nothing here yet. Say something to get it going.')).toBeVisible();
-    await page.getByRole('button', { name: 'Thread options' }).click();
+    await page.getByRole('button', { name: 'Chat options' }).click();
     await expect(page.getByRole('button', { name: 'Delete thread' })).toBeVisible();
   });
 
@@ -75,7 +75,7 @@ test.describe('a captain', () => {
     await tapMessage(page, 'Running 10 min late');
     await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
     await openRoom(page, 'Sunday pickup?');
-    await page.getByRole('button', { name: 'Thread options' }).click();
+    await page.getByRole('button', { name: 'Chat options' }).click();
     await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Close thread' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Delete thread' })).toBeVisible();

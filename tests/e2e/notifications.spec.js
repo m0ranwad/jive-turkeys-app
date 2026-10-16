@@ -1,10 +1,11 @@
-// Notifications on this device: the bell, the one-time offer (Schedule and chat),
+// Notifications on this device: the bell and the one-time offer (both at the top
+// of the chat's room list; the offer on Schedule too),
 // the settings (with chat messages and game alerts switched separately), and the
 // background helper that shows notifications and opens the chat.
 // Previews have no sender, so turning on shows a local sample instead; the
 // sender itself is tested in tests/unit/notify.test.js and the database rules
 // in supabase/tests/chat.test.sql.
-import { expect, iconBadge, isPhone, openChat, recordIconBadge, signIn, test } from './helpers';
+import { expect, iconBadge, isPhone, openChat, recordIconBadge, showRooms, signIn, test } from './helpers';
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
@@ -24,6 +25,7 @@ test.describe('turning notifications on and off', () => {
     await context.grantPermissions(['notifications']);
     await signIn(page);
     await openChat(page);
+    await showRooms(page);
   });
 
   test('the bell starts off; turning on shows a sample and the bell lights up', async ({ page }) => {
@@ -86,11 +88,12 @@ test('the chat offers notifications once; Not now hides the card for good', asyn
   await context.grantPermissions(['notifications']);
   await signIn(page, undefined, { pushPrompt: true });
   await openChat(page);
+  await showRooms(page);
   await expect(card(page)).toContainText('Get notifications for team chat and game alerts');
   await card(page).getByRole('button', { name: 'Not now' }).click();
   await expect(card(page)).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();
+  await expect(page.locator('[data-room="team"]')).toBeVisible();
   await expect(card(page)).toHaveCount(0);
 });
 
@@ -98,6 +101,7 @@ test('Turn on from the card works too, and the card goes away', async ({ context
   await context.grantPermissions(['notifications']);
   await signIn(page, undefined, { pushPrompt: true });
   await openChat(page);
+  await showRooms(page);
   await card(page).getByRole('button', { name: 'Turn on' }).click();
   await expect(bell(page)).toHaveAccessibleName('Notifications: on');
   await expect(card(page)).toHaveCount(0);
@@ -110,6 +114,7 @@ test('Schedule offers notifications too, and Not now there hides it in the chat 
   await card(page).getByRole('button', { name: 'Not now' }).click();
   await expect(card(page)).toHaveCount(0);
   await openChat(page);
+  await showRooms(page);
   await expect(card(page)).toHaveCount(0);
 });
 
@@ -125,6 +130,7 @@ test('chat messages and game alerts are both on, and each can be turned off, fro
   await context.grantPermissions(['notifications']);
   await signIn(page);
   await openChat(page);
+  await showRooms(page);
   await bell(page).click();
   await dialog(page).getByRole('button', { name: 'Turn on notifications' }).click();
   await expect(choice(dialog(page), 'Chat messages')).toHaveAttribute('aria-checked', 'true');
@@ -167,6 +173,7 @@ test('when notifications are blocked, it explains how to allow them', async ({ p
   await page.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'denied' }));
   await signIn(page);
   await openChat(page);
+  await showRooms(page);
   await bell(page).click();
   await expect(dialog(page)).toContainText('Notifications are blocked for Jive Turkeys.');
   await expect(dialog(page).getByRole('button', { name: 'Turn on notifications' })).toHaveCount(0);
@@ -179,6 +186,7 @@ test.describe('on an iPhone that has not added the site to its Home Screen', () 
   test('points to the Home Screen first', async ({ page }) => {
     await signIn(page, undefined, { pushPrompt: true });
     await openChat(page);
+    await showRooms(page);
     await expect(card(page)).toContainText('add Jive Turkeys to your Home Screen first');
     await bell(page).click();
     await expect(dialog(page)).toContainText('notifications work once Jive Turkeys is on your Home Screen');
@@ -222,7 +230,7 @@ test.describe('the background helper', () => {
       Object.defineProperty(self.navigator, 'setAppBadge', { configurable: true, value: (n) => record(n) });
       Object.defineProperty(self.navigator, 'clearAppBadge', { configurable: true, value: () => record(0) });
     });
-    const chat = { title: 'Team Chat', body: 'Sam O.: Field 3', url: '/banter', tag: 'chat-team' };
+    const chat = { title: 'Team Chat', body: 'Sam O.: Field 3', url: '/banter?room=team', tag: 'chat-team' };
 
     await worker.evaluate((data) => self.push(data), { ...chat, badge: 4 });
     await worker.evaluate((data) => self.push(data), { ...chat, badge: 5 });

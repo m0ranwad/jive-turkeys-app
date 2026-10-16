@@ -56,7 +56,7 @@ function useTurnOn() {
   return { busy, turnOn };
 }
 
-/** The bell in the chat header: shows whether notifications are on, and opens the settings. */
+/** The bell at the top of the chat's room list: shows whether notifications are on, and opens the settings. */
 export function NotificationsButton({ state, onClick }) {
   const Icon = state === 'on' ? BellRing : state === 'blocked' ? BellOff : Bell;
   return (
@@ -83,10 +83,11 @@ function readDismissed() {
 
 /**
  * A one-time offer to turn notifications on (or, on iPhone, to add the site to
- * the Home Screen first): a card at the top of Schedule, or a bar in the chat.
- * "Not now" in either hides both for good.
+ * the Home Screen first): a card at the top of Schedule (`card`), or a smaller
+ * one at the top of the chat's room list (`list`). "Not now" in either hides
+ * both for good.
  */
-export function NotificationsPrompt({ state, variant = 'bar' }) {
+export function NotificationsPrompt({ state, variant = 'list' }) {
   const [dismissed, setDismissed] = useState(readDismissed);
   const { busy, turnOn } = useTurnOn();
   if (dismissed || (state !== 'off' && state !== 'needs-install')) return null;
@@ -101,43 +102,59 @@ export function NotificationsPrompt({ state, variant = 'bar' }) {
   };
   const card = variant === 'card';
 
-  return (
-    <section
-      aria-label="Turn on notifications"
-      className={cn(
-        'flex items-center gap-3 bg-zinc-950 text-white',
-        card ? 'rounded-3xl p-4' : 'border-b border-black/5 px-4 py-2.5',
-      )}
-    >
-      <BellRing className="h-5 w-5 shrink-0 text-lime-400" />
-      <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/80">
-        {state === 'needs-install'
-          ? 'Want notifications? On iPhone, add Jive Turkeys to your Home Screen first.'
-          : 'Get notifications for team chat and game alerts, like Player of the Match voting.'}
-      </p>
-      {state === 'needs-install' ? (
-        <button
-          onClick={showInstallGuide}
-          className="shrink-0 rounded-full bg-lime-400 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300"
-        >
-          How
-        </button>
-      ) : (
-        <button
-          onClick={turnOn}
-          disabled={busy}
-          className="shrink-0 rounded-full bg-lime-400 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300 disabled:opacity-60"
-        >
-          Turn on
-        </button>
-      )}
+  const text = (
+    <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-white/80">
+      {state === 'needs-install'
+        ? 'Want notifications? On iPhone, add Jive Turkeys to your Home Screen first.'
+        : 'Get notifications for team chat and game alerts, like Player of the Match voting.'}
+    </p>
+  );
+  const action =
+    state === 'needs-install' ? (
       <button
-        onClick={dismiss}
-        aria-label="Not now"
-        className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-white/50 transition hover:bg-white/10 hover:text-white"
+        onClick={showInstallGuide}
+        className="shrink-0 rounded-full bg-lime-400 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300"
       >
-        <X className="h-4 w-4" />
+        How
       </button>
+    ) : (
+      <button
+        onClick={turnOn}
+        disabled={busy}
+        className="shrink-0 rounded-full bg-lime-400 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300 disabled:opacity-60"
+      >
+        Turn on
+      </button>
+    );
+  const notNow = (
+    <button
+      onClick={dismiss}
+      aria-label="Not now"
+      className="-mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-full text-white/50 transition hover:bg-white/10 hover:text-white"
+    >
+      <X className="h-4 w-4" />
+    </button>
+  );
+
+  if (card) {
+    return (
+      <section aria-label="Turn on notifications" className="flex items-center gap-3 rounded-3xl bg-zinc-950 p-4 text-white">
+        <BellRing className="h-5 w-5 shrink-0 text-lime-400" />
+        {text}
+        {action}
+        {notNow}
+      </section>
+    );
+  }
+  // Narrow enough for the list beside the chat on computers: the button goes under the words.
+  return (
+    <section aria-label="Turn on notifications" className="rounded-2xl bg-zinc-950 py-2.5 pl-3 pr-2 text-white">
+      <div className="flex items-start gap-2.5">
+        <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-lime-400" />
+        {text}
+        {notNow}
+      </div>
+      <div className="mt-1.5 pl-[26px]">{action}</div>
     </section>
   );
 }

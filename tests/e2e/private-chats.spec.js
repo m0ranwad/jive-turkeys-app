@@ -6,14 +6,16 @@
 import {
   composer,
   expect,
+  expectChatStart,
   message,
   openChat,
   openRoom,
-  openTeamChat,
+  openSearch,
   roomRow,
   send,
   showRooms,
   signIn,
+  startNew,
   tapMessage,
   test,
 } from './helpers';
@@ -46,7 +48,7 @@ test('captains have the Captains\' Lounge; players never see it', async ({ page 
   await signIn(page);
   await openChat(page);
   await showRooms(page);
-  await expect(page.locator('[data-room]:visible').nth(1)).toContainText("Captains' Lounge");
+  await expect(roomRow(page, "Captains' Lounge")).toBeVisible();
   await openRoom(page, "Captains' Lounge");
   await expect(page.getByText(/Captains only · 2 captains/)).toBeVisible();
   await expect(message(page, 'Lineup idea for Thursday')).toBeVisible();
@@ -60,8 +62,7 @@ test('captains have the Captains\' Lounge; players never see it', async ({ page 
   await openChat(page);
   await showRooms(page);
   await expect(roomRow(page, "Captains' Lounge")).toHaveCount(0);
-  await openTeamChat(page);
-  await page.getByRole('button', { name: 'Search the chat' }).click();
+  await openSearch(page);
   await page.getByRole('searchbox', { name: 'Search the chat' }).fill('Lineup idea');
   await expect(page.getByRole('dialog', { name: 'Search the chat' })).toContainText('Nothing found.');
 });
@@ -83,8 +84,7 @@ test("captains can't see private chats they aren't in", async ({ page }) => {
 test('start a private chat: pick teammates, it is named after them, and only they see it', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await showRooms(page);
-  await page.getByRole('button', { name: 'New private chat' }).click();
+  await startNew(page, 'private');
   const dialog = page.getByRole('dialog', { name: 'New private chat' });
   await expect(dialog).toContainText("Captains can't either, unless you add them");
   await expect(dialog.getByRole('button', { name: 'Start chat' })).toBeDisabled();
@@ -172,16 +172,15 @@ test('people in a private chat: add someone, and leave', async ({ page }) => {
   await people.getByRole('button', { name: 'Leave chat' }).click();
   const confirm = page.getByRole('dialog', { name: 'Leave this chat?' });
   await confirm.getByRole('button', { name: 'Leave' }).click();
-  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
-  await showRooms(page);
+  // Back to the room list on phones, Team Chat on computers.
+  await expectChatStart(page);
   await expect(chatRow(page, 'Jordan R. & Priya S.')).toHaveCount(0);
 });
 
 test('the starter of a private chat takes someone out', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await showRooms(page);
-  await page.getByRole('button', { name: 'New private chat' }).click();
+  await startNew(page, 'private');
   const start = page.getByRole('dialog', { name: 'New private chat' });
   await start.getByText('Sam Okafor').click();
   await start.getByText('Drew Patel').click();
@@ -237,7 +236,8 @@ test('the starter of a private chat renames, closes and deletes it', async ({ pa
   const confirm = page.getByRole('dialog', { name: 'Delete chat?' });
   await expect(confirm).toContainText('removed for everyone in it');
   await confirm.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+  await expectChatStart(page);
+  await expect(chatRow(page, 'Dues')).toHaveCount(0);
 });
 
 test('an old Message link to someone not on the team says so instead of starting a chat', async ({ page }) => {
@@ -245,5 +245,5 @@ test('an old Message link to someone not on the team says so instead of starting
   await page.goto('/banter?dm=00000000-0000-4000-8000-000000000000');
   await expect(page.getByText("They're not on the team anymore")).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'New private chat' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+  await expectChatStart(page);
 });

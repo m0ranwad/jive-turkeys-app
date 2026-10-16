@@ -141,6 +141,7 @@ test('the @mentions notification choice is on unless turned off', async ({ conte
   await context.grantPermissions(['notifications']);
   await signIn(page, PLAYER);
   await openChat(page);
+  await showRooms(page);
   await page.getByRole('button', { name: /^Notifications/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Notifications' });
   await dialog.getByRole('button', { name: 'Turn on notifications' }).click();

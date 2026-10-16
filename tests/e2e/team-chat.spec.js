@@ -1,6 +1,6 @@
 // Team Chat: reading, sending, reactions, replies, deleting, and chats
 // surviving a reload. See docs/chat.md for the expected behavior.
-import { composer, expect, isPhone, message, messageRow, openChat, send, signIn, tapMessage, test } from './helpers';
+import { composer, expect, isPhone, message, messageRow, openChat, send, showRooms, signIn, tapMessage, test } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
@@ -278,13 +278,15 @@ test('the chat fills the screen with the message box above the tab bar', async (
   expect(scrolls).toBe(false);
 });
 
-test('the tip shows once', async ({ page }) => {
+test('the tip shows once, at the top of the room list, not over the messages', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('jt_chat_tip_seen'));
   await page.reload();
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText(/tap any message to react/)).toHaveCount(0);
+  await showRooms(page);
   await expect(page.getByText(/tap any message to react, reply or copy it/)).toBeVisible();
   await page.getByRole('button', { name: 'Got it' }).click();
   await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText('Paid 💸')).toBeVisible();
+  await expect(page.locator('[data-room="team"]')).toBeVisible();
   await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
 });

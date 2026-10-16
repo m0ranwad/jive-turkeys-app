@@ -51,23 +51,49 @@ export const iconBadge = (page) => page.evaluate(() => window.__iconBadge.at(-1)
 export const chatTab = (page) => page.locator('a[href="/banter"]:visible').first();
 export const chatBadge = (page) => chatTab(page).locator('[aria-label$="unread"]');
 
+export const isPhone = (testInfo) => testInfo.project.name === 'phone';
+
+/** Phones show the room list or a room; computers show both side by side. */
+export const phoneLayout = (page) => page.viewportSize().width < 768;
+
+/** Taps the Chat tab and opens Team Chat (phones start on the room list). */
 export async function openChat(page) {
   await chatTab(page).click();
+  const teamChat = page.locator('[data-room="team"]');
+  await expect(teamChat).toBeVisible();
+  if (phoneLayout(page)) await teamChat.click();
   await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();
 }
 
-export const isPhone = (testInfo) => testInfo.project.name === 'phone';
+/** Where the chat starts: the room list on phones, Team Chat beside it on computers. */
+export async function expectChatStart(page) {
+  await expect(page.locator('[data-room="team"]')).toBeVisible();
+  if (phoneLayout(page)) await expect(page.getByRole('log', { name: 'Messages' })).toHaveCount(0);
+  else await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+}
 
 /** Shows the list of rooms (on computers it's always beside the chat). */
 export async function showRooms(page) {
   const list = page.locator('[data-room="team"]');
-  if (!(await list.isVisible())) {
-    // Phones: "Threads" in Team Chat, or the back arrow in a thread.
-    const threads = page.getByRole('button', { name: /^Threads/ });
-    if (await threads.isVisible()) await threads.click();
-    else await page.getByRole('button', { name: 'All chats' }).click();
-  }
+  // Wait for the chat to be on screen (say, after a reload): the list, or a room with its back arrow.
+  await expect(page.locator('[data-room="team"]:visible, [aria-label="All chats"]:visible').first()).toBeVisible();
+  // Phones: the back arrow in a room.
+  if (!(await list.isVisible())) await page.getByRole('button', { name: 'All chats' }).click();
   await expect(list).toBeVisible();
+}
+
+/** New at the top of the room list, then "Thread for everyone" or "Private chat". */
+export async function startNew(page, kind) {
+  await showRooms(page);
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  const pick = page.getByRole('dialog', { name: 'Start a chat' });
+  await pick.getByRole('button', { name: kind === 'thread' ? /^Thread for everyone/ : /^Private chat/ }).click();
+}
+
+/** Opens search, at the top of the room list. */
+export async function openSearch(page) {
+  await showRooms(page);
+  await page.getByRole('button', { name: 'Search the chat' }).click();
 }
 
 export async function openRoom(page, name) {

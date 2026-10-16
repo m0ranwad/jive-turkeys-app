@@ -26,6 +26,7 @@ import {
   unreadTotal,
   upsertMember,
   upsertThread,
+  waitingElsewhere,
 } from '@/lib/chat';
 
 const NOW = new Date('2026-10-08T20:00:00Z');
@@ -280,7 +281,7 @@ describe('rooms and unread', () => {
     expect(bumpOverview(list, msg('old', 'ann', 30), true)).toBe(list);
   });
 
-  it('sorts threads by latest activity, splits off closed ones, and flags new ones', () => {
+  it('sorts rooms by latest activity, splits off closed ones, and flags new ones', () => {
     const threads = [
       { id: 'quiet', title: 'Quiet', archived: false, created_date: at(5000) },
       { id: 'busy', title: 'Busy', archived: false, created_date: at(6000) },
@@ -299,14 +300,33 @@ describe('rooms and unread', () => {
       NOW.getTime(),
     );
     expect(rooms.team.unread).toBe(2);
-    expect(rooms.open.map((r) => r.thread.id)).toEqual(['busy', 'fresh', 'quiet', 'old-new']);
+    expect(rooms.others.map((r) => r.thread.id)).toEqual(['busy', 'fresh', 'quiet', 'old-new']);
     expect(rooms.closed.map((r) => r.thread.id)).toEqual(['closed']);
-    expect(rooms.open.find((r) => r.thread.id === 'fresh').isNew).toBe(true);
-    expect(rooms.open.find((r) => r.thread.id === 'busy').isNew).toBe(false);
-    expect(rooms.unreadInThreads).toBe(3);
-    expect(rooms.freshThreads).toBe(true);
+    expect(rooms.others.find((r) => r.thread.id === 'fresh').isNew).toBe(true);
+    expect(rooms.others.find((r) => r.thread.id === 'busy').isNew).toBe(false);
     expect(rooms.team.mentions).toBe(0);
-    expect(rooms.mentionsInThreads).toBe(0);
+  });
+
+  it("counts what's waiting outside the room on screen, for the back button on phones", () => {
+    const threads = [
+      { id: 'busy', title: 'Busy', archived: false, created_date: at(6000) },
+      { id: 'fresh', title: 'Fresh', archived: false, created_date: at(100) },
+      { id: 'old-new', title: 'Old new', archived: false, created_date: at(9000) },
+    ];
+    const rooms = organizeRooms(
+      threads,
+      [
+        summary(null, { unread: 2 }),
+        summary('busy', { last_message_at: at(1), unread: 3 }),
+        summary('fresh', { last_message_at: at(20), last_read_at: null, unread: 1 }),
+      ],
+      NOW.getTime(),
+    );
+    // From Team Chat: the thread you follow counts; the one never opened doesn't, but lights the dot.
+    expect(waitingElsewhere(rooms, null)).toEqual({ unread: 3, mentions: 0, fresh: true });
+    // From a thread: Team Chat counts, the room you're in doesn't.
+    expect(waitingElsewhere(rooms, 'busy')).toEqual({ unread: 2, mentions: 0, fresh: true });
+    expect(waitingElsewhere(rooms, 'fresh')).toEqual({ unread: 5, mentions: 0, fresh: false });
     // Mentions count in threads you've never opened, unlike unread messages.
     const mentioned = organizeRooms(threads, [
       summary(null, { unread: 2, mentions: 1 }),
@@ -314,17 +334,19 @@ describe('rooms and unread', () => {
       summary('fresh', { last_read_at: null, unread: 1, mentions: 1 }),
     ]);
     expect(mentioned.team.mentions).toBe(1);
-    expect(mentioned.open.find((r) => r.thread.id === 'fresh').mentions).toBe(1);
-    expect(mentioned.mentionsInThreads).toBe(2);
-    expect(mentioned.unreadInThreads).toBe(3);
+    expect(mentioned.others.find((r) => r.thread.id === 'fresh').mentions).toBe(1);
+    expect(waitingElsewhere(mentioned, null)).toMatchObject({ unread: 3, mentions: 2 });
+    expect(waitingElsewhere(mentioned, 'busy')).toMatchObject({ unread: 2, mentions: 2 });
     // A never-opened thread whose last message is a week old doesn't keep the dot lit.
-    expect(
-      organizeRooms([threads[3]], [summary('old-new', { last_message_at: at(8000), last_read_at: null, unread: 2 })])
-        .freshThreads,
-    ).toBe(false);
+    const stale = organizeRooms(
+      [threads[2]],
+      [summary('old-new', { last_message_at: at(8000), last_read_at: null, unread: 2 })],
+      NOW.getTime(),
+    );
+    expect(waitingElsewhere(stale, null).fresh).toBe(false);
   });
 
-  it('puts the Lounge after Team Chat and private chats in their own list, counting them like Team Chat', () => {
+  it('lists the Lounge, threads and private chats together by latest activity, counting the Lounge and private chats like Team Chat', () => {
     const threads = [
       { id: 'thread', title: 'Pickup', archived: false, visibility: 'team', created_date: at(500) },
       { id: 'lounge', title: "Captains' Lounge", archived: false, visibility: 'captains', created_date: at(9000) },
@@ -341,16 +363,15 @@ describe('rooms and unread', () => {
       ],
       NOW.getTime(),
     );
-    expect(rooms.lounge.thread.id).toBe('lounge');
-    expect(rooms.open.map((r) => r.thread.id)).toEqual(['thread']);
-    // The DM's last message is newer than the ride chat, which has none yet.
-    expect(rooms.privateChats.map((r) => r.thread.id)).toEqual(['dm', 'ride']);
+    // Latest activity first, whatever the kind; the ride chat has no messages yet, so it goes by when it started.
+    expect(rooms.others.map((r) => r.thread.id)).toEqual(['lounge', 'thread', 'dm', 'ride']);
     expect(rooms.closed.map((r) => r.thread.id)).toEqual(['old-chat']);
     // A thread never opened is New; a private chat or the Lounge never is, it just counts.
-    expect(rooms.open[0].isNew).toBe(true);
-    expect(rooms.privateChats.find((r) => r.thread.id === 'dm').isNew).toBe(false);
-    expect(rooms.lounge.isNew).toBe(false);
-    expect(rooms.unreadInThreads).toBe(5);
+    const room = (id) => rooms.others.find((r) => r.thread.id === id);
+    expect(room('thread').isNew).toBe(true);
+    expect(room('dm').isNew).toBe(false);
+    expect(room('lounge').isNew).toBe(false);
+    expect(waitingElsewhere(rooms, null).unread).toBe(5);
   });
 
   it('names a private chat after its people: four at most, then "& N more" (like the database)', () => {
@@ -396,7 +417,7 @@ describe('rooms and unread', () => {
     );
     // The private chat counts (opened or not); the never-opened thread doesn't, as on the Chat tab.
     expect(rooms.unreadInClosed).toBe(2);
-    expect(rooms.unreadInThreads).toBe(2);
+    expect(waitingElsewhere(rooms, null).unread).toBe(2);
     expect(
       unreadTotal([
         summary('chat', { last_read_at: null, unread: 2, visibility: 'private' }),
