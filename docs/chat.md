@@ -104,9 +104,9 @@ it's a thread with `visibility = 'private'`, and who's in it is `chat_thread_mem
 | Private chats show a lock on their icon, and the header says "Private · You, Jordan R. & …". | `[browser]` |
 | Only the people in it see it, its messages, reactions and who's in it, in the list, in search and in unread counts. Nobody else can post, react, add people or see it, captains included. | `[db]` `[unit]` `[browser]` |
 | Its unread count adds to the Chat tab like Team Chat's, even before you open it. What was said before you were added doesn't count as unread. | `[db]` `[unit]` `[browser]` |
-| **⋯ → People** lists who's in it. Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the dialog says so). Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
+| **⋯ → People** lists who's in it, like the Team page: initials colored by man / woman, and **You**, **Started it** and **Captain** badges, with "Only the two of you can see it" (or "these N people"). Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the window says so). Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
 | Its starter also gets **Remove** next to each person, and **Rename**, **Close chat** / **Reopen chat** and **Delete chat** (after a confirm that says it removes the messages for everyone in it). Once the starter leaves, nobody has those. | `[browser]` `[db]` `[unit]` |
-| **⋯ → Leave chat** (after a confirm) takes you out; it's gone from your list until someone adds you back. Your messages stay in it. | `[browser]` `[db]` `[unit]` |
+| **Leave chat** (in **⋯**, or at the bottom of People; after a confirm) takes you out; it's gone from your list until someone adds you back. Your messages stay in it. | `[browser]` `[db]` `[unit]` |
 | A private chat can never be opened up to the team, and a thread can never be made private: a room's kind is set when it starts. | `[db]` `[unit]` |
 
 ### The Captains' Lounge

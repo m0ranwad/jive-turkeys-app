@@ -404,10 +404,21 @@ export function ChatPage() {
   );
   const isCaptainUser = useCallback((userId) => !!profilesById.get(userId)?.is_captain, [profilesById]);
   const people = useMemo(() => mentionPeople(profiles), [profiles]);
-  // Teammates to start a private chat with or add to one.
+  // Teammates as the people windows show them, and the ones to start a private chat with or add to one.
+  const personOf = useCallback(
+    (userId) => {
+      const p = profilesById.get(userId);
+      return { id: userId, name: p?.display_name || 'Player', gender: p?.gender ?? null, captain: !!p?.is_captain };
+    },
+    [profilesById],
+  );
   const teammates = useMemo(
-    () => people.filter((p) => p.id !== me && !p.removed).sort((a, b) => a.name.localeCompare(b.name)),
-    [people, me],
+    () =>
+      profiles
+        .filter((p) => p.user_id && p.user_id !== me && !p.removed)
+        .map((p) => personOf(p.user_id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [profiles, me, personOf],
   );
 
   const thread = room ? threads?.find((t) => t.id === room) : null;
@@ -1031,10 +1042,11 @@ export function ChatPage() {
         thread={privateRoom ? thread : null}
         members={roomMembers}
         me={me}
-        nameOf={nameOf}
+        personOf={personOf}
         people={teammates}
         onAdd={addPeople}
         onRemove={removePerson}
+        onLeave={() => setDialog({ kind: 'leave', thread })}
       />
       <ConfirmDialog
         open={dialog?.kind === 'leave'}
