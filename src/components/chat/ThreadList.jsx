@@ -1,14 +1,47 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Hash, Lock, MessageSquare, Plus } from 'lucide-react';
-import { shortWhen, splitLeadingEmoji } from '@/lib/chat';
+import { Archive, ChevronDown, Hash, Lock, MessageSquare, Plus, Users } from 'lucide-react';
+import { isLounge, isPrivate, shortWhen, splitLeadingEmoji } from '@/lib/chat';
 import { shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-export function ThreadIcon({ title, className }) {
-  const { emoji } = splitLeadingEmoji(title);
+/** The Captains' Lounge: a captain's armband. */
+function LoungeIcon({ className, small }) {
   return (
-    <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-zinc-100 text-zinc-500', className)}>
-      {emoji ? <span className="text-xl leading-none">{emoji}</span> : <Hash className="h-5 w-5" />}
+    <span
+      aria-hidden
+      className={cn(
+        'grid shrink-0 place-items-center bg-lime-400 font-display font-black leading-none text-black',
+        small ? 'h-4 w-4 rounded-md text-[10px]' : 'h-10 w-10 rounded-2xl text-lg',
+        className,
+      )}
+    >
+      C
+    </span>
+  );
+}
+
+/** A thread's icon (its leading emoji, or #); a private chat's has a lock on it; the Lounge has its own. */
+export function ThreadIcon({ thread, className }) {
+  if (isLounge(thread)) return <LoungeIcon className={className} />;
+  const { emoji } = splitLeadingEmoji(thread.title);
+  const locked = isPrivate(thread);
+  return (
+    <span className={cn('relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-zinc-100 text-zinc-500', className)}>
+      {emoji ? (
+        <span className="text-xl leading-none">{emoji}</span>
+      ) : locked ? (
+        <Users className="h-5 w-5" />
+      ) : (
+        <Hash className="h-5 w-5" />
+      )}
+      {locked && (
+        <span
+          aria-label="Private"
+          className="absolute -bottom-1 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-zinc-950 text-lime-400 ring-2 ring-white"
+        >
+          <Lock className="h-2.5 w-2.5" strokeWidth={3} />
+        </span>
+      )}
     </span>
   );
 }
@@ -89,10 +122,45 @@ export function UnreadCount({ n, className }) {
   );
 }
 
-/** Team Chat at the top, then open threads by latest activity, then closed ones. */
-export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread }) {
+function SectionHeader({ label, newLabel, onNew }) {
+  return (
+    <div className="flex items-center justify-between px-2.5 pb-1 pt-4">
+      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">{label}</span>
+      <button
+        onClick={onNew}
+        aria-label={newLabel}
+        className="inline-flex items-center gap-1 rounded-full bg-lime-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300"
+      >
+        <Plus className="h-3 w-3" strokeWidth={3} /> New
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Team Chat at the top, then the Captains' Lounge (captains only), open threads
+ * and private chats by latest activity, then closed ones.
+ */
+export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread, onNewPrivate }) {
   const [showClosed, setShowClosed] = useState(false);
-  const { team, open, closed } = rooms;
+  const { team, lounge, open, privateChats, closed } = rooms;
+  const item = (room, extra = {}) => (
+    <RoomItem
+      key={room.thread.id}
+      room={room.thread.id}
+      icon={<ThreadIcon thread={room.thread} />}
+      title={splitLeadingEmoji(room.thread.title).text}
+      summary={room.summary}
+      unread={room.unread}
+      mentions={room.mentions}
+      isNew={room.isNew}
+      active={activeRoom === room.thread.id}
+      me={me}
+      nameOf={nameOf}
+      onClick={() => onOpen(room.thread.id)}
+      {...extra}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -113,38 +181,23 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
           nameOf={nameOf}
           onClick={() => onOpen(null)}
         />
+        {lounge && item(lounge)}
 
-        <div className="flex items-center justify-between px-2.5 pb-1 pt-4">
-          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Threads</span>
-          <button
-            onClick={onNewThread}
-            aria-label="New thread"
-            className="inline-flex items-center gap-1 rounded-full bg-lime-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-black transition hover:bg-lime-300"
-          >
-            <Plus className="h-3 w-3" strokeWidth={3} /> New
-          </button>
-        </div>
+        <SectionHeader label="Threads" newLabel="New thread" onNew={onNewThread} />
         {open.length === 0 && (
           <p className="px-2.5 py-2 text-xs leading-relaxed text-zinc-400">
             Side conversations live here: carpools, pickup games, the fantasy league. Start one with New.
           </p>
         )}
-        {open.map((room) => (
-          <RoomItem
-            key={room.thread.id}
-            room={room.thread.id}
-            icon={<ThreadIcon title={room.thread.title} />}
-            title={splitLeadingEmoji(room.thread.title).text}
-            summary={room.summary}
-            unread={room.unread}
-            mentions={room.mentions}
-            isNew={room.isNew}
-            active={activeRoom === room.thread.id}
-            me={me}
-            nameOf={nameOf}
-            onClick={() => onOpen(room.thread.id)}
-          />
-        ))}
+        {open.map((room) => item(room))}
+
+        <SectionHeader label="Private chats" newLabel="New private chat" onNew={onNewPrivate} />
+        {privateChats.length === 0 && (
+          <p className="px-2.5 py-2 text-xs leading-relaxed text-zinc-400">
+            Just you and the teammates you pick. Nobody else sees them, captains included.
+          </p>
+        )}
+        {privateChats.map((room) => item(room))}
 
         {closed.length > 0 && (
           <div className="pt-3">
@@ -153,24 +206,13 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread 
               aria-expanded={showClosed}
               className="flex w-full items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 transition hover:text-zinc-600"
             >
-              <Lock className="h-3 w-3" /> Closed ({closed.length})
+              <Archive className="h-3 w-3" /> Closed ({closed.length})
               <ChevronDown className={cn('ml-auto h-3.5 w-3.5 transition', showClosed && 'rotate-180')} />
             </button>
             {showClosed &&
-              closed.map((room) => (
-                <RoomItem
-                  key={room.thread.id}
-                  room={room.thread.id}
-                  icon={<ThreadIcon title={room.thread.title} className="opacity-60" />}
-                  title={splitLeadingEmoji(room.thread.title).text}
-                  summary={room.summary}
-                  mentions={room.mentions}
-                  active={activeRoom === room.thread.id}
-                  me={me}
-                  nameOf={nameOf}
-                  onClick={() => onOpen(room.thread.id)}
-                />
-              ))}
+              closed.map((room) =>
+                item(room, { icon: <ThreadIcon thread={room.thread} className="opacity-60" />, unread: 0, isNew: false }),
+              )}
           </div>
         )}
       </div>
@@ -216,7 +258,7 @@ export function ThreadStrip({ rooms, activeRoom, onOpen, onNewThread }) {
         {activeRoom !== null && rooms.team.mentions > 0 && <MentionCount n={rooms.team.mentions} />}
         {activeRoom !== null && rooms.team.unread > 0 && <UnreadCount n={rooms.team.unread} />}
       </button>
-      {rooms.open.map((room) => {
+      {[rooms.lounge, ...rooms.open, ...rooms.privateChats].filter(Boolean).map((room) => {
         const active = activeRoom === room.thread.id;
         const { emoji, text } = splitLeadingEmoji(room.thread.title);
         return (
@@ -227,7 +269,14 @@ export function ThreadStrip({ rooms, activeRoom, onOpen, onNewThread }) {
             aria-current={active ? 'page' : undefined}
             className={chip(active)}
           >
-            {emoji ? <span className="text-sm leading-none">{emoji}</span> : <Hash className="h-3.5 w-3.5" />}
+            {isLounge(room.thread) ? (
+              <LoungeIcon small />
+            ) : emoji ? (
+              <span className="text-sm leading-none">{emoji}</span>
+            ) : (
+              !isPrivate(room.thread) && <Hash className="h-3.5 w-3.5" />
+            )}
+            {isPrivate(room.thread) && <Lock aria-label="Private" className="h-3.5 w-3.5" strokeWidth={2.6} />}
             <span className="max-w-[10rem] truncate">{text}</span>
             {!active && room.mentions > 0 && <MentionCount n={room.mentions} />}
             {!active && room.isNew && <span aria-label="New" className="h-2 w-2 rounded-full bg-lime-500" />}

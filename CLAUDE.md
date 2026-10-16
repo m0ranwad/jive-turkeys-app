@@ -172,6 +172,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   buttons (`src/components/AuthShell.jsx`). The demo password for every sample account is `demo1234`.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, `src/lib/mentions.js` (@mentions), and
   `src/hooks/useChatUnread.js` (the Chat tab badge and its @ count). `docs/chat.md` is the expected behavior.
+  Private chats and the Captains' Lounge are threads with `chat_threads.visibility` `private` / `captains`; who's in a
+  private chat is `chat_thread_members` (started and added to only through `chat_start_private()` /
+  `chat_add_members()`). Captains can't read private chats they aren't in; the policies, `chat_can_read()` (for
+  notifications and mentions) and the demo backend's `canRead()` must agree.
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid

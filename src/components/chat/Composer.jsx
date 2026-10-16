@@ -288,11 +288,11 @@ export const Composer = forwardRef(function Composer(
   );
 });
 
-export function ClosedNotice({ canReopen, onReopen }) {
+export function ClosedNotice({ canReopen, onReopen, label = 'This thread is closed.' }) {
   return (
     <div className="flex items-center justify-center gap-3 border-t border-black/5 bg-zinc-50 px-4 py-3.5 text-sm font-semibold text-zinc-500">
       <Lock className="h-4 w-4" />
-      This thread is closed.
+      {label}
       {canReopen && (
         <button
           onClick={onReopen}

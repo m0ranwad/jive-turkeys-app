@@ -21,16 +21,18 @@ test.beforeEach(async ({ page }) => {
   await openChat(page);
 });
 
-test('the room list shows Team Chat first, then threads by latest activity', async ({ page }) => {
+test('the room list shows Team Chat first, the Lounge, threads by latest activity, then private chats', async ({ page }) => {
   await showRooms(page);
   const rooms = page.locator('[data-room]:visible');
-  await expect(rooms).toHaveCount(4);
+  await expect(rooms).toHaveCount(6);
   await expect(rooms.nth(0)).toContainText('Team Chat');
-  await expect(rooms.nth(1)).toContainText('Sunday pickup?');
-  await expect(rooms.nth(2)).toContainText('Fantasy football league');
-  await expect(rooms.nth(3)).toContainText('Post-game food spot');
+  await expect(rooms.nth(1)).toContainText("Captains' Lounge");
+  await expect(rooms.nth(2)).toContainText('Sunday pickup?');
+  await expect(rooms.nth(3)).toContainText('Fantasy football league');
+  await expect(rooms.nth(4)).toContainText('Post-game food spot');
+  await expect(rooms.nth(5)).toContainText('Casey C. & Jordan R.');
   // Previews show who said what last.
-  await expect(rooms.nth(1)).toContainText("Riley N.: Can't this week");
+  await expect(rooms.nth(2)).toContainText("Riley N.: Can't this week");
 });
 
 test('threads show unread counts, and New for ones never opened', async ({ page }) => {
@@ -168,18 +170,21 @@ test.describe('the thread row on phones', () => {
 
   const chips = (page) => page.getByRole('navigation', { name: 'Rooms' });
 
-  test('shows Team Chat, then open threads by latest activity, with unread counts', async ({ page }) => {
+  test('shows Team Chat, the Lounge, open threads by latest activity, then private chats, with unread counts', async ({ page }) => {
     const row = chips(page);
     await expect(row).toBeVisible();
     const rooms = row.locator('[data-strip-room]');
-    await expect(rooms).toHaveCount(4);
+    await expect(rooms).toHaveCount(6);
     await expect(rooms.nth(0)).toHaveText(/Team Chat/);
     await expect(rooms.nth(0)).toHaveAttribute('aria-current', 'page');
-    await expect(rooms.nth(1)).toContainText('Sunday pickup?');
-    await expect(rooms.nth(1).getByLabel('3 unread')).toBeVisible();
-    await expect(rooms.nth(2)).toContainText('Fantasy football league');
-    await expect(rooms.nth(2).getByLabel('New')).toBeVisible();
-    await expect(rooms.nth(3)).toContainText('Post-game food spot');
+    await expect(rooms.nth(1)).toContainText("Captains' Lounge");
+    await expect(rooms.nth(2)).toContainText('Sunday pickup?');
+    await expect(rooms.nth(2).getByLabel('3 unread')).toBeVisible();
+    await expect(rooms.nth(3)).toContainText('Fantasy football league');
+    await expect(rooms.nth(3).getByLabel('New')).toBeVisible();
+    await expect(rooms.nth(4)).toContainText('Post-game food spot');
+    await expect(rooms.nth(5)).toContainText('Casey C. & Jordan R.');
+    await expect(rooms.nth(5).getByLabel('Private')).toBeVisible();
     // Closed threads stay in the full list only.
     await expect(row).not.toContainText('Jersey order');
   });
@@ -210,10 +215,10 @@ test.describe('the thread row on phones', () => {
 
   test('says "Start a thread" when there are none yet', async ({ page }) => {
     await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem('jt_demo_db_v16'));
+      const db = JSON.parse(localStorage.getItem('jt_demo_db_v17'));
       db.chat_threads = [];
       db.messages = db.messages.filter((m) => !m.thread_id);
-      localStorage.setItem('jt_demo_db_v16', JSON.stringify(db));
+      localStorage.setItem('jt_demo_db_v17', JSON.stringify(db));
     });
     await page.reload();
     await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Copy, Pencil, Phone, UserPlus } from 'lucide-react';
+import { Copy, MessageCircle, Pencil, Phone, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { Formation } from '@/components/team/Formation';
@@ -287,6 +287,16 @@ export function TeamPage() {
                     )}
                   </div>
                 </div>
+                {/* A private chat with them (opens the one you already have, if there is one). */}
+                {!isMe && !p.guest && p.user_id && (
+                  <Link
+                    to={`/banter?dm=${p.user_id}`}
+                    aria-label={`Message ${p.display_name}`}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </Link>
+                )}
                 {p.phone && (
                   <a
                     href={`tel:${p.phone}`}

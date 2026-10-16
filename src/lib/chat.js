@@ -146,9 +146,60 @@ export const roomOf = (message) => message.thread_id ?? null;
 /** Fired after a room is marked read, so the unread badge refreshes. */
 export const CHAT_READ_EVENT = 'jt:chat-read';
 
-/** Unread count for the Chat tab: Team Chat plus threads the player has opened. */
+// ---------------------------------------------------------------------------
+// Kinds of room (chat_threads.visibility): threads are for the whole team,
+// private chats for the teammates in them, and the Captains' Lounge for
+// captains. Team Chat itself isn't a thread.
+// ---------------------------------------------------------------------------
+
+export const isPrivate = (thread) => thread?.visibility === 'private';
+export const isLounge = (thread) => thread?.visibility === 'captains';
+
+/** Rooms whose messages always count as unread, like Team Chat's: private chats and the Lounge. */
+const countsLikeTeamChat = (room) => room.thread_id === null || (!!room.visibility && room.visibility !== 'team');
+
+/** Unread count for the Chat tab: Team Chat, private chats and the Lounge, plus threads the player has opened. */
 export const unreadTotal = (overview) =>
-  overview.reduce((n, room) => (room.thread_id === null || room.last_read_at ? n + room.unread : n), 0);
+  overview.reduce((n, room) => (countsLikeTeamChat(room) || room.last_read_at ? n + room.unread : n), 0);
+
+/**
+ * Who can rename, close and delete a room: a thread's starter or a captain; a
+ * private chat's starter only (captains have no say there); nobody for the Lounge.
+ */
+export function canManageRoom(thread, me, isCaptain) {
+  if (!thread || isLounge(thread)) return false;
+  if (isPrivate(thread)) return thread.created_by === me;
+  return thread.created_by === me || !!isCaptain;
+}
+
+/** Captains delete anyone's message, except in private chats, where everyone deletes only their own. */
+export const canDeleteAny = (thread, isCaptain) => !!isCaptain && !isPrivate(thread);
+
+/**
+ * A private chat's name when nobody gives it one: everyone's chat names, as many
+ * as fit in 80 characters. ['Casey C.', 'Jordan R.', 'Sam O.'] -> "Casey C., Jordan R. & Sam O."
+ */
+export function privateChatTitle(names) {
+  const list = names.filter(Boolean);
+  const join = (parts) => (parts.length > 1 ? `${parts.slice(0, -1).join(', ')} & ${parts.at(-1)}` : parts[0]);
+  for (let shown = list.length; shown > 0; shown -= 1) {
+    const rest = list.length - shown;
+    const title = join(rest ? [...list.slice(0, shown), `${rest} more`] : list);
+    if (title.length <= 80) return title;
+  }
+  return 'Private chat';
+}
+
+/** The open private chat with just these two players, if there is one. */
+export function directChat(threads, members, me, other) {
+  return (
+    threads.find((t) => {
+      if (!isPrivate(t) || t.archived) return false;
+      const ids = members.filter((m) => m.thread_id === t.id).map((m) => m.user_id);
+      return ids.length === 2 && ids.includes(me) && ids.includes(other);
+    }) || null
+  );
+}
 
 /** The Chat tab's @ count: unread messages that mention the player, in any room (threads they haven't opened too). */
 export const mentionTotal = (overview) => overview.reduce((n, room) => n + (room.mentions || 0), 0);
@@ -204,9 +255,11 @@ export function bumpOverview(list, message, countsAsUnread, mentionsMe = false) 
 const NEW_THREAD_DAYS = 3;
 
 /**
- * Team Chat plus open threads (latest activity first) and closed threads, with
- * each room's summary from chat overview. `unreadInThreads` counts threads the
- * player has opened; `mentionsInThreads` counts unread mentions in any thread;
+ * Team Chat, the Captains' Lounge (for captains), open threads and open private
+ * chats (each latest activity first), and closed ones, with each room's summary
+ * from chat overview. `unreadInThreads` counts every room but Team Chat that
+ * adds to the Chat tab (threads the player has opened, private chats, the
+ * Lounge); `mentionsInThreads` counts unread mentions in all of them;
  * `freshThreads` is true when a thread they've never opened got messages in
  * the last few days.
  */
@@ -215,25 +268,33 @@ export function organizeRooms(threads, overview, now = Date.now()) {
   const recent = now - NEW_THREAD_DAYS * 24 * 60 * 60 * 1000;
   const list = threads.map((thread) => {
     const summary = summaries.get(thread.id);
+    const followed = isPrivate(thread) || isLounge(thread) || !!summary?.last_read_at;
     return {
       thread,
       summary,
       unread: summary?.unread || 0,
       mentions: summary?.mentions || 0,
-      // Never opened, and there's something in it from someone else.
-      isNew: !!summary && !summary.last_read_at && summary.unread > 0,
+      followed,
+      // A thread never opened, with something in it from someone else.
+      isNew: !followed && !!summary && summary.unread > 0,
       recent: !!summary && MS(summary.last_message_at) > recent,
       at: summary?.last_message_at || thread.created_date,
     };
   });
   list.sort((a, b) => MS(b.at) - MS(a.at));
   const team = summaries.get(null);
-  const open = list.filter((r) => !r.thread.archived);
+  const lounge = list.find((r) => isLounge(r.thread)) || null;
+  const rooms = list.filter((r) => !isLounge(r.thread));
+  const open = rooms.filter((r) => !r.thread.archived && !isPrivate(r.thread));
+  const privateChats = rooms.filter((r) => !r.thread.archived && isPrivate(r.thread));
+  const followedOpen = [lounge, ...open, ...privateChats].filter((r) => r && r.followed);
   return {
     team: { summary: team, unread: team?.unread || 0, mentions: team?.mentions || 0 },
+    lounge,
     open,
-    closed: list.filter((r) => r.thread.archived),
-    unreadInThreads: open.reduce((n, r) => (r.summary?.last_read_at ? n + r.unread : n), 0),
+    privateChats,
+    closed: rooms.filter((r) => r.thread.archived),
+    unreadInThreads: followedOpen.reduce((n, r) => n + r.unread, 0),
     mentionsInThreads: list.reduce((n, r) => n + r.mentions, 0),
     freshThreads: open.some((r) => r.isNew && r.recent),
   };

@@ -18,8 +18,8 @@ The team's chat history is the one thing a site update must never lose.
 | A database update can't remove or change existing messages, threads, reactions or any other team data. Every new migration is rehearsed on a copy of the database filled with sample data, and the check fails if any existing row is missing or different afterwards. This runs on every pull request, and again right before the live database is updated. | `[rehearsal]` |
 | The one exception is a data-removing change a co-owner approved in plain words: its migration file says `-- owner-approved`. The rehearsal then lists what it removed instead of failing. | `[rehearsal]` |
 | Database update files that were already applied can't be edited or deleted. | `[rehearsal]` |
-| When a player's account is deleted, their messages and threads stay, under the name they posted with. Only their reactions and read markers go. | `[db]` |
-| Messages are only removed when someone deletes them on purpose (their own, or any as a captain), or when their thread is deleted. | `[db]` |
+| When a player's account is deleted, their messages and threads stay, under the name they posted with. Only their reactions, read markers and places in private chats go. | `[db]` |
+| Messages are only removed when someone deletes them on purpose (their own, or any as a captain outside private chats), or when their thread or private chat is deleted. Leaving a private chat keeps your messages in it. | `[db]` |
 | The rules that decide what deleting removes ("delete rules" on the links between tables) are locked by a test. Changing one, for example so deleting an account also deletes its messages, fails the check. | `[db]` |
 | Chats, threads and reactions in demo mode survive a page reload, and survive a later version adding new kinds of data. | `[unit]` `[browser]` |
 | Previews and local development use sample data (demo mode) and can never touch the real chat. | `vite.config.js` |
@@ -42,8 +42,8 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | Links (http/https only) can be tapped, open in a new tab, and long ones are shortened. Messages of 1 to 3 emoji show big, without a bubble. | `[browser]` `[unit]` |
 | **@mentions:** typing @ in the message box lists teammates on the site (first names first; not yourself or removed players). Typing narrows it; tapping one (on a computer, the arrows and Enter or Tab) puts in their chat name, like "@Jordan R.", and Escape closes the list. Teammates who share a short name show their full names. A name typed out in full counts too, but only at the start of a word, so an email address doesn't. | `[browser]` `[unit]` |
 | Mentions stand out in the message, and mentions of you (by name or @team) get a lime background. A message keeps who it mentions (`messages.mentions`); editing the text updates that, without a notification. | `[browser]` `[unit]` `[db]` |
-| **@team** mentions everyone. Only captains get it in the list, and the database ignores it from anyone else (`messages.mentions_team`). | `[browser]` `[db]` |
-| A message only mentions teammates on the site (not an account that hasn't entered the team code), each once, and never its author, whatever the site sends. | `[db]` `[unit]` |
+| **@team** mentions everyone. Only captains get it in the list, only in Team Chat and threads, and the database ignores it anywhere else or from anyone else (`messages.mentions_team`). | `[browser]` `[db]` |
+| A message only mentions teammates on the site (not an account that hasn't entered the team code) who can read its room, each once, and never its author, whatever the site sends. In a private chat the list only offers its people; in the Captains' Lounge, only captains. | `[db]` `[unit]` `[browser]` |
 | Shows the latest 60 messages. **Load earlier messages** adds the 60 before, without jumping away from where you were. | `[browser]` `[unit]` |
 | New messages that arrive while you're scrolled up show a "↓ N new messages" button instead of yanking you down. | manual (see below) |
 | On phones the chat fills the screen, with the message box just above the tab bar. Only the messages scroll, not the page. | `[browser]` |
@@ -62,26 +62,27 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | One of each emoji per player per message. You can only add or remove your own reactions; captains can also remove others'. | `[db]` |
 | **Reply** quotes the message above yours ("Replying to Jordan R." while typing, Esc or ✕ cancels). Tapping the quote jumps to the original and flashes it. If the original was deleted, the quote says "Original message was deleted". | `[browser]` `[db]` |
 | **Copy** copies the text. | `[browser]` |
-| **Delete** (after a confirm) removes the message for everyone, with its reactions. Replies to it stay. Players see Delete only on their own messages; captains on every message. The database enforces the same. | `[browser]` `[db]` |
+| **Delete** (after a confirm) removes the message for everyone, with its reactions. Replies to it stay. Players see Delete only on their own messages; captains on every message, except in private chats, where everyone deletes only their own. The database enforces the same. | `[browser]` `[db]` |
 | **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Nobody can edit messages yet (planned: issue #6). | `[db]` |
 
-**Search** (the 🔍 in the chat header) finds messages in Team Chat and every thread:
+**Search** (the 🔍 in the chat header) finds messages in Team Chat, every thread, your private chats and (for captains) the Captains' Lounge:
 
 | Expected behavior | Checked by |
 |---|---|
 | Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%`, a leading `-` or the word "or" are just text. Two characters at least. | `[db]` |
 | Results show who, where (Team Chat or the thread's name), when, and the match highlighted. Tapping one opens that room and jumps to the message, loading older messages until it's there. | `[browser]` |
-| Players only find messages they can read; an account that hasn't joined the team finds nothing. | `[db]` |
+| Players only find messages they can read: never a private chat they aren't in (captains included), nor the Lounge unless they're a captain. An account that hasn't joined the team finds nothing. | `[db]` `[unit]` `[browser]` |
 
-## 4. Threads
+## 4. Threads, private chats and the Captains' Lounge
 
-Side conversations, so Team Chat stays about the team. Every thread is visible to the whole team.
+Threads are side conversations, so Team Chat stays about the team. Every thread is visible to the whole team.
+Private chats and the Captains' Lounge are the exceptions: see [below](#private-chats).
 
 | Expected behavior | Checked by |
 |---|---|
-| The room list shows Team Chat first, then open threads with the most recent activity first. Each row shows the last message ("Riley N.: Can't this week"), when it was sent, and an unread count. | `[browser]` `[unit]` |
-| Phones: a row under the chat header shows Team Chat and every open thread (latest activity first) with unread counts, a dot for new ones, and **+ New** ("Start a thread" when there are none). The room you're in is highlighted, and the row hides while you type. The **Threads** button in Team Chat opens the full list, closed threads included, and ‹ goes back to it. Computers: the list is always beside the chat. | `[browser]` |
+| The room list shows Team Chat first, then the Captains' Lounge (captains only), then open threads, then open private chats, each with the most recent activity first. Each row shows the last message ("Riley N.: Can't this week"), when it was sent, and an unread count. | `[browser]` `[unit]` |
+| Phones: a row under the chat header shows Team Chat, the Lounge (captains), every open thread and every open private chat (each latest activity first) with unread counts, a dot for new threads, and **+ New** for a thread ("Start a thread" when there are none). The room you're in is highlighted, and the row hides while you type. The **Threads** button in Team Chat opens the full list, closed rooms and **New private chat** included, and ‹ goes back to it. Computers: the list is always beside the chat. | `[browser]` |
 | **New thread** asks for a topic (1 to 80 characters) and an optional first message. A leading emoji becomes the thread's icon. You land in the new thread. | `[browser]` `[unit]` `[db]` |
 | Anyone can post in an open thread. | `[db]` `[browser]` |
 | The person who started a thread, and captains, get **⋯** with Rename, Close thread / Reopen thread and Delete thread. Others don't, and the database refuses them too. | `[browser]` `[db]` |
@@ -90,16 +91,45 @@ Side conversations, so Team Chat stays about the team. Every thread is visible t
 | A link to a thread that no longer exists says "This thread isn't here anymore" with a button back to Team Chat. | `[browser]` |
 | Messages only show in the room they were posted in. | `[browser]` `[unit]` |
 
+### Private chats
+
+A private chat is a room only the teammates in it can see. **Captains can't read private chats they aren't
+in**, and have no say over them (they can't delete messages, rename, close or delete them). In the database
+it's a thread with `visibility = 'private'`, and who's in it is `chat_thread_members`.
+
+| Expected behavior | Checked by |
+|---|---|
+| **New private chat** (in the room list) picks teammates on the site (a search box shows once the list is long), an optional name and an optional first message. Without a name, it's named after its people ("Casey C. & Jordan R."; as many as fit in 80 characters). The starter is in it too. You land in the new chat. | `[browser]` `[unit]` `[db]` |
+| A teammate's **Message** button on the Team page opens your open private chat with just them, or starts one with them already picked. | `[browser]` `[unit]` |
+| Private chats show a lock on their icon, and the header says "Private · You, Jordan R. & …". | `[browser]` |
+| Only the people in it see it, its messages, reactions and who's in it, in the list, in search and in unread counts. Nobody else can post, react, add people or see it, captains included. | `[db]` `[unit]` `[browser]` |
+| Its unread count adds to the Chat tab like Team Chat's, even before you open it. What was said before you were added doesn't count as unread. | `[db]` `[unit]` `[browser]` |
+| **⋯ → People** lists who's in it. Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the dialog says so). Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
+| Its starter also gets **Remove** next to each person, and **Rename**, **Close chat** / **Reopen chat** and **Delete chat** (after a confirm that says it removes the messages for everyone in it). Once the starter leaves, nobody has those. | `[browser]` `[db]` `[unit]` |
+| **⋯ → Leave chat** (after a confirm) takes you out; it's gone from your list until someone adds you back. Your messages stay in it. | `[browser]` `[db]` `[unit]` |
+| A private chat can never be opened up to the team, and a thread can never be made private: a room's kind is set when it starts. | `[db]` `[unit]` |
+
+### The Captains' Lounge
+
+A room only captains see, built in (the database starts it). In the database it's the one thread with
+`visibility = 'captains'`.
+
+| Expected behavior | Checked by |
+|---|---|
+| Every captain sees it right under Team Chat, with a "C" armband icon and "Captains only · N captains"; a player made captain sees it from then, and a captain made a player again loses it. Players never see it, its messages or its unread count, and can't post or react in it. | `[db]` `[unit]` `[browser]` |
+| Nobody can rename, close or delete it (no **⋯** menu). Captains can delete any message in it, like in Team Chat. | `[db]` `[browser]` |
+| Its unread count adds to captains' Chat tab like Team Chat's, opened or not. | `[db]` `[unit]` |
+
 ## 5. Unread counts
 
 Read markers are stored per player in the database (`chat_reads`), so phone and computer agree.
 
 | Expected behavior | Checked by |
 |---|---|
-| The **Chat tab** (bottom bar on phones, top bar on computers, and the menu) shows a count: unread Team Chat messages plus unread messages in threads you've opened. No badge while you're on the chat page. | `[browser]` `[unit]` |
+| The **Chat tab** (bottom bar on phones, top bar on computers, and the menu) shows a count: unread messages in Team Chat, your private chats and (for captains) the Captains' Lounge, plus threads you've opened. No badge while you're on the chat page. | `[browser]` `[unit]` |
 | Your own messages never count. History from before you signed up doesn't count. | `[browser]` `[db]` |
 | Opening a room marks it read up to its latest message, shortly after it's shown and while the page is in view. The marker only ever moves forward. | `[browser]` `[db]` `[unit]` |
-| Threads you've never opened show **New** in the list instead of a count, and don't add to the Chat tab badge. A dot on the Threads button flags ones with activity in the last 3 days. | `[browser]` `[unit]` |
+| Threads you've never opened show **New** in the list instead of a count, and don't add to the Chat tab badge (private chats and the Lounge always show their count). A dot on the Threads button flags ones with activity in the last 3 days. | `[browser]` `[unit]` |
 | **@ count:** next to the unread number, the Chat tab (and the menu) shows a separate "@2": unread messages that mention you, by name or @team, in every room, threads you've never opened included. Each room in the list and in the phone room row shows its own; the Threads button shows the threads' total in place of their unread number. Opening a room clears its mentions. | `[browser]` `[unit]` `[db]` |
 | Read markers are private: nobody can see or change another player's. | `[db]` |
 
@@ -108,9 +138,10 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 | Expected behavior | Checked by |
 |---|---|
 | Only signed-in players can read anything. Signed-out visitors get nothing, not even the unread summary. | `[db]` |
+| Team Chat and threads are for the whole team; a private chat only for its people (captains included only if they're in it); the Captains' Lounge only for captains. The database enforces this for messages, reactions, search, unread counts, notifications and live updates. | `[db]` |
 | Every table has row level security on, and signed-out visitors have no access to any table. | `[db]` |
-| You post, react and start threads only as yourself. | `[db]` |
-| Messages, threads and reactions update live for everyone on the page (Supabase Realtime). | `[db]` (publication), `[unit]` (subscriptions) |
+| You post, react and start threads and private chats only as yourself. | `[db]` |
+| Messages, threads, reactions and who's in each private chat update live for everyone on the page who can see them (Supabase Realtime, which follows the same rules). Being added to a private chat makes it show up. | `[db]` (publication), `[unit]` (subscriptions) |
 
 ## 7. Phone notifications
 
@@ -130,6 +161,7 @@ everything, so the function can't be made to send anything else.
 |---|---|
 | Team Chat messages notify everyone who turned notifications on, except the author. | `[db]` |
 | Thread messages notify only the thread's starter and players who have opened the thread. | `[db]` |
+| Private chat messages notify everyone in it (opened or not); Lounge messages notify every captain. Nobody who can't read a room is ever notified about it. | `[db]` |
 | A message that mentions a player (by name or @team) notifies them wherever it is, even in a thread they haven't opened and even with **Chat messages** off, unless they turned **@mentions** off. | `[db]` |
 | Only players on the team get notifications: a player a captain removed gets none until they're added back. | `[db]` |
 | A player who turned **Chat messages** off gets no chat notifications except @mentions; **@mentions** off, none for mentions in rooms they don't follow; **Game alerts** off, no Player of the Match ones. All start on, and only the player can change theirs. | `[db]` `[browser]` |
@@ -139,7 +171,7 @@ everything, so the function can't be made to send anything else.
 | If notifications can't be sent (the sender is down, not set up yet), messages still post normally. | `[db]` |
 | A player's devices are private to them. A phone that changes hands notifies whoever turned notifications on last. Signing out turns them off on that device. | `[db]` `[browser]` |
 | Phones that unsubscribed are forgotten the next time a send to them fails. | `[unit]` |
-| **The app icon shows the unread number**, the same as the Chat tab (Team Chat plus threads you've opened, not your own messages). Each chat notification carries it (`chat_push_unread`), so it goes up while the app is closed; game alerts leave it as it is. If the count isn't available, the notification still goes out. | `[db]` `[unit]` `[browser]` |
+| **The app icon shows the unread number**, the same as the Chat tab (Team Chat, your private chats and the Lounge for captains, plus threads you've opened; not your own messages). Each chat notification carries it (`chat_push_unread`), so it goes up while the app is closed; game alerts leave it as it is. If the count isn't available, the notification still goes out. | `[db]` `[unit]` `[browser]` |
 | While the site is open, the icon follows the Chat tab and clears once everything is read. Players who turn **Chat messages** off, or turn notifications off on the device (signing out does), get no number (an @mention notification clears it instead). On an iPhone it only shows on the Home Screen app. | `[browser]` `[db]` |
 | The bell shows the right state: on, off, blocked in settings (with how to fix it), or "add to Home Screen first" on iPhone. **Send a test** sends one to all your devices. | `[browser]` |
 | Encryption and signing follow the Web Push standards, checked against an independent implementation. | `[unit]` |
@@ -182,6 +214,10 @@ devices signed in as different players:
    2. Open the app and read Team Chat, then close it: the number is gone.
 7. @mentions (after a change to them): from one device, @mention the other player in a thread they've never
    opened. Their phone gets the notification, and their Chat tab shows "@1" until they open that thread.
+8. Private chats (after a change to them): from one device, start a private chat with the other player. It shows
+   up on the other device without a refresh, with a lock, and their phone gets a notification for its first
+   message. A third player (or a captain) who isn't in it doesn't see it. Leave it on one device: it disappears
+   there, and the other still sees the messages.
 
 ## Running the tests
 

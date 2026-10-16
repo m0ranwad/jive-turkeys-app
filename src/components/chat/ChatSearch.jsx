@@ -78,7 +78,7 @@ export function ChatSearch({ open, onOpenChange, nameOf, onPick }) {
           {error && <p className="py-6 text-center text-sm text-red-600">{error}</p>}
           {!error && results?.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">Nothing found.</p>}
           {!error && results === null && (
-            <p className="py-6 text-center text-sm text-zinc-400">Searches Team Chat and every thread.</p>
+            <p className="py-6 text-center text-sm text-zinc-400">Searches Team Chat, every thread and your private chats.</p>
           )}
           <ul className="space-y-1.5">
             {(results || []).map((m) => (

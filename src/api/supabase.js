@@ -256,6 +256,19 @@ export function createSupabaseBackend(url, key) {
       return data;
     },
 
+    /** Starts a private chat with the teammates picked (the starter is in it too). Resolves to the new chat. */
+    async startPrivate(title, userIds) {
+      const { data, error } = await supabase.rpc('chat_start_private', { p_title: title, p_user_ids: userIds });
+      if (error) fail(error);
+      return data;
+    },
+
+    /** Adds teammates to a private chat you're in. They see the whole chat. */
+    async addMembers(threadId, userIds) {
+      const { error } = await supabase.rpc('chat_add_members', { p_thread_id: threadId, p_user_ids: userIds });
+      if (error) fail(error);
+    },
+
     /** "I'm looking at this room", so this player's phone doesn't buzz for it. */
     async viewing(threadId) {
       const { error } = await supabase.rpc('chat_viewing', { p_thread_id: threadId });

@@ -114,6 +114,23 @@ describe('chat.overview and markRead', () => {
   });
 });
 
+describe('private chats', () => {
+  it('starts one and adds people through the database functions', async () => {
+    result = { data: { id: 't1', title: 'Ride', visibility: 'private' }, error: null };
+    expect(await api.chat.startPrivate('Ride', ['a', 'b'])).toEqual({ id: 't1', title: 'Ride', visibility: 'private' });
+    await api.chat.addMembers('t1', ['c']);
+    expect(calls).toEqual([
+      ['rpc', 'chat_start_private', { p_title: 'Ride', p_user_ids: ['a', 'b'] }],
+      ['rpc', 'chat_add_members', { p_thread_id: 't1', p_user_ids: ['c'] }],
+    ]);
+  });
+
+  it('reports why it could not', async () => {
+    result = { data: null, error: { message: 'Pick at least one teammate' } };
+    await expect(api.chat.startPrivate('Just me', [])).rejects.toThrow('Pick at least one teammate');
+  });
+});
+
 describe('filter', () => {
   it('uses "is null" for null and "in" for lists', async () => {
     await api.entities.Message.filter({ thread_id: null, id: ['a', 'b'], user_id: 'u' });

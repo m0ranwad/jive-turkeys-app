@@ -67,6 +67,26 @@ begin
 end;
 $$;
 
+-- A private chat between Jordan and Sam, and a message in the Captains' Lounge (once those exist).
+do $$
+begin
+  if to_regclass('public.chat_thread_members') is not null then
+    execute $sql$
+      insert into public.chat_threads (id, title, created_by, author_name, visibility) values
+        ('d3333333-3333-4333-8333-333333333333', 'Jordan R. & Sam O.', '22222222-2222-4222-8222-222222222222', 'Jordan Rivera', 'private');
+      insert into public.chat_thread_members (thread_id, user_id, added_by) values
+        ('d3333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222'),
+        ('d3333333-3333-4333-8333-333333333333', '33333333-3333-4333-8333-333333333333', '22222222-2222-4222-8222-222222222222');
+      insert into public.messages (id, user_id, author_name, body, thread_id, created_date) values
+        ('c7777777-7777-4777-8777-777777777777', '22222222-2222-4222-8222-222222222222', 'Jordan Rivera', 'Ride Thursday?', 'd3333333-3333-4333-8333-333333333333', '2026-10-04 17:00+00');
+      insert into public.messages (id, user_id, author_name, body, thread_id, created_date)
+        select 'c8888888-8888-4888-8888-888888888888', '11111111-1111-4111-8111-111111111111', 'Casey Captain', 'Lineup idea for Thursday', id, '2026-10-04 18:00+00'
+        from public.chat_threads where visibility = 'captains';
+    $sql$;
+  end if;
+end;
+$$;
+
 -- Devices signed up for notifications (once that exists).
 do $$
 begin

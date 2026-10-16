@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { ChevronLeft, Lock, LockOpen, MessageSquare, MessagesSquare, MoreHorizontal, Pencil, Search, Trash2, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  Lock,
+  LockOpen,
+  LogOut,
+  MessageSquare,
+  MessagesSquare,
+  MoreHorizontal,
+  Pencil,
+  Search,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
-import { ConfirmDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
+import { ConfirmDialog, PeopleDialog, PrivateChatDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ChatSearch } from '@/components/chat/ChatSearch';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
@@ -16,9 +29,15 @@ import {
   CHAT_READ_EVENT,
   addReaction,
   bumpOverview,
+  canDeleteAny,
+  canManageRoom,
+  directChat,
   insertMessage,
   isAfter,
+  isLounge,
+  isPrivate,
   organizeRooms,
+  privateChatTitle,
   roomOf,
   splitLeadingEmoji,
   upsertThread,
@@ -68,6 +87,10 @@ function ChatTip() {
 
 let pendingCount = 0;
 const pendingId = () => `pending-${++pendingCount}`;
+
+// Who's in each private chat (only the ones this player is in). Before the
+// database has private chats there's nobody, and the chat works as it did.
+const loadMembers = () => api.entities.ChatThreadMember.list().catch(() => []);
 
 // How much the visible area must shrink while typing to count as an on-screen keyboard.
 const KEYBOARD_PX = 120;
@@ -145,9 +168,12 @@ export function ChatPage() {
   const [params, setParams] = useSearchParams();
   const room = params.get('thread') || null;
   const listOpen = params.get('view') === 'threads';
+  // A teammate's Message button on the Team page: open your private chat with them, or start one.
+  const dmWith = params.get('dm');
   const me = user?.id;
 
   const [threads, setThreads] = useState(null);
+  const [members, setMembers] = useState([]);
   const [overview, setOverview] = useState([]);
   const [loaded, setLoaded] = useState(null);
   const [reactions, setReactions] = useState([]);
@@ -185,13 +211,14 @@ export function ChatPage() {
       .catch(() => {});
   }, []);
 
-  // Threads, room summaries, and live updates for the whole page.
+  // Rooms, who's in the private ones, room summaries, and live updates for the whole page.
   useEffect(() => {
     let alive = true;
-    Promise.all([api.entities.ChatThread.list('-created_date'), api.chat.overview()])
-      .then(([threadRows, summary]) => {
+    Promise.all([api.entities.ChatThread.list('-created_date'), loadMembers(), api.chat.overview()])
+      .then(([threadRows, memberRows, summary]) => {
         if (!alive) return;
         setThreads(threadRows);
+        setMembers(memberRows);
         setOverview(summary);
       })
       .catch((err) => {
@@ -201,10 +228,26 @@ export function ChatPage() {
       });
 
     let refreshTimer;
+    let roomsTimer;
     const offThreads = api.entities.ChatThread.subscribe((t) => setThreads((list) => upsertThread(list, t)), {
       onUpdate: (t) => setThreads((list) => upsertThread(list, t)),
       onDelete: ({ id }) => setThreads((list) => list && list.filter((t) => t.id !== id)),
     });
+    // Someone added you to a private chat, or took you (or someone else) out: fetch the rooms again.
+    const reloadRooms = () => {
+      clearTimeout(roomsTimer);
+      roomsTimer = setTimeout(() => {
+        Promise.all([api.entities.ChatThread.list('-created_date'), loadMembers()])
+          .then(([threadRows, memberRows]) => {
+            if (!alive) return;
+            setThreads(threadRows);
+            setMembers(memberRows);
+            refreshOverview();
+          })
+          .catch(() => {});
+      }, 300);
+    };
+    const offMembers = api.entities.ChatThreadMember.subscribe(reloadRooms, { onDelete: reloadRooms });
     const offMessages = api.entities.Message.subscribe(
       (m) => {
         const { me: myId, viewing } = live.current;
@@ -240,7 +283,9 @@ export function ChatPage() {
     return () => {
       alive = false;
       clearTimeout(refreshTimer);
+      clearTimeout(roomsTimer);
       offThreads();
+      offMembers();
       offMessages();
       offReactions();
       document.removeEventListener('visibilitychange', onVisibility);
@@ -358,12 +403,36 @@ export function ChatPage() {
     [profilesById],
   );
   const isCaptainUser = useCallback((userId) => !!profilesById.get(userId)?.is_captain, [profilesById]);
-  // Who can be @mentioned, and who a message mentions (only what's set is sent, so a message
-  // without mentions saves the same way it always has).
   const people = useMemo(() => mentionPeople(profiles), [profiles]);
-  const mentionFields = (body) => {
-    const { mentions, team } = findMentions(body, people, { me, canMentionTeam: isCaptain });
-    return { ...(mentions.length && { mentions }), ...(team && { mentions_team: true }) };
+  // Teammates to start a private chat with or add to one.
+  const teammates = useMemo(
+    () => people.filter((p) => p.id !== me && !p.removed).sort((a, b) => a.name.localeCompare(b.name)),
+    [people, me],
+  );
+
+  const thread = room ? threads?.find((t) => t.id === room) : null;
+  const threadMissing = !!room && !!threads && !thread;
+  const privateRoom = isPrivate(thread);
+  const lounge = isLounge(thread);
+  const canManage = canManageRoom(thread, me, isCaptain);
+  const roomMembers = useMemo(
+    () => (privateRoom ? members.filter((m) => m.thread_id === thread.id) : []),
+    [members, thread, privateRoom],
+  );
+  // Who can be @mentioned in this room: only the people who can read it. @team only in Team Chat and threads.
+  const roomPeople = useMemo(() => {
+    if (privateRoom) {
+      const ids = new Set(roomMembers.map((m) => m.user_id));
+      return people.filter((p) => ids.has(p.id));
+    }
+    return lounge ? people.filter((p) => isCaptainUser(p.id)) : people;
+  }, [people, privateRoom, lounge, roomMembers, isCaptainUser]);
+  const canMentionTeam = isCaptain && !privateRoom && !lounge;
+  // Who a message mentions (only what's set is sent, so a message without mentions saves the
+  // same way it always has).
+  const mentionFields = (body, { who = roomPeople, team = canMentionTeam } = {}) => {
+    const { mentions, team: everyone } = findMentions(body, who, { me, canMentionTeam: team });
+    return { ...(mentions.length && { mentions }), ...(everyone && { mentions_team: true }) };
   };
 
   const reactionsByMessage = useMemo(() => {
@@ -379,15 +448,23 @@ export function ChatPage() {
   const lookup = useCallback((id) => messagesById.get(id) || extras[id] || null, [messagesById, extras]);
 
   const rooms = useMemo(() => organizeRooms(threads || [], overview), [threads, overview]);
-
-  const thread = room ? threads?.find((t) => t.id === room) : null;
-  const threadMissing = !!room && !!threads && !thread;
-  const canManage = !!thread && (thread.created_by === me || isCaptain);
   const myName = profile?.display_name || user?.full_name || 'Player';
 
-  const openRoom = (id) => setParams(id ? { thread: id } : {});
+  const openRoom = (id, options) => setParams(id ? { thread: id } : {}, options);
   // Keeps the open room loaded underneath the list on phones.
   const showThreads = () => setParams(room ? { thread: room, view: 'threads' } : { view: 'threads' });
+
+  // From a teammate's Message button: your open private chat with just them, or a new one.
+  useEffect(() => {
+    if (!dmWith || !threads || !me) return;
+    const existing = directChat(threads, members, me, dmWith);
+    if (existing) openRoom(existing.id, { replace: true });
+    else {
+      openRoom(null, { replace: true });
+      if (dmWith !== me) setDialog({ kind: 'private', preselected: dmWith });
+    }
+    // Runs once the rooms are in; openRoom changes every render.
+  }, [dmWith, threads, members, me]);
 
   const send = async (body) => {
     if (!me) return false;
@@ -557,7 +634,7 @@ export function ChatPage() {
           body: first,
           thread_id: created.id,
           reply_to_id: null,
-          ...mentionFields(first),
+          ...mentionFields(first, { who: people, team: isCaptain }),
         });
       }
       openRoom(created.id);
@@ -567,14 +644,64 @@ export function ChatPage() {
     }
   };
 
+  const savePrivate = async ({ title, userIds, first }) => {
+    try {
+      const others = [...userIds].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      const created = await api.chat.startPrivate(
+        title || privateChatTitle([me, ...others].map((id) => shortName(nameOf(id)))),
+        userIds,
+      );
+      setThreads((list) => upsertThread(list, created));
+      setMembers(await loadMembers());
+      api.chat.markRead(created.id, created.created_date).catch(() => {});
+      if (first) {
+        const inIt = new Set([me, ...userIds]);
+        await api.entities.Message.create({
+          user_id: me,
+          author_name: myName,
+          body: first,
+          thread_id: created.id,
+          reply_to_id: null,
+          ...mentionFields(first, { who: people.filter((p) => inIt.has(p.id)), team: false }),
+        });
+      }
+      openRoom(created.id);
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+      throw err;
+    }
+  };
+
+  const addPeople = async (userIds) => {
+    try {
+      await api.chat.addMembers(thread.id, userIds);
+      setMembers(await loadMembers());
+      toast({ title: userIds.length === 1 ? `${nameOf(userIds[0])} is in the chat` : `${userIds.length} people added` });
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+      throw err;
+    }
+  };
+
+  const removePerson = async (member) => {
+    try {
+      await api.entities.ChatThreadMember.delete(member.id);
+      setMembers((list) => list.filter((m) => m.id !== member.id));
+      toast({ title: `${nameOf(member.user_id)} is out of the chat` });
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+    }
+  };
+
   const setClosed = async (archived) => {
     setMenuOpen(false);
     try {
       const updated = await api.entities.ChatThread.update(thread.id, { archived });
       setThreads((list) => upsertThread(list, updated));
+      const kind = privateRoom ? 'Chat' : 'Thread';
       toast({
-        title: archived ? 'Thread closed' : 'Thread reopened',
-        description: archived ? 'It moved to Closed threads.' : undefined,
+        title: archived ? `${kind} closed` : `${kind} reopened`,
+        description: archived ? `It moved to Closed ${privateRoom ? 'chats' : 'threads'}.` : undefined,
       });
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });
@@ -587,14 +714,21 @@ export function ChatPage() {
         await api.entities.ChatThread.delete(dialog.thread.id);
         setThreads((list) => list.filter((t) => t.id !== dialog.thread.id));
         openRoom(null);
-        toast({ title: 'Thread deleted' });
+        toast({ title: isPrivate(dialog.thread) ? 'Chat deleted' : 'Thread deleted' });
+      } else if (dialog.kind === 'leave') {
+        const mine = members.find((m) => m.thread_id === dialog.thread.id && m.user_id === me);
+        if (mine) await api.entities.ChatThreadMember.delete(mine.id);
+        setThreads((list) => list.filter((t) => t.id !== dialog.thread.id));
+        setMembers((list) => list.filter((m) => m.thread_id !== dialog.thread.id));
+        openRoom(null);
+        toast({ title: 'You left the chat' });
       } else {
         await api.entities.Message.delete(dialog.message.id);
         setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== dialog.message.id) });
         refreshOverview();
       }
     } catch (err) {
-      toast({ title: "That didn't delete", description: err.message });
+      toast({ title: dialog.kind === 'leave' ? "That didn't work" : "That didn't delete", description: err.message });
       throw err;
     }
   };
@@ -603,6 +737,24 @@ export function ChatPage() {
 
   const teamSize = profiles.filter((p) => p.status !== 'on_break').length;
   const title = thread ? splitLeadingEmoji(thread.title).text : 'Team Chat';
+  const roomKind = privateRoom ? 'chat' : 'thread';
+  const subtitle = thread
+    ? `${thread.archived ? 'Closed · ' : ''}${
+        lounge
+          ? `Captains only · ${profiles.filter((p) => p.is_captain && !p.removed).length} captains`
+          : privateRoom
+            ? `Private · ${privateChatTitle([
+                'You',
+                ...roomMembers
+                  .filter((m) => m.user_id !== me)
+                  .map((m) => shortName(nameOf(m.user_id)))
+                  .sort((a, b) => a.localeCompare(b)),
+              ])}`
+            : `Started by ${thread.created_by === me ? 'you' : shortName(nameOf(thread.created_by, thread.author_name))}`
+      }`
+    : room
+      ? ''
+      : `Everyone · ${teamSize} players`;
 
   return (
     <div ref={shell} data-chat-shell className="flex gap-3" style={shellStyle}>
@@ -630,6 +782,7 @@ export function ChatPage() {
             nameOf={nameOf}
             onOpen={openRoom}
             onNewThread={() => setDialog({ kind: 'new' })}
+            onNewPrivate={() => setDialog({ kind: 'private' })}
           />
         ) : (
           <PageSpinner />
@@ -653,7 +806,7 @@ export function ChatPage() {
             </button>
           ) : null}
           {thread ? (
-            <ThreadIcon title={thread.title} className={cn('h-9 w-9 rounded-xl', thread.archived && 'opacity-60')} />
+            <ThreadIcon thread={thread} className={cn('h-9 w-9 rounded-xl', thread.archived && 'opacity-60')} />
           ) : (
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-950 text-lime-400">
               <MessageSquare className="h-[18px] w-[18px]" strokeWidth={2.4} />
@@ -663,13 +816,7 @@ export function ChatPage() {
             <h1 className="truncate font-display text-base font-extrabold uppercase tracking-tight">
               {threadMissing ? 'Thread' : title}
             </h1>
-            <p className="truncate text-[11px] font-semibold text-zinc-400">
-              {thread
-                ? `${thread.archived ? 'Closed · ' : ''}Started by ${thread.created_by === me ? 'you' : shortName(nameOf(thread.created_by, thread.author_name))}`
-                : room
-                  ? ''
-                  : `Everyone · ${teamSize} players`}
-            </p>
+            <p className="truncate text-[11px] font-semibold text-zinc-400">{subtitle}</p>
           </div>
 
           <button
@@ -699,11 +846,11 @@ export function ChatPage() {
             </button>
           )}
 
-          {canManage && (
+          {(canManage || privateRoom) && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((open) => !open)}
-                aria-label="Thread options"
+                aria-label={privateRoom ? 'Chat options' : 'Thread options'}
                 aria-expanded={menuOpen}
                 className="grid h-9 w-9 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
               >
@@ -713,28 +860,54 @@ export function ChatPage() {
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full z-40 mt-1 w-48 overflow-hidden rounded-2xl border border-black/5 bg-white py-1 shadow-xl">
-                    <MenuItem
-                      icon={Pencil}
-                      label="Rename"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setDialog({ kind: 'rename' });
-                      }}
-                    />
-                    {thread.archived ? (
-                      <MenuItem icon={LockOpen} label="Reopen thread" onClick={() => setClosed(false)} />
-                    ) : (
-                      <MenuItem icon={Lock} label="Close thread" onClick={() => setClosed(true)} />
+                    {privateRoom && (
+                      <MenuItem
+                        icon={Users}
+                        label="People"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setDialog({ kind: 'people' });
+                        }}
+                      />
                     )}
-                    <MenuItem
-                      icon={Trash2}
-                      label="Delete thread"
-                      danger
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setDialog({ kind: 'deleteThread', thread });
-                      }}
-                    />
+                    {canManage && (
+                      <>
+                        <MenuItem
+                          icon={Pencil}
+                          label="Rename"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setDialog({ kind: 'rename' });
+                          }}
+                        />
+                        {thread.archived ? (
+                          <MenuItem icon={LockOpen} label={`Reopen ${roomKind}`} onClick={() => setClosed(false)} />
+                        ) : (
+                          <MenuItem icon={Lock} label={`Close ${roomKind}`} onClick={() => setClosed(true)} />
+                        )}
+                      </>
+                    )}
+                    {privateRoom && (
+                      <MenuItem
+                        icon={LogOut}
+                        label="Leave chat"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setDialog({ kind: 'leave', thread });
+                        }}
+                      />
+                    )}
+                    {canManage && (
+                      <MenuItem
+                        icon={Trash2}
+                        label={`Delete ${roomKind}`}
+                        danger
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setDialog({ kind: 'deleteThread', thread });
+                        }}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -769,7 +942,8 @@ export function ChatPage() {
               messages={loaded.messages}
               unreadAfter={loaded.unreadAfter}
               me={me}
-              isCaptain={isCaptain}
+              // Can delete anyone's message: captains, except in private chats.
+              isCaptain={canDeleteAny(thread, isCaptain)}
               reactionsByMessage={reactionsByMessage}
               lookup={lookup}
               nameOf={nameOf}
@@ -785,16 +959,26 @@ export function ChatPage() {
               onEdit={startEdit}
               focusId={focusId}
               onFocused={() => setFocusId(null)}
-              emptyText={thread ? 'Nothing here yet. Say something to get it going.' : 'No messages yet. Break the ice.'}
+              emptyText={
+                lounge
+                  ? "Only captains can see this room. Plan lineups, subs and anything else that's just for captains."
+                  : privateRoom
+                    ? 'Only the people in this chat can see it. Say hi.'
+                    : thread
+                      ? 'Nothing here yet. Say something to get it going.'
+                      : 'No messages yet. Break the ice.'
+              }
             />
             {thread?.archived ? (
-              <ClosedNotice canReopen={canManage} onReopen={() => setClosed(false)} />
+              <ClosedNotice canReopen={canManage} onReopen={() => setClosed(false)} label={`This ${roomKind} is closed.`} />
             ) : (
               <Composer
                 key={`composer-${room ?? 'team'}`}
                 ref={composer}
                 room={room ?? 'team'}
-                placeholder={thread ? 'Message this thread' : 'Message the team'}
+                placeholder={
+                  lounge ? 'Message the captains' : privateRoom ? 'Message this chat' : thread ? 'Message this thread' : 'Message the team'
+                }
                 replyTo={replyTo}
                 replyName={
                   replyTo ? (replyTo.user_id === me ? 'yourself' : shortName(nameOf(replyTo.user_id, replyTo.author_name))) : ''
@@ -804,9 +988,9 @@ export function ChatPage() {
                 editing={editing}
                 onCancelEdit={() => setEditing(null)}
                 onSaveEdit={saveEdit}
-                people={people}
+                people={roomPeople}
                 me={me}
-                canMentionTeam={isCaptain}
+                canMentionTeam={canMentionTeam}
               />
             )}
           </>
@@ -834,13 +1018,42 @@ export function ChatPage() {
         thread={dialog?.kind === 'rename' ? thread : null}
         onSave={saveThread}
       />
+      <PrivateChatDialog
+        open={dialog?.kind === 'private'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        people={teammates}
+        preselected={dialog?.kind === 'private' ? dialog.preselected : null}
+        onSave={savePrivate}
+      />
+      <PeopleDialog
+        open={dialog?.kind === 'people' && privateRoom}
+        onOpenChange={(open) => !open && setDialog(null)}
+        thread={privateRoom ? thread : null}
+        members={roomMembers}
+        me={me}
+        nameOf={nameOf}
+        people={teammates}
+        onAdd={addPeople}
+        onRemove={removePerson}
+      />
+      <ConfirmDialog
+        open={dialog?.kind === 'leave'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        title="Leave this chat?"
+        body="You won't see it anymore unless someone in it adds you back. Your messages stay."
+        confirmLabel="Leave"
+        busyLabel="Leaving…"
+        onConfirm={confirmDelete}
+      />
       <ConfirmDialog
         open={dialog?.kind === 'deleteThread' || dialog?.kind === 'deleteMessage'}
         onOpenChange={(open) => !open && setDialog(null)}
-        title={dialog?.kind === 'deleteThread' ? 'Delete thread?' : 'Delete message?'}
+        title={dialog?.kind === 'deleteThread' ? (isPrivate(dialog.thread) ? 'Delete chat?' : 'Delete thread?') : 'Delete message?'}
         body={
           dialog?.kind === 'deleteThread'
-            ? `“${dialog.thread.title}” and all its messages will be removed for everyone. To keep them, close the thread instead.`
+            ? isPrivate(dialog.thread)
+              ? `“${dialog.thread.title}” and all its messages will be removed for everyone in it. To keep them, close the chat instead.`
+              : `“${dialog.thread.title}” and all its messages will be removed for everyone. To keep them, close the thread instead.`
             : 'It will be removed for everyone.'
         }
         confirmLabel="Delete"

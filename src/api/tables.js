@@ -15,6 +15,7 @@ export const TABLES = {
   TeamJoinCode: 'team_join_code',
   Message: 'messages',
   ChatThread: 'chat_threads',
+  ChatThreadMember: 'chat_thread_members',
   MessageReaction: 'message_reactions',
   ChatRead: 'chat_reads',
   Announcement: 'announcements',

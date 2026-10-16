@@ -7,13 +7,17 @@ import {
   addReaction,
   buildTimeline,
   bumpOverview,
+  canDeleteAny,
+  canManageRoom,
   dayLabel,
+  directChat,
   insertMessage,
   isAfter,
   isEmojiOnly,
   linkParts,
   mentionTotal,
   organizeRooms,
+  privateChatTitle,
   roomOf,
   shortWhen,
   splitLeadingEmoji,
@@ -226,6 +230,17 @@ describe('rooms and unread', () => {
     expect(unreadTotal([])).toBe(0);
   });
 
+  it('counts private chats and the Captains\' Lounge like Team Chat, opened or not', () => {
+    expect(
+      unreadTotal([
+        summary(null, { unread: 2 }),
+        summary('never-opened', { unread: 4, last_read_at: null, visibility: 'team' }),
+        summary('dm', { unread: 1, last_read_at: null, visibility: 'private' }),
+        summary('lounge', { unread: 3, last_read_at: null, visibility: 'captains' }),
+      ]),
+    ).toBe(6);
+  });
+
   it('counts unread @mentions of you in every room, threads you have never opened too', () => {
     expect(
       mentionTotal([
@@ -305,6 +320,76 @@ describe('rooms and unread', () => {
       organizeRooms([threads[3]], [summary('old-new', { last_message_at: at(8000), last_read_at: null, unread: 2 })])
         .freshThreads,
     ).toBe(false);
+  });
+
+  it('puts the Lounge after Team Chat and private chats in their own list, counting them like Team Chat', () => {
+    const threads = [
+      { id: 'thread', title: 'Pickup', archived: false, visibility: 'team', created_date: at(500) },
+      { id: 'lounge', title: "Captains' Lounge", archived: false, visibility: 'captains', created_date: at(9000) },
+      { id: 'dm', title: 'Casey C. & Jordan R.', archived: false, visibility: 'private', created_date: at(300) },
+      { id: 'ride', title: 'Ride', archived: false, visibility: 'private', created_date: at(100) },
+      { id: 'old-chat', title: 'Old', archived: true, visibility: 'private', created_date: at(50) },
+    ];
+    const rooms = organizeRooms(
+      threads,
+      [
+        summary('thread', { last_message_at: at(5), last_read_at: null, unread: 2 }),
+        summary('lounge', { last_message_at: at(1), last_read_at: null, unread: 1 }),
+        summary('dm', { last_message_at: at(30), last_read_at: null, unread: 4 }),
+      ],
+      NOW.getTime(),
+    );
+    expect(rooms.lounge.thread.id).toBe('lounge');
+    expect(rooms.open.map((r) => r.thread.id)).toEqual(['thread']);
+    // The DM's last message is newer than the ride chat, which has none yet.
+    expect(rooms.privateChats.map((r) => r.thread.id)).toEqual(['dm', 'ride']);
+    expect(rooms.closed.map((r) => r.thread.id)).toEqual(['old-chat']);
+    // A thread never opened is New; a private chat or the Lounge never is, it just counts.
+    expect(rooms.open[0].isNew).toBe(true);
+    expect(rooms.privateChats.find((r) => r.thread.id === 'dm').isNew).toBe(false);
+    expect(rooms.lounge.isNew).toBe(false);
+    expect(rooms.unreadInThreads).toBe(5);
+  });
+
+  it('names a private chat after its people, as many as fit', () => {
+    expect(privateChatTitle(['Casey C.', 'Jordan R.'])).toBe('Casey C. & Jordan R.');
+    expect(privateChatTitle(['Casey C.', 'Jordan R.', 'Sam O.'])).toBe('Casey C., Jordan R. & Sam O.');
+    const many = Array.from({ length: 12 }, (_, i) => `Player${i} X.`);
+    const title = privateChatTitle(many);
+    expect(title.length).toBeLessThanOrEqual(80);
+    expect(title).toMatch(/^Player0 X\., .* & \d+ more$/);
+  });
+
+  it('finds the open private chat with just two players', () => {
+    const threads = [
+      { id: 'team', visibility: 'team' },
+      { id: 'group', visibility: 'private' },
+      { id: 'closed', visibility: 'private', archived: true },
+      { id: 'dm', visibility: 'private' },
+    ];
+    const members = [
+      ['group', 'me'], ['group', 'jo'], ['group', 'sam'],
+      ['closed', 'me'], ['closed', 'jo'],
+      ['dm', 'jo'], ['dm', 'me'],
+    ].map(([thread_id, user_id]) => ({ thread_id, user_id }));
+    expect(directChat(threads, members, 'me', 'jo').id).toBe('dm');
+    expect(directChat(threads, members, 'me', 'sam')).toBeNull();
+  });
+
+  it('lets captains manage threads but not private chats or the Lounge', () => {
+    const thread = { visibility: 'team', created_by: 'ann' };
+    const chat = { visibility: 'private', created_by: 'ann' };
+    const lounge = { visibility: 'captains', created_by: null };
+    expect(canManageRoom(thread, 'cap', true)).toBe(true);
+    expect(canManageRoom(thread, 'ann', false)).toBe(true);
+    expect(canManageRoom(thread, 'bob', false)).toBe(false);
+    expect(canManageRoom(chat, 'ann', false)).toBe(true);
+    expect(canManageRoom(chat, 'cap', true)).toBe(false);
+    expect(canManageRoom(lounge, 'cap', true)).toBe(false);
+    expect(canDeleteAny(thread, true)).toBe(true);
+    expect(canDeleteAny(null, true)).toBe(true);
+    expect(canDeleteAny(chat, true)).toBe(false);
+    expect(canDeleteAny(lounge, true)).toBe(true);
   });
 
   it('updates a thread in place, or adds a new one at the top', () => {
