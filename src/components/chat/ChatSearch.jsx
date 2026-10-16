@@ -23,9 +23,10 @@ function Highlighted({ text, query }) {
 
 /**
  * Search every chat room you can read: type a word, tap a result to jump to
- * that message. `onPick(message)` gets { id, thread_id }.
+ * that message. `onPick(message)` gets { id, thread_id }. `roomName(threadId,
+ * savedTitle)`: a room's name as this player sees it.
  */
-export function ChatSearch({ open, onOpenChange, nameOf, onPick }) {
+export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) => saved, onPick }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
@@ -94,7 +95,7 @@ export function ChatSearch({ open, onOpenChange, nameOf, onPick }) {
                   <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
                     <span className="truncate text-zinc-900">
                       {shortName(nameOf(m.user_id, m.author_name))}
-                      <span className="font-semibold text-zinc-400"> · {m.thread_id ? m.thread_title || 'Thread' : 'Team Chat'}</span>
+                      <span className="font-semibold text-zinc-400"> · {m.thread_id ? roomName(m.thread_id, m.thread_title) || 'Thread' : 'Team Chat'}</span>
                     </span>
                     <span className="shrink-0 font-semibold text-zinc-400">{shortWhen(m.created_date)}</span>
                   </div>

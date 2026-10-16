@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v17';
+const DB_KEY = 'jt_demo_db_v18';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -179,6 +179,68 @@ describe('private chats and the Captains\' Lounge', () => {
     const theirs = (await api.chat.history(dm)).find((m) => m.user_id === jordan);
     await expect(api.entities.Message.delete(theirs.id)).rejects.toThrow('permission');
     await api.entities.Message.delete(sent.id);
+  });
+
+  it('takes a removed player out of their private chats, and adding them back does not bring them back', async () => {
+    const { api } = await signedIn();
+    const jordan = await userId(api, 'Jordan Rivera');
+    await api.users.setRemoved(jordan, true);
+    expect((await api.entities.ChatThreadMember.list()).some((m) => m.user_id === jordan)).toBe(false);
+    await api.users.setRemoved(jordan, false);
+    await asJordan(api);
+    expect(await titles(api)).not.toContain("🚗 Ride to Thursday's game");
+    expect(await titles(api)).not.toContain('Casey C. & Jordan R.');
+  });
+
+  it('counts unread from when you were added back, even if you had read further back before leaving', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const chat = await api.chat.startPrivate('Carpool', [sam]);
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+    await api.auth.signIn('sam@demo.test', 'demo1234');
+    await api.chat.markRead(chat.id, new Date().toISOString());
+    await api.chat.leave(chat.id);
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    await wait();
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'While Sam was out', thread_id: chat.id });
+    await wait();
+    await api.chat.addMembers(chat.id, [sam]);
+    await wait();
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'Welcome back', thread_id: chat.id });
+    await api.auth.signIn('sam@demo.test', 'demo1234');
+    expect((await api.chat.history(chat.id)).map((m) => m.body)).toEqual(['While Sam was out', 'Welcome back']);
+    expect((await api.chat.overview()).find((o) => o.thread_id === chat.id).unread).toBe(1);
+  });
+
+  it('only says someone left or was taken out when it happened', async () => {
+    const { api } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const dm = await idOf(api, 'Casey C. & Jordan R.');
+    // Jordan started it, so Casey (a captain) can't take Jordan out.
+    await expect(api.chat.removeMember(dm, await userId(api, 'Jordan Rivera'))).rejects.toThrow('permission');
+    // Sam isn't in it, so there's nobody to take out.
+    await expect(api.chat.removeMember(dm, sam)).rejects.toThrow('permission');
+    await api.chat.leave(dm);
+    await expect(api.chat.leave(dm)).rejects.toThrow('permission');
+    expect(await titles(api)).not.toContain('Casey C. & Jordan R.');
+  });
+
+  it('a chat nobody named gets a name when renamed, and nobody unnames it', async () => {
+    const { api, me } = await signedIn();
+    const sam = await userId(api, 'Sam Okafor');
+    const chat = await api.chat.startPrivate('Casey C. & Sam O.', [sam], { named: false });
+    expect(chat.named).toBe(false);
+    expect((await api.entities.ChatThread.update(chat.id, { title: '🥅 Goalies' })).named).toBe(true);
+    await expect(api.entities.ChatThread.update(chat.id, { named: false })).rejects.toThrow('permission');
+    expect((await api.entities.ChatThread.filter({ id: chat.id }))[0]).toMatchObject({ created_by: me.id, named: true });
+  });
+
+  it('shows nothing of the chat to an account that has not entered the team code', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('nia@demo.test', 'demo1234');
+    expect(await api.entities.ChatThread.list()).toEqual([]);
+    expect(await api.chat.history(null)).toEqual([]);
+    expect(await api.chat.search('pinnies')).toEqual([]);
   });
 });
 

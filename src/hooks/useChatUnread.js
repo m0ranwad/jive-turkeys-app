@@ -26,12 +26,15 @@ export function useChatUnread(enabled) {
 
     refresh();
     const unsubscribe = api.entities.Message.subscribe(refresh, { onDelete: refresh });
+    // Added to a private chat, or taken out of one (deletes reach everyone, but they're rare).
+    const unsubscribeMembers = api.entities.ChatThreadMember.subscribe(refresh, { onDelete: refresh });
     window.addEventListener(CHAT_READ_EVENT, refresh);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       alive = false;
       clearTimeout(timer);
       unsubscribe();
+      unsubscribeMembers();
       window.removeEventListener(CHAT_READ_EVENT, refresh);
       document.removeEventListener('visibilitychange', onVisible);
     };

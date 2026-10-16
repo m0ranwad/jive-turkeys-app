@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import { shortName } from '@/lib/format';
 
 /** One-tap reactions; the + button opens the full emoji picker. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '🔥', '🦃'];
@@ -176,19 +177,38 @@ export function canManageRoom(thread, me, isCaptain) {
 export const canDeleteAny = (thread, isCaptain) => !!isCaptain && !isPrivate(thread);
 
 /**
- * A private chat's name when nobody gives it one: everyone's chat names, as many
- * as fit in 80 characters. ['Casey C.', 'Jordan R.', 'Sam O.'] -> "Casey C., Jordan R. & Sam O."
+ * A list of chat names, the way a private chat with no name is called: up to
+ * four names, then "& N more". ['Jordan R.', 'Sam O.'] -> "Jordan R. & Sam O."
+ * The same as chat_room_label() in the database. At most 80 characters.
  */
 export function privateChatTitle(names) {
   const list = names.filter(Boolean);
-  const join = (parts) => (parts.length > 1 ? `${parts.slice(0, -1).join(', ')} & ${parts.at(-1)}` : parts[0]);
-  for (let shown = list.length; shown > 0; shown -= 1) {
-    const rest = list.length - shown;
-    const title = join(rest ? [...list.slice(0, shown), `${rest} more`] : list);
-    if (title.length <= 80) return title;
-  }
-  return 'Private chat';
+  if (!list.length) return 'Private chat';
+  const parts = list.length > 4 ? [...list.slice(0, 3), `${list.length - 3} more`] : list;
+  const title = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} & ${parts.at(-1)}` : parts[0];
+  return title.length > 80 ? `${title.slice(0, 79)}…` : title;
 }
+
+/**
+ * A room's name as this player sees it: its title, or for a private chat
+ * nobody named, the other people in it now, by chat name ("Jordan R.",
+ * "Jordan R. & Sam O."; "Just you" when nobody else is left).
+ * `members`: chat_thread_members rows; `nameOf(userId)`: their name.
+ */
+export function roomTitle(thread, { members = [], me, nameOf } = {}) {
+  if (!thread || !isPrivate(thread) || thread.named !== false) return thread?.title ?? '';
+  const others = members
+    .filter((m) => m.thread_id === thread.id && m.user_id !== me)
+    .map((m) => shortName(nameOf(m.user_id)))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return others.length ? privateChatTitle(others) : 'Just you';
+}
+
+/** Adds someone's place in a private chat to the list, or replaces the copy of it. */
+export const upsertMember = (list, row) => [
+  ...(list || []).filter((m) => m.id !== row.id && !(m.thread_id === row.thread_id && m.user_id === row.user_id)),
+  row,
+];
 
 /** The open private chat with just these two players, if there is one. */
 export function directChat(threads, members, me, other) {
@@ -259,7 +279,8 @@ const NEW_THREAD_DAYS = 3;
  * chats (each latest activity first), and closed ones, with each room's summary
  * from chat overview. `unreadInThreads` counts every room but Team Chat that
  * adds to the Chat tab (threads the player has opened, private chats, the
- * Lounge); `mentionsInThreads` counts unread mentions in all of them;
+ * Lounge, closed or not; `unreadInClosed` the closed ones among them);
+ * `mentionsInThreads` counts unread mentions in all of them;
  * `freshThreads` is true when a thread they've never opened got messages in
  * the last few days.
  */
@@ -287,14 +308,17 @@ export function organizeRooms(threads, overview, now = Date.now()) {
   const rooms = list.filter((r) => !isLounge(r.thread));
   const open = rooms.filter((r) => !r.thread.archived && !isPrivate(r.thread));
   const privateChats = rooms.filter((r) => !r.thread.archived && isPrivate(r.thread));
-  const followedOpen = [lounge, ...open, ...privateChats].filter((r) => r && r.followed);
+  const closed = rooms.filter((r) => r.thread.archived);
+  // What the Chat tab counts, outside Team Chat (closed rooms too: what came in before they closed).
+  const followed = [lounge, ...open, ...privateChats, ...closed].filter((r) => r && r.followed);
   return {
     team: { summary: team, unread: team?.unread || 0, mentions: team?.mentions || 0 },
     lounge,
     open,
     privateChats,
-    closed: rooms.filter((r) => r.thread.archived),
-    unreadInThreads: followedOpen.reduce((n, r) => n + r.unread, 0),
+    closed,
+    unreadInClosed: closed.reduce((n, r) => (r.followed ? n + r.unread : n), 0),
+    unreadInThreads: followed.reduce((n, r) => n + r.unread, 0),
     mentionsInThreads: list.reduce((n, r) => n + r.mentions, 0),
     freshThreads: open.some((r) => r.isNew && r.recent),
   };

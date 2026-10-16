@@ -11,6 +11,9 @@ const keepTyping = (e) => e.preventDefault();
 // Unsent text per room, kept while moving between rooms.
 const drafts = new Map();
 
+/** Puts text in a room's message box for when it opens (say, a first message that didn't send). */
+export const keepDraft = (room, text) => drafts.set(room, text);
+
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
  * reply preview, and a list of teammates to @mention while typing a name after

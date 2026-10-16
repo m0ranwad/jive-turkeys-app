@@ -72,7 +72,10 @@ export async function showRooms(page) {
 
 export async function openRoom(page, name) {
   await showRooms(page);
-  await page.locator('[data-room]', { hasText: name }).click();
+  const row = page.locator('[data-room]', { hasText: name });
+  await row.click();
+  // The room you were in shows for a moment longer: wait for this one, so typing goes to it.
+  await expect(row).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();
 }
 

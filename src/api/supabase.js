@@ -222,6 +222,18 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
+  // A refused delete removes nothing without an error, so check that a row went.
+  async function removeMember(threadId, userId) {
+    const { data, error } = await supabase
+      .from('chat_thread_members')
+      .delete()
+      .eq('thread_id', threadId)
+      .eq('user_id', userId)
+      .select('id');
+    if (error) fail(error);
+    if (!data?.length) throw new Error("You don't have permission to do that.");
+  }
+
   const chat = {
     /** Up to `limit` messages in a room (null = Team Chat) before `before`, oldest first. */
     async history(threadId, { before, limit = 60 } = {}) {
@@ -256,12 +268,24 @@ export function createSupabaseBackend(url, key) {
       return data;
     },
 
-    /** Starts a private chat with the teammates picked (the starter is in it too). Resolves to the new chat. */
-    async startPrivate(title, userIds) {
-      const { data, error } = await supabase.rpc('chat_start_private', { p_title: title, p_user_ids: userIds });
+    /**
+     * Starts a private chat with the teammates picked (the starter is in it too). Resolves to the
+     * new chat. `named: false` when nobody gave it a name (the title is then everyone's names).
+     */
+    async startPrivate(title, userIds, { named = true } = {}) {
+      const { data, error } = await supabase.rpc('chat_start_private', { p_title: title, p_user_ids: userIds, p_named: named });
       if (error) fail(error);
       return data;
     },
+
+    /** Leaves a private chat. Throws unless you're really out of it. */
+    async leave(threadId) {
+      const { data } = await supabase.auth.getSession();
+      await removeMember(threadId, data.session?.user?.id);
+    },
+
+    /** The starter takes someone out of a private chat. Throws unless they're really out. */
+    removeMember: (threadId, userId) => removeMember(threadId, userId),
 
     /** Adds teammates to a private chat you're in. They see the whole chat. */
     async addMembers(threadId, userIds) {

@@ -19,10 +19,12 @@ import {
   organizeRooms,
   privateChatTitle,
   roomOf,
+  roomTitle,
   shortWhen,
   splitLeadingEmoji,
   summarizeReactions,
   unreadTotal,
+  upsertMember,
   upsertThread,
 } from '@/lib/chat';
 
@@ -351,13 +353,56 @@ describe('rooms and unread', () => {
     expect(rooms.unreadInThreads).toBe(5);
   });
 
-  it('names a private chat after its people, as many as fit', () => {
+  it('names a private chat after its people: four at most, then "& N more" (like the database)', () => {
+    expect(privateChatTitle(['Jordan R.'])).toBe('Jordan R.');
     expect(privateChatTitle(['Casey C.', 'Jordan R.'])).toBe('Casey C. & Jordan R.');
-    expect(privateChatTitle(['Casey C.', 'Jordan R.', 'Sam O.'])).toBe('Casey C., Jordan R. & Sam O.');
-    const many = Array.from({ length: 12 }, (_, i) => `Player${i} X.`);
-    const title = privateChatTitle(many);
-    expect(title.length).toBeLessThanOrEqual(80);
-    expect(title).toMatch(/^Player0 X\., .* & \d+ more$/);
+    expect(privateChatTitle(['Casey C.', 'Jordan R.', 'Sam O.', 'Riley N.'])).toBe('Casey C., Jordan R., Sam O. & Riley N.');
+    expect(privateChatTitle(['A B.', 'C D.', 'E F.', 'G H.', 'I J.', 'K L.'])).toBe('A B., C D., E F. & 3 more');
+    expect(privateChatTitle([])).toBe('Private chat');
+    expect(privateChatTitle(['X'.repeat(50), 'Y'.repeat(50)]).length).toBeLessThanOrEqual(80);
+  });
+
+  it("shows a private chat nobody named as the other people in it now, and anything else by its title", () => {
+    const names = { me: 'Casey Captain', jo: 'Jordan Rivera', sam: 'Sam Okafor' };
+    const nameOf = (id) => names[id];
+    const members = (ids) => ids.map((user_id, i) => ({ id: `m${i}`, thread_id: 'dm', user_id }));
+    const dm = { id: 'dm', title: 'Casey C. & Jordan R.', visibility: 'private', named: false };
+    expect(roomTitle(dm, { members: members(['me', 'jo']), me: 'me', nameOf })).toBe('Jordan R.');
+    expect(roomTitle(dm, { members: members(['me', 'jo']), me: 'jo', nameOf })).toBe('Casey C.');
+    expect(roomTitle(dm, { members: members(['me', 'sam', 'jo']), me: 'me', nameOf })).toBe('Jordan R. & Sam O.');
+    expect(roomTitle(dm, { members: members(['me']), me: 'me', nameOf })).toBe('Just you');
+    expect(roomTitle({ ...dm, named: true, title: '🚗 Ride' }, { members: members(['me', 'jo']), me: 'me', nameOf })).toBe('🚗 Ride');
+    expect(roomTitle({ id: 't', title: 'Pickup', visibility: 'team' }, { me: 'me', nameOf })).toBe('Pickup');
+  });
+
+  it('keeps one copy of each place in a private chat', () => {
+    const list = [{ id: 'local', thread_id: 't', user_id: 'jo' }];
+    expect(upsertMember(list, { id: 'real', thread_id: 't', user_id: 'jo' })).toEqual([{ id: 'real', thread_id: 't', user_id: 'jo' }]);
+    expect(upsertMember(list, { id: 'm2', thread_id: 't', user_id: 'sam' })).toHaveLength(2);
+    expect(upsertMember(undefined, { id: 'm2', thread_id: 't', user_id: 'sam' })).toHaveLength(1);
+  });
+
+  it("counts closed rooms' leftover unread where the Chat tab does, and shows it on Closed", () => {
+    const rooms = organizeRooms(
+      [
+        { id: 'chat', title: 'Old chat', archived: true, visibility: 'private', created_date: at(500) },
+        { id: 'thread', title: 'Old thread', archived: true, visibility: 'team', created_date: at(600) },
+      ],
+      [
+        summary('chat', { last_read_at: null, unread: 2 }),
+        summary('thread', { last_read_at: null, unread: 5 }),
+      ],
+      NOW.getTime(),
+    );
+    // The private chat counts (opened or not); the never-opened thread doesn't, as on the Chat tab.
+    expect(rooms.unreadInClosed).toBe(2);
+    expect(rooms.unreadInThreads).toBe(2);
+    expect(
+      unreadTotal([
+        summary('chat', { last_read_at: null, unread: 2, visibility: 'private' }),
+        summary('thread', { last_read_at: null, unread: 5, visibility: 'team' }),
+      ]),
+    ).toBe(2);
   });
 
   it('finds the open private chat with just two players', () => {

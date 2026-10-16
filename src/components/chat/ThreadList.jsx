@@ -207,11 +207,17 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, onNewThread,
               className="flex w-full items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 transition hover:text-zinc-600"
             >
               <Archive className="h-3 w-3" /> Closed ({closed.length})
+              {/* What came in before they closed still counts on the Chat tab, so it shows here too. */}
+              {!showClosed && rooms.unreadInClosed > 0 && <UnreadCount n={rooms.unreadInClosed} className="ml-1" />}
               <ChevronDown className={cn('ml-auto h-3.5 w-3.5 transition', showClosed && 'rotate-180')} />
             </button>
             {showClosed &&
               closed.map((room) =>
-                item(room, { icon: <ThreadIcon thread={room.thread} className="opacity-60" />, unread: 0, isNew: false }),
+                item(room, {
+                  icon: <ThreadIcon thread={room.thread} className="opacity-60" />,
+                  unread: room.followed ? room.unread : 0,
+                  isNew: false,
+                }),
               )}
           </div>
         )}

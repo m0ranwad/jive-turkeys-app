@@ -99,14 +99,16 @@ it's a thread with `visibility = 'private'`, and who's in it is `chat_thread_mem
 
 | Expected behavior | Checked by |
 |---|---|
-| **New private chat** (in the room list) picks teammates on the site (a search box shows once the list is long), an optional name and an optional first message. Without a name, it's named after its people ("Casey C. & Jordan R."; as many as fit in 80 characters). The starter is in it too. You land in the new chat. | `[browser]` `[unit]` `[db]` |
+| **New private chat** (in the room list) picks teammates on the site (a search box shows once the list is long; "sam", "okafor" and "sam ok" all find Sam Okafor), an optional name and an optional first message. The starter is in it too. You land in the new chat. If the first message doesn't send, you still land in the chat, with the message in the box to send again (never a second chat). | `[browser]` `[unit]` `[db]` |
+| Without a name, each person sees it called after the other people in it right now: "Jordan R." to Casey, "Casey C." to Jordan, "Jordan R. & Sam O." in a group (four names at most, then "& N more"; "Just you" once everyone else has left). That's the same in the list, the header, search and notifications, and it follows people joining and leaving. Renaming it gives it that name for everyone (`chat_threads.named`). | `[browser]` `[unit]` `[db]` |
 | A teammate's **Message** button on the Team page opens your open private chat with just them, or starts one with them already picked. | `[browser]` `[unit]` |
 | Private chats show a lock on their icon, and the header says "Private · You, Jordan R. & …". | `[browser]` |
 | Only the people in it see it, its messages, reactions and who's in it, in the list, in search and in unread counts. Nobody else can post, react, add people or see it, captains included. | `[db]` `[unit]` `[browser]` |
-| Its unread count adds to the Chat tab like Team Chat's, even before you open it. What was said before you were added doesn't count as unread. | `[db]` `[unit]` `[browser]` |
+| Its unread count adds to the Chat tab like Team Chat's, even before you open it. What was said before you were added (or added back) doesn't count as unread, even if you'd read further back before leaving. | `[db]` `[unit]` `[browser]` |
+| A player a captain takes off the team drops out of every private chat they were in, and off its People list. Adding them back to the team doesn't bring the chats back: someone in each chat adds them again. | `[db]` `[unit]` |
 | **⋯ → People** lists who's in it, like the Team page: initials colored by man / woman, and **You**, **Started it** and **Captain** badges, with "Only the two of you can see it" (or "these N people"). Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the window says so). Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
 | Its starter also gets **Remove** next to each person, and **Rename**, **Close chat** / **Reopen chat** and **Delete chat** (after a confirm that says it removes the messages for everyone in it). Once the starter leaves, nobody has those. | `[browser]` `[db]` `[unit]` |
-| **Leave chat** (in **⋯**, or at the bottom of People; after a confirm) takes you out; it's gone from your list until someone adds you back. Your messages stay in it. | `[browser]` `[db]` `[unit]` |
+| **Leave chat** (in **⋯**, or at the bottom of People; after a confirm) takes you out; it's gone from your list until someone adds you back. Your messages stay in it. Leaving and taking someone out only say they worked once they really did. | `[browser]` `[db]` `[unit]` |
 | A private chat can never be opened up to the team, and a thread can never be made private: a room's kind is set when it starts. | `[db]` `[unit]` |
 
 ### The Captains' Lounge
@@ -130,6 +132,7 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 | Your own messages never count. History from before you signed up doesn't count. | `[browser]` `[db]` |
 | Opening a room marks it read up to its latest message, shortly after it's shown and while the page is in view. The marker only ever moves forward. | `[browser]` `[db]` `[unit]` |
 | Threads you've never opened show **New** in the list instead of a count, and don't add to the Chat tab badge (private chats and the Lounge always show their count). A dot on the Threads button flags ones with activity in the last 3 days. | `[browser]` `[unit]` |
+| A closed room keeps what was unread when it closed. The collapsed **Closed (N)** shows that count (and each closed room its own), so the Chat tab never counts something you can't find. | `[unit]` |
 | **@ count:** next to the unread number, the Chat tab (and the menu) shows a separate "@2": unread messages that mention you, by name or @team, in every room, threads you've never opened included. Each room in the list and in the phone room row shows its own; the Threads button shows the threads' total in place of their unread number. Opening a room clears its mentions. | `[browser]` `[unit]` `[db]` |
 | Read markers are private: nobody can see or change another player's. | `[db]` |
 

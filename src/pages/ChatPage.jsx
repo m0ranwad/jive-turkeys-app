@@ -18,7 +18,7 @@ import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
 import { ConfirmDialog, PeopleDialog, PrivateChatDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ChatSearch } from '@/components/chat/ChatSearch';
-import { ClosedNotice, Composer } from '@/components/chat/Composer';
+import { ClosedNotice, Composer, keepDraft } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { Conversation } from '@/components/chat/Conversation';
 import { MentionCount, ThreadIcon, ThreadList, ThreadStrip, UnreadCount } from '@/components/chat/ThreadList';
@@ -39,9 +39,12 @@ import {
   organizeRooms,
   privateChatTitle,
   roomOf,
+  roomTitle,
   splitLeadingEmoji,
+  upsertMember,
   upsertThread,
 } from '@/lib/chat';
+import { friendlyError, saveFailedToast } from '@/lib/errors';
 import { shortName } from '@/lib/format';
 import { findMentions, mentionPeople, mentionsMe } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
@@ -88,9 +91,8 @@ function ChatTip() {
 let pendingCount = 0;
 const pendingId = () => `pending-${++pendingCount}`;
 
-// Who's in each private chat (only the ones this player is in). Before the
-// database has private chats there's nobody, and the chat works as it did.
-const loadMembers = () => api.entities.ChatThreadMember.list().catch(() => []);
+// Who's in each private chat (only the ones this player is in).
+const loadMembers = () => api.entities.ChatThreadMember.list();
 
 // How much the visible area must shrink while typing to count as an on-screen keyboard.
 const KEYBOARD_PX = 120;
@@ -173,7 +175,8 @@ export function ChatPage() {
   const me = user?.id;
 
   const [threads, setThreads] = useState(null);
-  const [members, setMembers] = useState([]);
+  // Who's in your private chats: undefined while loading, null if that failed (say, no signal).
+  const [members, setMembers] = useState(undefined);
   const [overview, setOverview] = useState([]);
   const [loaded, setLoaded] = useState(null);
   const [reactions, setReactions] = useState([]);
@@ -203,6 +206,10 @@ export function ChatPage() {
   const arriving = useRef({ room: undefined, messages: [] });
   const overviewRef = useRef(overview);
   overviewRef.current = overview;
+  const membersRef = useRef(members);
+  membersRef.current = members;
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
 
   const refreshOverview = useCallback(() => {
     api.chat
@@ -214,11 +221,10 @@ export function ChatPage() {
   // Rooms, who's in the private ones, room summaries, and live updates for the whole page.
   useEffect(() => {
     let alive = true;
-    Promise.all([api.entities.ChatThread.list('-created_date'), loadMembers(), api.chat.overview()])
-      .then(([threadRows, memberRows, summary]) => {
+    Promise.all([api.entities.ChatThread.list('-created_date'), api.chat.overview()])
+      .then(([threadRows, summary]) => {
         if (!alive) return;
         setThreads(threadRows);
-        setMembers(memberRows);
         setOverview(summary);
       })
       .catch((err) => {
@@ -226,6 +232,12 @@ export function ChatPage() {
         setThreads([]);
         toast({ title: "Chat didn't load", description: err.message });
       });
+    // Tried again when the page comes back into view, if it failed.
+    const fetchMembers = () =>
+      loadMembers()
+        .then((rows) => alive && setMembers(rows))
+        .catch(() => alive && setMembers((current) => (Array.isArray(current) ? current : null)));
+    fetchMembers();
 
     let refreshTimer;
     let roomsTimer;
@@ -233,21 +245,41 @@ export function ChatPage() {
       onUpdate: (t) => setThreads((list) => upsertThread(list, t)),
       onDelete: ({ id }) => setThreads((list) => list && list.filter((t) => t.id !== id)),
     });
-    // Someone added you to a private chat, or took you (or someone else) out: fetch the rooms again.
+    // You were added to a private chat: fetch the rooms, since it's new to you.
     const reloadRooms = () => {
       clearTimeout(roomsTimer);
       roomsTimer = setTimeout(() => {
-        Promise.all([api.entities.ChatThread.list('-created_date'), loadMembers()])
+        Promise.all([api.entities.ChatThread.list('-created_date'), loadMembers().catch(() => undefined)])
           .then(([threadRows, memberRows]) => {
             if (!alive) return;
             setThreads(threadRows);
-            setMembers(memberRows);
+            if (memberRows) setMembers(memberRows);
             refreshOverview();
           })
           .catch(() => {});
       }, 300);
     };
-    const offMembers = api.entities.ChatThreadMember.subscribe(reloadRooms, { onDelete: reloadRooms });
+    const offMembers = api.entities.ChatThreadMember.subscribe(
+      (row) => {
+        if (membersRef.current?.some((m) => m.id === row.id)) return;
+        // Someone new in a chat you're in: add them to the list.
+        if (row.user_id !== live.current.me && threadsRef.current?.some((t) => t.id === row.thread_id)) {
+          setMembers((list) => (Array.isArray(list) ? upsertMember(list, row) : list));
+        } else reloadRooms();
+      },
+      {
+        // Deletes carry only the id and reach every open page, so only ones in your chats count.
+        onDelete: ({ id }) => {
+          const gone = membersRef.current?.find((m) => m.id === id);
+          if (!gone) return;
+          if (gone.user_id === live.current.me) {
+            setThreads((list) => list && list.filter((t) => t.id !== gone.thread_id));
+            setMembers((list) => list.filter((m) => m.thread_id !== gone.thread_id));
+            refreshOverview();
+          } else setMembers((list) => list.filter((m) => m.id !== id));
+        },
+      },
+    );
     const offMessages = api.entities.Message.subscribe(
       (m) => {
         const { me: myId, viewing } = live.current;
@@ -277,7 +309,9 @@ export function ChatPage() {
     });
     const onVisibility = () => {
       setVisible(!document.hidden);
-      if (!document.hidden) refreshOverview();
+      if (document.hidden) return;
+      refreshOverview();
+      if (membersRef.current === null) fetchMembers();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
@@ -421,14 +455,27 @@ export function ChatPage() {
     [profiles, me, personOf],
   );
 
-  const thread = room ? threads?.find((t) => t.id === room) : null;
+  const memberList = useMemo(() => (Array.isArray(members) ? members : []), [members]);
+  // Rooms as this player sees them: a private chat nobody named shows the other people in it now.
+  const shownThreads = useMemo(
+    () =>
+      threads &&
+      threads.map((t) =>
+        isPrivate(t) && t.named === false && Array.isArray(members)
+          ? { ...t, title: roomTitle(t, { members, me, nameOf }) }
+          : t,
+      ),
+    [threads, members, me, nameOf],
+  );
+
+  const thread = room ? shownThreads?.find((t) => t.id === room) : null;
   const threadMissing = !!room && !!threads && !thread;
   const privateRoom = isPrivate(thread);
   const lounge = isLounge(thread);
   const canManage = canManageRoom(thread, me, isCaptain);
   const roomMembers = useMemo(
-    () => (privateRoom ? members.filter((m) => m.thread_id === thread.id) : []),
-    [members, thread, privateRoom],
+    () => (privateRoom ? memberList.filter((m) => m.thread_id === thread.id) : []),
+    [memberList, thread, privateRoom],
   );
   // Who can be @mentioned in this room: only the people who can read it. @team only in Team Chat and threads.
   const roomPeople = useMemo(() => {
@@ -458,7 +505,7 @@ export function ChatPage() {
   const messagesById = useMemo(() => new Map((loaded?.messages || []).map((m) => [m.id, m])), [loaded]);
   const lookup = useCallback((id) => messagesById.get(id) || extras[id] || null, [messagesById, extras]);
 
-  const rooms = useMemo(() => organizeRooms(threads || [], overview), [threads, overview]);
+  const rooms = useMemo(() => organizeRooms(shownThreads || [], overview), [shownThreads, overview]);
   const myName = profile?.display_name || user?.full_name || 'Player';
 
   const openRoom = (id, options) => setParams(id ? { thread: id } : {}, options);
@@ -467,15 +514,23 @@ export function ChatPage() {
 
   // From a teammate's Message button: your open private chat with just them, or a new one.
   useEffect(() => {
-    if (!dmWith || !threads || !me) return;
-    const existing = directChat(threads, members, me, dmWith);
-    if (existing) openRoom(existing.id, { replace: true });
-    else {
-      openRoom(null, { replace: true });
-      if (dmWith !== me) setDialog({ kind: 'private', preselected: dmWith });
+    if (!dmWith || !threads || !me || loading || members === undefined) return;
+    const existing = members && directChat(threads, members, me, dmWith);
+    if (existing) {
+      openRoom(existing.id, { replace: true });
+      return;
     }
-    // Runs once the rooms are in; openRoom changes every render.
-  }, [dmWith, threads, members, me]);
+    openRoom(null, { replace: true });
+    if (members === null) {
+      // Without the list we can't tell if you have one already, and a second would be a duplicate.
+      toast({ title: "Couldn't open your private chats", description: 'Check your signal and try again.' });
+    } else if (teammates.some((p) => p.id === dmWith)) {
+      setDialog({ kind: 'private', preselected: dmWith });
+    } else if (dmWith !== me) {
+      toast({ title: "They're not on the team anymore" });
+    }
+    // Runs once the rooms and who's in them are in; openRoom and toast change every render.
+  }, [dmWith, threads, members, me, loading, teammates]);
 
   const send = async (body) => {
     if (!me) return false;
@@ -627,80 +682,88 @@ export function ChatPage() {
     toast({ title: ok ? 'Copied' : "Couldn't copy that" });
   };
 
+  /**
+   * A new room's first message. The room already exists, so a failed send doesn't
+   * undo it (trying again would start a second one): the text waits in its message box.
+   */
+  const sendFirst = async (room, body, mentioned) => {
+    try {
+      await api.entities.Message.create({ user_id: me, author_name: myName, body, thread_id: room, reply_to_id: null, ...mentioned });
+    } catch (err) {
+      keepDraft(room, body);
+      toast({ title: "That didn't send", description: `${friendlyError(err)} Your message is in the box to send again.` });
+    }
+  };
+
   const saveThread = async ({ title, first }) => {
+    let created;
     try {
       if (dialog.kind === 'rename') {
         const updated = await api.entities.ChatThread.update(thread.id, { title });
         setThreads((list) => upsertThread(list, updated));
         return;
       }
-      const created = await api.entities.ChatThread.create({ title, created_by: me, author_name: myName });
-      setThreads((list) => upsertThread(list, created));
-      // The starter has "read" it, so replies count toward their unread badge.
-      api.chat.markRead(created.id, created.created_date).catch(() => {});
-      if (first) {
-        await api.entities.Message.create({
-          user_id: me,
-          author_name: myName,
-          body: first,
-          thread_id: created.id,
-          reply_to_id: null,
-          ...mentionFields(first, { who: people, team: isCaptain }),
-        });
-      }
-      openRoom(created.id);
+      created = await api.entities.ChatThread.create({ title, created_by: me, author_name: myName });
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
       throw err;
     }
+    setThreads((list) => upsertThread(list, created));
+    // The starter has "read" it, so replies count toward their unread badge.
+    api.chat.markRead(created.id, created.created_date).catch(() => {});
+    if (first) await sendFirst(created.id, first, mentionFields(first, { who: people, team: isCaptain }));
+    openRoom(created.id);
   };
 
   const savePrivate = async ({ title, userIds, first }) => {
+    let created;
     try {
       const others = [...userIds].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-      const created = await api.chat.startPrivate(
+      created = await api.chat.startPrivate(
         title || privateChatTitle([me, ...others].map((id) => shortName(nameOf(id)))),
         userIds,
+        { named: !!title },
       );
-      setThreads((list) => upsertThread(list, created));
-      setMembers(await loadMembers());
-      api.chat.markRead(created.id, created.created_date).catch(() => {});
-      if (first) {
-        const inIt = new Set([me, ...userIds]);
-        await api.entities.Message.create({
-          user_id: me,
-          author_name: myName,
-          body: first,
-          thread_id: created.id,
-          reply_to_id: null,
-          ...mentionFields(first, { who: people.filter((p) => inIt.has(p.id)), team: false }),
-        });
-      }
-      openRoom(created.id);
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
       throw err;
     }
+    setThreads((list) => upsertThread(list, created));
+    try {
+      setMembers(await loadMembers());
+    } catch {
+      // The live update brings them.
+    }
+    api.chat.markRead(created.id, created.created_date).catch(() => {});
+    if (first) {
+      const inIt = new Set([me, ...userIds]);
+      await sendFirst(created.id, first, mentionFields(first, { who: people.filter((p) => inIt.has(p.id)), team: false }));
+    }
+    openRoom(created.id);
   };
 
   const addPeople = async (userIds) => {
     try {
       await api.chat.addMembers(thread.id, userIds);
-      setMembers(await loadMembers());
-      toast({ title: userIds.length === 1 ? `${nameOf(userIds[0])} is in the chat` : `${userIds.length} people added` });
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
       throw err;
     }
+    try {
+      setMembers(await loadMembers());
+    } catch {
+      // The live update brings them.
+    }
+    toast({ title: userIds.length === 1 ? `${nameOf(userIds[0])} is in the chat` : `${userIds.length} people added` });
   };
 
   const removePerson = async (member) => {
     try {
-      await api.entities.ChatThreadMember.delete(member.id);
-      setMembers((list) => list.filter((m) => m.id !== member.id));
+      await api.chat.removeMember(member.thread_id, member.user_id);
+      setMembers((list) => list.filter((m) => !(m.thread_id === member.thread_id && m.user_id === member.user_id)));
       toast({ title: `${nameOf(member.user_id)} is out of the chat` });
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
     }
   };
 
@@ -727,10 +790,9 @@ export function ChatPage() {
         openRoom(null);
         toast({ title: isPrivate(dialog.thread) ? 'Chat deleted' : 'Thread deleted' });
       } else if (dialog.kind === 'leave') {
-        const mine = members.find((m) => m.thread_id === dialog.thread.id && m.user_id === me);
-        if (mine) await api.entities.ChatThreadMember.delete(mine.id);
+        await api.chat.leave(dialog.thread.id);
         setThreads((list) => list.filter((t) => t.id !== dialog.thread.id));
-        setMembers((list) => list.filter((m) => m.thread_id !== dialog.thread.id));
+        setMembers((list) => (Array.isArray(list) ? list.filter((m) => m.thread_id !== dialog.thread.id) : list));
         openRoom(null);
         toast({ title: 'You left the chat' });
       } else {
@@ -739,7 +801,7 @@ export function ChatPage() {
         refreshOverview();
       }
     } catch (err) {
-      toast({ title: dialog.kind === 'leave' ? "That didn't work" : "That didn't delete", description: err.message });
+      toast(dialog.kind === 'leave' ? saveFailedToast(err) : { title: "That didn't delete", description: err.message });
       throw err;
     }
   };
@@ -753,7 +815,9 @@ export function ChatPage() {
     ? `${thread.archived ? 'Closed · ' : ''}${
         lounge
           ? `Captains only · ${profiles.filter((p) => p.is_captain && !p.removed).length} captains`
-          : privateRoom
+          : privateRoom && !Array.isArray(members)
+            ? 'Private'
+            : privateRoom
             ? `Private · ${privateChatTitle([
                 'You',
                 ...roomMembers
@@ -1017,6 +1081,7 @@ export function ChatPage() {
         open={searchOpen}
         onOpenChange={setSearchOpen}
         nameOf={nameOf}
+        roomName={(id, saved) => shownThreads?.find((t) => t.id === id)?.title ?? saved}
         onPick={(found) => {
           setSearchOpen(false);
           setFindTarget({ room: found.thread_id ?? null, id: found.id });
@@ -1040,7 +1105,7 @@ export function ChatPage() {
         open={dialog?.kind === 'people' && privateRoom}
         onOpenChange={(open) => !open && setDialog(null)}
         thread={privateRoom ? thread : null}
-        members={roomMembers}
+        members={Array.isArray(members) ? roomMembers : null}
         me={me}
         personOf={personOf}
         people={teammates}

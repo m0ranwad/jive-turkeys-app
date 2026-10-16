@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v17';
+const DB_KEY = 'jt_demo_db_v18';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -150,12 +150,12 @@ function seed() {
   const reads = [];
   const members = [];
   const thread = (starter, title, ago, extra = {}) => {
-    const row = { id: uid(), title, created_by: starter.user_id, author_name: starter.display_name, archived: false, visibility: 'team', created_date: minutesAgo(ago), updated_date: minutesAgo(ago), ...extra };
+    const row = { id: uid(), title, created_by: starter.user_id, author_name: starter.display_name, archived: false, visibility: 'team', named: true, created_date: minutesAgo(ago), updated_date: minutesAgo(ago), ...extra };
     threads.push(row);
     return row.id;
   };
-  const privateChat = (starter, title, ago, people) => {
-    const id = thread(starter, title, ago + 1, { visibility: 'private' });
+  const privateChat = (starter, title, ago, people, extra = {}) => {
+    const id = thread(starter, title, ago + 1, { visibility: 'private', ...extra });
     people.forEach((p) =>
       members.push({ id: uid(), thread_id: id, user_id: p.user_id, added_by: starter.user_id, created_date: minutesAgo(ago + 1), updated_date: minutesAgo(ago + 1) }),
     );
@@ -233,7 +233,8 @@ function seed() {
 
   // Private chats: Jordan's with the captain, and Jordan's ride with Sam and Riley,
   // which captains can't see (sign in as Jordan to see it).
-  const dm = privateChat(profiles[1], 'Casey C. & Jordan R.', 400, [profiles[1], me]);
+  // Nobody named it, so each of them sees the other's name.
+  const dm = privateChat(profiles[1], 'Casey C. & Jordan R.', 400, [profiles[1], me], { named: false });
   say(dm, profiles[1], 'Hey, can I pay my dues next week? Paycheck hits Friday', 400);
   say(dm, me, 'No problem, thanks for the heads up 👍', 380);
   readUpTo(dm, 380);
@@ -567,9 +568,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const inChat = (threadId, userId) => db.chat_thread_members.some((m) => m.thread_id === threadId && m.user_id === userId);
   const threadOf = (threadId) => db.chat_threads.find((t) => t.id === threadId);
   const canRead = (threadId, user = currentUser()) => {
+    if (!onTeam(user)) return false;
     if (!threadId) return true;
     const thread = threadOf(threadId);
-    if (!thread || !user) return false;
+    if (!thread) return false;
     if (thread.visibility === 'captains') return user.role === 'admin';
     if (thread.visibility === 'private') return inChat(threadId, user.id);
     return true;
@@ -597,6 +599,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (table === 'chat_threads') {
       if (action === 'create' && (record.visibility ?? 'team') !== 'team') refuse();
       if (action === 'update' && 'visibility' in patch && patch.visibility !== record.visibility) refuse();
+      if (action === 'update' && 'named' in patch) refuse();
       if (action !== 'create' && !(canRead(record.id, me) && canManageRoom(record, me.id, isCaptain))) refuse();
     }
     if (table === 'messages' && action === 'create') {
@@ -614,7 +617,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     }
     if (table === 'chat_thread_members') {
       // People are added with chat.startPrivate() and chat.addMembers(); anyone leaves, the starter takes people out.
-      if (action !== 'delete') refuse();
+      if (action !== 'delete' || !onTeam(me)) refuse();
       const starter = threadOf(record.thread_id)?.created_by === me.id && inChat(record.thread_id, me.id);
       if (record.user_id !== me.id && !starter) refuse();
     }
@@ -680,7 +683,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const opensVoting = table === 'games' && patch.has_result && !record.has_result && !record.potm_opened_at;
         // Same as the database's message_edited(): changing the text marks it edited.
         const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;
-        Object.assign(record, patch, { updated_date: now() }, edited && { edited_date: now() });
+        // Same as chat_thread_named(): renaming a room gives it that name.
+        const renamed = table === 'chat_threads' && 'title' in patch && patch.title !== record.title;
+        Object.assign(record, patch, { updated_date: now() }, edited && { edited_date: now() }, renamed && { named: true });
         if (table === 'messages') cleanMentions(record);
         if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
@@ -867,8 +872,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (userId === currentUser().id) throw new Error("You can't remove yourself");
       const user = db.users.find((u) => u.id === userId);
       if (!user) throw new Error("That player isn't on the site");
-      if (removed) Object.assign(user, { removed_at: now(), joined_team_at: null, role: 'user' });
-      else Object.assign(user, { removed_at: null, joined_team_at: now() });
+      if (removed) {
+        Object.assign(user, { removed_at: now(), joined_team_at: null, role: 'user' });
+        // Like chat_member_active(): out of every private chat, and adding them back doesn't undo it.
+        db.chat_thread_members = db.chat_thread_members.filter((m) => m.user_id !== userId);
+      } else Object.assign(user, { removed_at: null, joined_team_at: now() });
       db.player_profiles
         .filter((p) => p.user_id === userId)
         .forEach((p) => {
@@ -932,10 +940,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         if (!rooms.has(threadId)) {
           const read = db.chat_reads.find((r) => r.user_id === me.id && (r.thread_id ?? null) === threadId);
           const added = db.chat_thread_members.find((x) => x.thread_id === threadId && x.user_id === me.id);
+          const read_ = read?.last_read_at ?? null;
+          const added_ = added?.created_date ?? null;
           rooms.set(threadId, {
             thread_id: threadId,
-            last_read_at: read?.last_read_at ?? null,
-            since: read?.last_read_at ?? added?.created_date ?? null,
+            last_read_at: read_,
+            // Unread from your read marker, but never from before you were (last) added.
+            since: read_ && added_ ? (read_ > added_ ? read_ : added_) : (read_ ?? added_),
             visibility: threadId ? (threadOf(threadId)?.visibility ?? 'team') : null,
             unread: 0,
             mentions: 0,
@@ -956,7 +967,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       return delay([...rooms.values()].map(({ since, ...room }) => room));
     },
     // Same as the database's chat_start_private().
-    async startPrivate(title, userIds) {
+    async startPrivate(title, userIds, { named = true } = {}) {
       requireUser();
       failIfOffline();
       const me = currentUser();
@@ -967,7 +978,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const profile = db.player_profiles.find((p) => p.user_id === me.id);
       const thread = {
         id: uid(), title: name, created_by: me.id, author_name: profile?.display_name || me.full_name || null,
-        archived: false, visibility: 'private', created_date: now(), updated_date: now(),
+        archived: false, visibility: 'private', named, created_date: now(), updated_date: now(),
       };
       db.chat_threads.push(thread);
       for (const id of [me.id, ...people]) {
@@ -976,6 +987,22 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       save(db);
       notify('chat_threads', 'onInsert', thread);
       return delay(thread);
+    },
+    // Leaving, and the starter taking someone out (the chat_thread_members delete policy).
+    async leave(threadId) {
+      requireUser();
+      return chat.removeMember(threadId, currentUser().id);
+    },
+    async removeMember(threadId, userId) {
+      requireUser();
+      failIfOffline();
+      const row = db.chat_thread_members.find((m) => m.thread_id === threadId && m.user_id === userId);
+      if (!row) refuse();
+      checkChatWrite('chat_thread_members', 'delete', row);
+      db.chat_thread_members = db.chat_thread_members.filter((m) => m.id !== row.id);
+      save(db);
+      notify('chat_thread_members', 'onDelete', { id: row.id });
+      return delay(null);
     },
     // Same as the database's chat_add_members().
     async addMembers(threadId, userIds) {

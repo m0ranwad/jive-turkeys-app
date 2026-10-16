@@ -118,9 +118,14 @@ function Avatar({ person, small }) {
  */
 function PeoplePicker({ people, picked, onToggle }) {
   const [query, setQuery] = useState('');
+  // A name or any word in it starting with what's typed: "sam", "okafor" and "sam ok" all find Sam Okafor.
   const shown = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase();
-    return q ? people.filter((p) => p.name.toLocaleLowerCase().split(/\s+/).some((w) => w.startsWith(q))) : people;
+    const q = query.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    if (!q) return people;
+    return people.filter((p) => {
+      const name = p.name.toLocaleLowerCase();
+      return name.startsWith(q) || name.split(/\s+/).some((w) => w.startsWith(q));
+    });
   }, [people, query]);
   if (!people.length) {
     return <p className="rounded-2xl bg-zinc-50 px-3.5 py-3 text-sm text-zinc-500">Everyone on the site is already in it.</p>;
@@ -204,7 +209,8 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
     if (open) {
       setTitle('');
       setFirst('');
-      setPicked(new Set(preselected ? [preselected] : []));
+      // Only someone in the list, so a pick can always be seen and taken off.
+      setPicked(new Set(people.some((p) => p.id === preselected) ? [preselected] : []));
     }
     // Only when it opens, so the roster updating doesn't wipe what's picked.
   }, [open]);
@@ -280,11 +286,18 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
   );
 }
 
+/** "Only the two of you can see it." */
+function whoCanSee(n) {
+  if (n === 1) return 'Only you can see it.';
+  if (n === 2) return 'Only the two of you can see it.';
+  return `Only these ${n} people can see it.`;
+}
+
 /**
  * Who's in a private chat. Anyone in it can add teammates (not while it's
  * closed) or leave; its starter can take people out.
- * `members`: [{ id, user_id }] rows; `personOf(userId)`: { name, gender, captain };
- * `people`: everyone who could be added.
+ * `members`: [{ id, thread_id, user_id }] rows, or null when they didn't load;
+ * `personOf(userId)`: { name, gender, captain }; `people`: everyone who could be added.
  */
 export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf, people, onAdd, onRemove, onLeave }) {
   const [adding, setAdding] = useState(false);
@@ -299,6 +312,20 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
   }, [open]);
 
   if (!thread) return null;
+  if (!members) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className={DIALOG}>
+          <DialogHeader className="text-left">
+            <DialogTitle className={DIALOG_TITLE}>People in this chat</DialogTitle>
+          </DialogHeader>
+          <p className="rounded-2xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
+            Couldn't load who's in this chat. Check your signal, then close this and try again.
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   const starter = thread.created_by === me;
   const inIt = new Set(members.map((m) => m.user_id));
   const addable = people.filter((p) => !inIt.has(p.id));
@@ -327,7 +354,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
         </DialogHeader>
         <p className="-mt-2 flex items-center gap-2 text-sm text-zinc-500">
           <Lock className="h-3.5 w-3.5 shrink-0" />
-          Only {members.length === 2 ? 'the two of you' : `these ${members.length} people`} can see it.
+          {whoCanSee(members.length)}
         </p>
 
         <ul aria-label="People in this chat" className="divide-y divide-zinc-100">

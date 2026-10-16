@@ -19,6 +19,17 @@ import {
 } from './helpers';
 
 const mentionList = (page) => page.getByRole('listbox', { name: 'Mention a teammate' });
+// A private chat nobody named shows the other people in it ("Jordan R." to Casey), so
+// match the room's name exactly (Team Chat's preview can say "Jordan R.: …").
+const chatRow = (page, name) => page.locator('[data-room]').filter({ has: page.getByText(name, { exact: true }) });
+const heading = (page, name) => page.getByRole('heading', { name, exact: true });
+
+async function openChatRoom(page, name) {
+  await showRooms(page);
+  await chatRow(page, name).click();
+  await expect(chatRow(page, name)).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();
+}
 
 /** Signs out and back in as someone else, with the same sample data. */
 async function switchTo(page, email) {
@@ -59,7 +70,7 @@ test("captains can't see private chats they aren't in", async ({ page }) => {
   await signIn(page);
   await openChat(page);
   await showRooms(page);
-  await expect(roomRow(page, 'Casey C. & Jordan R.')).toBeVisible();
+  await expect(chatRow(page, 'Jordan R.')).toBeVisible();
   await expect(roomRow(page, 'Ride to Thursday')).toHaveCount(0);
 
   await switchTo(page, 'jordan@demo.test');
@@ -77,31 +88,33 @@ test('start a private chat: pick teammates, it is named after them, and only the
   const dialog = page.getByRole('dialog', { name: 'New private chat' });
   await expect(dialog).toContainText("Captains can't either, unless you add them");
   await expect(dialog.getByRole('button', { name: 'Start chat' })).toBeDisabled();
-  await dialog.getByPlaceholder('Find a teammate').fill('sam');
+  await dialog.getByPlaceholder('Find a teammate').fill('sam ok');
   await dialog.getByText('Sam Okafor').click();
   await expect(dialog.getByRole('checkbox', { name: 'Sam Okafor' })).toBeChecked();
   await dialog.locator('#private-first').fill('Can you cover goal Thursday?');
   await dialog.getByRole('button', { name: 'Start chat' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Casey C. & Sam O.' })).toBeVisible();
+  // Nobody named it, so it shows the other person.
+  await expect(heading(page, 'Sam O.')).toBeVisible();
   await expect(page.getByText('Private · You & Sam O.')).toBeVisible();
   await expect(message(page, 'Can you cover goal Thursday?')).toBeVisible();
   await send(page, 'Taylor is out');
   await showRooms(page);
-  await expect(roomRow(page, 'Casey C. & Sam O.').getByLabel('Private')).toBeVisible();
+  await expect(chatRow(page, 'Sam O.').getByLabel('Private')).toBeVisible();
 
   // Jordan isn't in it.
   await switchTo(page, 'jordan@demo.test');
   await openChat(page);
   await showRooms(page);
-  await expect(roomRow(page, 'Casey C. & Sam O.')).toHaveCount(0);
+  await expect(chatRow(page, 'Sam O.')).toHaveCount(0);
+  await expect(chatRow(page, 'Casey C.'), 'their own chat with Casey is there').toHaveCount(1);
 
-  // Sam is, and it counts as unread for them right away.
+  // Sam is (to Sam it's "Casey C."), and it counts as unread for them right away.
   await switchTo(page, 'sam@demo.test');
   await openChat(page);
   await showRooms(page);
-  await expect(roomRow(page, 'Casey C. & Sam O.').getByLabel('2 unread')).toBeVisible();
-  await openRoom(page, 'Casey C. & Sam O.');
+  await expect(chatRow(page, 'Casey C.').getByLabel('2 unread')).toBeVisible();
+  await openChatRoom(page, 'Casey C.');
   await expect(message(page, 'Taylor is out')).toBeVisible();
 });
 
@@ -109,7 +122,7 @@ test("a teammate's Message button opens your private chat with them, or starts o
   await signIn(page);
   await page.getByRole('link', { name: 'Team', exact: true }).filter({ visible: true }).click();
   await page.getByRole('link', { name: 'Message Jordan Rivera' }).click();
-  await expect(page.getByRole('heading', { name: 'Casey C. & Jordan R.' })).toBeVisible();
+  await expect(heading(page, 'Jordan R.')).toBeVisible();
   await expect(message(page, 'Paycheck hits Friday')).toBeVisible();
 
   await page.getByRole('link', { name: 'Team', exact: true }).filter({ visible: true }).click();
@@ -117,14 +130,14 @@ test("a teammate's Message button opens your private chat with them, or starts o
   const dialog = page.getByRole('dialog', { name: 'New private chat' });
   await expect(dialog.getByRole('checkbox', { name: 'Drew Patel' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Start chat' }).click();
-  await expect(page.getByRole('heading', { name: 'Casey C. & Drew P.' })).toBeVisible();
+  await expect(heading(page, 'Drew P.')).toBeVisible();
   await expect(page.getByText('Only the people in this chat can see it.')).toBeVisible();
 });
 
 test('people in a private chat: add someone, and leave', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await openRoom(page, 'Casey C. & Jordan R.');
+  await openChatRoom(page, 'Jordan R.');
   await page.getByRole('button', { name: 'Chat options' }).click();
   // Jordan started it: Casey can't rename or delete it, captain or not. Anyone can leave.
   await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0);
@@ -150,6 +163,8 @@ test('people in a private chat: add someone, and leave', async ({ page }) => {
   await expect(people).toContainText('Only these 3 people can see it.');
   await page.keyboard.press('Escape');
   await expect(page.getByText('Private · You, Jordan R. & Priya S.')).toBeVisible();
+  // Its name follows who's in it.
+  await expect(heading(page, 'Jordan R. & Priya S.')).toBeVisible();
 
   // Leaving, from the people window.
   await page.getByRole('button', { name: 'Chat options' }).click();
@@ -159,7 +174,7 @@ test('people in a private chat: add someone, and leave', async ({ page }) => {
   await confirm.getByRole('button', { name: 'Leave' }).click();
   await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
   await showRooms(page);
-  await expect(roomRow(page, 'Casey C. & Jordan R.')).toHaveCount(0);
+  await expect(chatRow(page, 'Jordan R. & Priya S.')).toHaveCount(0);
 });
 
 test('the starter of a private chat takes someone out', async ({ page }) => {
@@ -172,7 +187,7 @@ test('the starter of a private chat takes someone out', async ({ page }) => {
   await start.getByText('Drew Patel').click();
   await expect(start).toContainText('2 picked');
   await start.getByRole('button', { name: 'Start chat' }).click();
-  await expect(page.getByRole('heading', { name: 'Casey C., Drew P. & Sam O.' })).toBeVisible();
+  await expect(heading(page, 'Drew P. & Sam O.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'People' }).click();
@@ -181,12 +196,14 @@ test('the starter of a private chat takes someone out', async ({ page }) => {
   await people.getByRole('button', { name: 'Take Drew Patel out' }).click();
   await expect(people.getByRole('listitem')).toHaveCount(2);
   await expect(people).toContainText('Only the two of you can see it.');
+  await page.keyboard.press('Escape');
+  await expect(heading(page, 'Sam O.')).toBeVisible();
 });
 
 test('in a private chat, mentions are only its people, and captains delete only their own messages', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await openRoom(page, 'Casey C. & Jordan R.');
+  await openChatRoom(page, 'Jordan R.');
   await composer(page).pressSequentially('@');
   await expect(mentionList(page).getByRole('option')).toHaveText([/@Jordan R\./]);
   await composer(page).fill('');
@@ -201,10 +218,11 @@ test('in a private chat, mentions are only its people, and captains delete only 
 test('the starter of a private chat renames, closes and deletes it', async ({ page }) => {
   await signIn(page, 'jordan@demo.test');
   await openChat(page);
-  await openRoom(page, 'Casey C. & Jordan R.');
+  await openChatRoom(page, 'Casey C.');
   await page.getByRole('button', { name: 'Chat options' }).click();
   await page.getByRole('button', { name: 'Rename' }).click();
   const rename = page.getByRole('dialog', { name: 'Rename chat' });
+  await expect(rename.locator('#thread-title')).toHaveValue('Casey C.');
   await rename.locator('#thread-title').fill('💸 Dues');
   await rename.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: 'Dues' })).toBeVisible();
@@ -219,5 +237,13 @@ test('the starter of a private chat renames, closes and deletes it', async ({ pa
   const confirm = page.getByRole('dialog', { name: 'Delete chat?' });
   await expect(confirm).toContainText('removed for everyone in it');
   await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
+});
+
+test('an old Message link to someone not on the team says so instead of starting a chat', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/banter?dm=00000000-0000-4000-8000-000000000000');
+  await expect(page.getByText("They're not on the team anymore")).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'New private chat' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Team Chat' })).toBeVisible();
 });

@@ -30,7 +30,7 @@ test('the room list shows Team Chat first, the Lounge, threads by latest activit
   await expect(rooms.nth(2)).toContainText('Sunday pickup?');
   await expect(rooms.nth(3)).toContainText('Fantasy football league');
   await expect(rooms.nth(4)).toContainText('Post-game food spot');
-  await expect(rooms.nth(5)).toContainText('Casey C. & Jordan R.');
+  await expect(rooms.nth(5)).toContainText('Jordan R.'); // Casey's private chat with Jordan, named after them
   // Previews show who said what last.
   await expect(rooms.nth(2)).toContainText("Riley N.: Can't this week");
 });
@@ -183,7 +183,7 @@ test.describe('the thread row on phones', () => {
     await expect(rooms.nth(3)).toContainText('Fantasy football league');
     await expect(rooms.nth(3).getByLabel('New')).toBeVisible();
     await expect(rooms.nth(4)).toContainText('Post-game food spot');
-    await expect(rooms.nth(5)).toContainText('Casey C. & Jordan R.');
+    await expect(rooms.nth(5)).toContainText('Jordan R.'); // Casey's private chat with Jordan, named after them
     await expect(rooms.nth(5).getByLabel('Private')).toBeVisible();
     // Closed threads stay in the full list only.
     await expect(row).not.toContainText('Jersey order');
@@ -215,10 +215,10 @@ test.describe('the thread row on phones', () => {
 
   test('says "Start a thread" when there are none yet', async ({ page }) => {
     await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem('jt_demo_db_v17'));
+      const db = JSON.parse(localStorage.getItem('jt_demo_db_v18'));
       db.chat_threads = [];
       db.messages = db.messages.filter((m) => !m.thread_id);
-      localStorage.setItem('jt_demo_db_v17', JSON.stringify(db));
+      localStorage.setItem('jt_demo_db_v18', JSON.stringify(db));
     });
     await page.reload();
     await expect(chips(page).getByRole('button', { name: 'New thread' })).toHaveText(/Start a thread/);
