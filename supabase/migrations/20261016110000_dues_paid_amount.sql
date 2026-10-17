@@ -4,11 +4,81 @@
 -- out) after people had paid changed what they had "paid" and the totals
 -- counted money nobody sent.
 --
--- Payments marked before this have no amount (null): they show the current
--- share, as before.
+-- Payments already marked when this goes live get the share they show right
+-- now (dues_fill_paid_amounts() at the end). Any left without an amount
+-- (null) show the current share, as before.
 
 alter table public.dues_payments add column paid_amount numeric(10, 2) check (paid_amount >= 0);
 alter table public.dues_history add column paid_amount numeric(10, 2) check (paid_amount >= 0);
+
+-- ---------------------------------------------------------------------------
+-- Each active player's share of one session, worked out the same way as the
+-- site (teamDues() in src/lib/dues.js, with membersForSession() in
+-- src/lib/roster.js): the session's own list, or today's statuses for a
+-- session without one; custom amounts first, then an even share of what's
+-- left for everyone else, rounded up to whole dollars. Nothing for a session
+-- without a fee. supabase/tests/dues_shares.test.sql and
+-- tests/unit/dues.test.js check the same numbers.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.dues_shares(p_year integer, p_session integer)
+returns table (user_id uuid, guest_id uuid, amount numeric)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with fee as (
+    select round(coalesce(sd.total_fee, 0) * 100) as total_cents
+    from public.session_dues sd
+    where sd.season_year = p_year and sd.session = p_session
+  ),
+  listed as (
+    select exists (
+      select 1 from public.session_roster r where r.season_year = p_year and r.session = p_session
+    ) as has_list
+  ),
+  members as (
+    -- The session's own list: everyone on it but 'off', except roster names that have joined.
+    select r.user_id, r.guest_id, r.status
+    from public.session_roster r
+    left join public.team_guests g on g.id = r.guest_id
+    where (select has_list from listed)
+      and r.season_year = p_year and r.session = p_session and r.status <> 'off'
+      and (r.user_id is null or exists (select 1 from public.player_profiles p where p.user_id = r.user_id))
+      and (r.guest_id is null or g.linked_user_id is null)
+    union all
+    -- No list yet: today's statuses. Removed players, and roster names that have joined, are off it.
+    select p.user_id, null, case when p.removed then 'inactive' else p.status end
+    from public.player_profiles p
+    where not (select has_list from listed)
+    union all
+    select null, g.id, case when g.removed or g.linked_user_id is not null then 'inactive' else g.status end
+    from public.team_guests g
+    where not (select has_list from listed)
+  ),
+  active as (
+    select m.user_id, m.guest_id, d.override_amount
+    from members m
+    left join public.dues_payments d
+      on d.season_year = p_year and d.session = p_session and (d.user_id = m.user_id or d.guest_id = m.guest_id)
+    where m.status = 'active'
+  ),
+  counts as (
+    select count(*) filter (where override_amount is null) as auto_count,
+      coalesce(sum(round(override_amount * 100)), 0) as custom_cents
+    from active
+  )
+  select a.user_id, a.guest_id,
+    coalesce(
+      a.override_amount,
+      case when c.auto_count > 0 then ceil(greatest(0, f.total_cents - c.custom_cents) / (c.auto_count * 100)) else 0 end
+    )
+  from active a cross join counts c cross join fee f;
+$$;
+
+revoke execute on function public.dues_shares(integer, integer) from public, anon, authenticated;
+grant execute on function public.dues_shares(integer, integer) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- Same as before (20261014000809_team_join_code.sql), plus each player's
@@ -117,8 +187,9 @@ revoke execute on function public.mark_dues_paid(integer, integer, uuid[], boole
 grant execute on function public.mark_dues_paid(integer, integer, uuid[], boolean, date, numeric[]) to authenticated, service_role;
 
 -- The version without amounts stays for a site that hasn't reloaded since this
--- went live. It records no amount (the current share counts, as before), and
--- marking someone not paid clears the amount the new version recorded.
+-- went live. It records each player's share as the database works it out (no
+-- amount for anyone not on the session's active roster), and marking someone
+-- not paid clears the amount, as the new version does.
 create or replace function public.mark_dues_paid(
   p_season_year integer,
   p_session integer,
@@ -132,7 +203,14 @@ security definer
 set search_path = public
 as $$
 begin
-  perform public.mark_dues_paid(p_season_year, p_session, p_user_ids, p_paid, p_paid_date, null::numeric[]);
+  perform public.mark_dues_paid(
+    p_season_year, p_session, p_user_ids, p_paid, p_paid_date,
+    (
+      select array_agg(s.amount order by w.n)
+      from unnest(p_user_ids) with ordinality as w (id, n)
+      left join public.dues_shares(p_season_year, p_session) s on s.user_id = w.id or s.guest_id = w.id
+    )
+  );
 end;
 $$;
 
@@ -219,3 +297,48 @@ begin
   end if;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Payments already marked paid get the share they show right now, so a fee or
+-- roster change after this goes live shows the difference for them too. Each
+-- one's latest paid entry in the history gets the same amount. Payments from
+-- players not on the session's active roster, or in a session without a fee,
+-- stay without one ("amount not recorded").
+-- ---------------------------------------------------------------------------
+
+create or replace function public.dues_fill_paid_amounts()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  filled integer;
+begin
+  update public.dues_payments d set paid_amount = s.amount
+  from public.session_dues sd
+  cross join lateral public.dues_shares(sd.season_year, sd.session) s
+  where d.paid and d.paid_amount is null
+    and d.season_year = sd.season_year and d.session = sd.session
+    and (d.user_id = s.user_id or d.guest_id = s.guest_id);
+  get diagnostics filled = row_count;
+
+  update public.dues_history h set paid_amount = d.paid_amount
+  from public.dues_payments d
+  where d.paid and d.paid_amount is not null
+    and h.paid and h.paid_amount is null
+    and h.id = (
+      select l.id from public.dues_history l
+      where l.season_year = d.season_year and l.session = d.session
+        and (l.user_id = d.user_id or l.guest_id = d.guest_id)
+      order by l.created_date desc, l.id desc
+      limit 1
+    );
+  return filled;
+end;
+$$;
+
+revoke execute on function public.dues_fill_paid_amounts() from public, anon, authenticated;
+grant execute on function public.dues_fill_paid_amounts() to service_role;
+
+select public.dues_fill_paid_amounts();

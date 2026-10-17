@@ -368,7 +368,7 @@ select dues_test.ok(
 -- The site from before this update calls the version without amounts: no amount is recorded, as before.
 select public.mark_dues_paid(2026, 9, array[dues_test.id('kim')], true, '2026-10-09');
 select dues_test.ok((select paid and paid_amount is null from dues_test.paid9(dues_test.id('kim'))),
-  'marking paid without amounts still works, and records none (the current share counts)');
+  'marking paid without amounts still works (session 9 has no fee, so there is no share to record)');
 select public.mark_dues_paid(2026, 9, array[dues_test.id('kim')], true, '2026-10-12', array[70]::numeric[]);
 select dues_test.ok((select paid_amount is null and paid_date = '2026-10-09' from dues_test.paid9(dues_test.id('kim'))),
   'a payment with no amount recorded has no difference to pay');

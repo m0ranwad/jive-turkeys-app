@@ -13,11 +13,13 @@ import {
   notPlayingLabel,
   payNote,
   payOptions,
+  profileAsPlayer,
   reminderText,
   splitDues,
   stepSession,
   teamDues,
 } from '@/lib/dues';
+import { membersForSession } from '@/lib/roster';
 
 describe('the session fee', () => {
   it('is the league fee plus the ref fee for every game: $595 + 7 × $18 = $721', () => {
@@ -195,6 +197,37 @@ describe('players who paid and are not playing', () => {
 
   it('are found among the session players alone when that is all there is', () => {
     expect(teamDues(100, people, payments).notPlaying.map((p) => p.user_id)).toEqual(['jo', 'pat']);
+  });
+});
+
+// The same people and numbers as supabase/tests/dues_shares.test.sql: the database works out the share it records for
+// payments marked before amounts were kept (and from a site that hasn't reloaded) with dues_shares().
+describe('the database splits the same way', () => {
+  const profile = (user_id, status = 'active', removed = false) => ({ user_id, display_name: user_id, status, removed });
+  const guest = (id, extra = {}) => ({ id, display_name: id, status: 'active', removed: false, linked_user_id: null, ...extra });
+  const pay = (session, id, extra = {}) => ({ season_year: 2026, session, user_id: id, guest_id: null, ...extra });
+  const { members, payments } = duesMembers({
+    profiles: [profile('ann'), profile('bo'), profile('cy'), profile('di', 'sub_pool'), profile('ed', 'active', true)].map(profileAsPlayer),
+    guests: [guest('gina'), guest('gus', { linked_user_id: 'bo' }), guest('gail', { removed: true })],
+    payments: [pay(2, 'cy', { override_amount: 40 }), pay(5, 'ann', { override_amount: 60 }), pay(6, 'ann', { override_amount: 0.3 })],
+    history: [],
+  });
+  const entry = (session, id, status) => ({ season_year: 2026, session, user_id: id, guest_id: null, status });
+  const roster = [
+    ...[['ann', 'active'], ['bo', 'on_break'], ['cy', 'active'], ['di', 'active'], ['ed', 'active']].map(([id, status]) => entry(3, id, status)),
+    { ...entry(3, null, 'off'), guest_id: 'gina' },
+    { ...entry(3, null, 'active'), guest_id: 'gus' },
+  ];
+  const shares = (session, total) => {
+    const team = teamDues(total, membersForSession(members, roster, { year: 2026, session }), payments.filter((p) => p.session === session));
+    return Object.fromEntries(team.active.map((p) => [p.user_id, team.shareOf(p.user_id).amount]));
+  };
+
+  it('with today\'s statuses, a list of its own, custom amounts over the fee, and cents', () => {
+    expect(shares(2, 721)).toEqual({ ann: 227, bo: 227, cy: 40, gina: 227 });
+    expect(shares(3, 100)).toEqual({ ann: 25, cy: 25, di: 25, ed: 25 });
+    expect(shares(5, 50)).toEqual({ ann: 60, bo: 0, cy: 0, gina: 0 });
+    expect(shares(6, 100.3)).toEqual({ ann: 0.3, bo: 34, cy: 34, gina: 34 });
   });
 });
 
