@@ -158,14 +158,16 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   const playerRow = (p) => {
     const share = team.shareOf(p.user_id);
     const partner = team.partnerOf(p.user_id);
-    // Paid players show what they paid, and say so if their share has changed since.
+    // Paid players show what they paid, and their share when that's different: part of it (or paid
+    // before it went up), or more than it is now.
     const changed = share.paid && share.paid_amount !== share.amount;
+    const shareNote = share.paid_amount < share.amount ? `share is ${dollars(share.amount)}` : `share is now ${dollars(share.amount)}`;
     const balance = share.paid ? team.balanceOf(p.user_id) : 0;
     const details = [
       p.guest && 'not joined yet',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
-      changed && `share is now ${dollars(share.amount)}`,
+      changed && shareNote,
       share.paid && markedBy(p.user_id),
     ].filter(Boolean);
     return (

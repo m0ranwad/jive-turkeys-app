@@ -11,11 +11,13 @@ import {
   feeSentence,
   feeTotal,
   notPlayingLabel,
+  partPayment,
   payNote,
   payOptions,
   profileAsPlayer,
   reminderText,
   splitDues,
+  splitPayment,
   stepSession,
   teamDues,
 } from '@/lib/dues';
@@ -151,6 +153,58 @@ describe('what paid players paid', () => {
     // One partner paid in full, the other hasn't paid: that's still one line, for the unpaid share.
     const mixed = teamDues(400, profiles, [paidAt('alex', 100), paidAt('sam', 100), paidAt('morgan', 100)]);
     expect(mixed.stillToPay).toEqual([{ name: 'Riley', amount: 100, more: false }]);
+  });
+});
+
+describe('part payments', () => {
+  it('split money between people by what each still owes, in cents, never more than they owe', () => {
+    const both = [{ user_id: 'a', due: 61 }, { user_id: 'b', due: 61 }];
+    expect(splitPayment(80, both)).toEqual([{ user_id: 'a', amount: 40 }, { user_id: 'b', amount: 40 }]);
+    expect(splitPayment(81, both)).toEqual([{ user_id: 'a', amount: 40.5 }, { user_id: 'b', amount: 40.5 }]);
+    // $61 and $31 owed: $50 splits $33.15 / $16.85, and the cents add up.
+    expect(splitPayment(50, [{ user_id: 'a', due: 61 }, { user_id: 'b', due: 31 }])).toEqual([
+      { user_id: 'a', amount: 33.15 },
+      { user_id: 'b', amount: 16.85 },
+    ]);
+    expect(splitPayment(200, both)).toEqual([{ user_id: 'a', amount: 61 }, { user_id: 'b', amount: 61 }]);
+    expect(splitPayment(25, [{ user_id: 'a', due: 0 }, { user_id: 'b', due: 61 }])).toEqual([{ user_id: 'b', amount: 25 }]);
+    expect(splitPayment(25, [])).toEqual([]);
+  });
+
+  const paid = (user_id, paid_amount) => ({ user_id, paid: true, paid_amount });
+  const profile = (name, extra = {}) => ({ user_id: name, display_name: name, status: 'active', ...extra });
+
+  it("add to what someone already paid, and leave the rest owed like a share that went up", () => {
+    const team = teamDues(122, [profile('sam'), profile('kim')], [paid('sam', 30)]);
+    expect(team.owingTogether('sam')).toEqual([{ user_id: 'sam', due: 31 }]);
+    expect(partPayment(team, 'sam', 20)).toEqual({ userIds: ['sam'], amounts: [50] });
+    expect(partPayment(team, 'kim', 40)).toEqual({ userIds: ['kim'], amounts: [40] });
+
+    const after = teamDues(122, [profile('sam'), profile('kim')], [paid('sam', 50), paid('kim', 40)]);
+    expect(after.players.map((p) => [p.user_id, p.paid, p.paid_amount, p.shortBy])).toEqual([
+      ['kim', true, 40, 21],
+      ['sam', true, 50, 11],
+    ]);
+    expect(after).toMatchObject({ paidCount: 2, collected: 90, stillOwed: 32 });
+    expect(after.stillToPay).toEqual([
+      { name: 'kim', amount: 21, more: true },
+      { name: 'sam', amount: 11, more: true },
+    ]);
+  });
+
+  it('cover a couple together, split by what each owes', () => {
+    const couple = [profile('alex', { pays_with: 'riley' }), profile('riley', { pays_with: 'alex' })];
+    const team = teamDues(122, couple, []);
+    expect(team.owingTogether('alex')).toEqual([
+      { user_id: 'alex', due: 61 },
+      { user_id: 'riley', due: 61 },
+    ]);
+    expect(partPayment(team, 'riley', 80)).toEqual({ userIds: ['riley', 'alex'], amounts: [40, 40] });
+
+    // Alex has paid in full already: it all goes to Riley.
+    const one = teamDues(122, couple, [paid('alex', 61)]);
+    expect(partPayment(one, 'alex', 30)).toEqual({ userIds: ['riley'], amounts: [30] });
+    expect(one.owingTogether('alex').map((p) => p.due)).toEqual([0, 61]);
   });
 });
 

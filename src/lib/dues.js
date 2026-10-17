@@ -166,6 +166,9 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
     const partner = partnerOf(userId);
     return fromCents(cents(shareOf(userId).shortBy) + (partner ? cents(shareOf(partner.user_id).shortBy) : 0));
   };
+  // What a player and their partner still owe, each: [{ user_id, due }].
+  const owingTogether = (userId) =>
+    [userId, partnerOf(userId)?.user_id].filter(Boolean).map((id) => ({ user_id: id, due: shareOf(id) ? due(id) : 0 }));
 
   // Who still owes, with a couple who both still owe as one line and one amount.
   const stillToPay = [];
@@ -212,10 +215,44 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
     shareOf,
     partnerOf,
     balanceOf,
+    owingTogether,
     stillToPay,
     notPlaying,
     notPlayingPaid,
     notPlayingOf,
+  };
+}
+
+/**
+ * Splits money that came in between people by what each still owes, in cents:
+ * a couple's $80 toward $61 + $61 is $40 each. `owing` is [{ user_id, due }];
+ * nobody gets more than they owe, and anyone who owes nothing is left out.
+ */
+export function splitPayment(amount, owing) {
+  const parts = owing.filter((p) => cents(p.due) > 0);
+  const total = parts.reduce((sum, p) => sum + cents(p.due), 0);
+  let left = Math.min(cents(amount), total);
+  const whole = left;
+  return parts.map((p, i) => {
+    const part = Math.min(cents(p.due), left, i === parts.length - 1 ? left : Math.round((whole * cents(p.due)) / total));
+    left -= part;
+    return { user_id: p.user_id, amount: fromCents(part) };
+  });
+}
+
+/**
+ * Part of what a player (and their partner) owe came in: what to mark paid.
+ * Each one's new total is what they'd paid so far plus their part of `amount`.
+ * Returns { userIds, amounts } for api.dues.markPaid().
+ */
+export function partPayment(team, userId, amount) {
+  const parts = splitPayment(amount, team.owingTogether(userId));
+  return {
+    userIds: parts.map((p) => p.user_id),
+    amounts: parts.map((p) => {
+      const share = team.shareOf(p.user_id);
+      return fromCents(cents(share.paid ? share.paid_amount : 0) + cents(p.amount));
+    }),
   };
 }
 

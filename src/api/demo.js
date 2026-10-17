@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v19';
+const DB_KEY = 'jt_demo_db_v20';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -248,8 +248,8 @@ function seed() {
   // Riley are a couple who pay together. Drew was in the sub pool last session
   // and Chris only joined this one, so neither paid for session 1. Everyone
   // paid the $61 share, except Sam, who paid $50 before the ref fees were added
-  // (so he has $11 more to pay), and Jamie paid session 2 before deciding to
-  // sit it out.
+  // (so he has $11 more to pay), and Morgan, who gave the captain $30 cash and
+  // owes the other $31. Jamie paid session 2 before deciding to sit it out.
   profiles[4].pays_with = profiles[7].user_id;
   profiles[7].pays_with = profiles[4].user_id;
   const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
@@ -265,6 +265,7 @@ function seed() {
             paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'),
             paid_by: i === 3 ? captainId : p.user_id,
             ...(i === 2 && { paid_amount: 50 }),
+            ...(i === 5 && { paid_amount: 30, paid_by: captainId }),
           }]
         : []),
     ].map((row) => ({

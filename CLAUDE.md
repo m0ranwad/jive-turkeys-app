@@ -188,6 +188,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   the same way" in `tests/unit/dues.test.js` use the same numbers). If a share goes up afterwards
   the player stays paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
   session's active roster show under **Paid, not playing** and count in Collected (`notPlaying` in `teamDues()`).
+  Anyone can record part of a payment (**Paid part of it?**, up to what's owed; a couple's is split by what each owes,
+  `partPayment()` / `splitPayment()`); the rest shows the same way as a share that went up.
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
   current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status
