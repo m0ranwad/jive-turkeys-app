@@ -187,3 +187,17 @@ begin
   end if;
 end;
 $$;
+
+-- A session fee that was changed after it was set, kept in the dues changes (once those exist).
+do $$
+begin
+  if to_regclass('public.dues_changes') is not null then
+    insert into public.dues_changes (season_year, session, kind, old_value, new_value, changed_by, created_date) values
+      (2026, 2, 'fee', null, '{"league_fee": 1150, "ref_fee": 0, "game_count": 7, "total_fee": 1150}',
+        '11111111-1111-4111-8111-111111111111', '2026-09-25 20:00+00'),
+      (2026, 2, 'fee', '{"league_fee": 1150, "ref_fee": 0, "game_count": 7, "total_fee": 1150}',
+        '{"league_fee": 1200, "ref_fee": 0, "game_count": 7, "total_fee": 1200}',
+        '11111111-1111-4111-8111-111111111111', '2026-09-26 20:00+00');
+  end if;
+end;
+$$;

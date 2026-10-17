@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { CARD } from '@/lib/constants';
-import { dollars, feeParts, feeTotal, partPayment, payNote, teamDues } from '@/lib/dues';
+import { dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip, shortDate } from './DuesParts';
@@ -19,7 +19,7 @@ const round = (value) => Math.round(value * 100) / 100;
  * what was paid isn't the share, and `short` that it's less.
  */
 function myShare(data, period, userId) {
-  const { row, payments, history, members } = sessionSlice(data, period);
+  const { row, payments, history, changes, members } = sessionSlice(data, period);
   if (!row) return { row: null };
   // The team as it was that session, so later status changes don't rewrite it.
   const team = teamDues(Number(row.total_fee) || 0, members, payments, data.profiles);
@@ -46,6 +46,8 @@ function myShare(data, period, userId) {
     paidDate: payment?.paid_date ?? null,
     paidBy: payment?.paid_by ?? null,
     history: history.filter((e) => e.user_id === userId),
+    // What moved your share since you marked paid, for "Why your share changed".
+    why: share?.paid ? shareChanges(changes, history, userId, share.custom) : [],
   };
 }
 
@@ -239,6 +241,13 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
   return (
     <div className="space-y-4">
       <ShareCard mine={mine} />
+
+      {mine.paid && mine.changed && mine.why.length > 0 && (
+        <section className={CARD} data-testid="why-share-changed">
+          <h3 className={cn(HEADING, 'mb-3')}>Why your share changed</h3>
+          <HistoryList events={mine.why} nameOf={nameOf} meId={user.id} limit={3} />
+        </section>
+      )}
 
       {mine.share && !mine.paid && mine.amount > 0 && (
         <section className={cn(CARD, 'space-y-4')}>

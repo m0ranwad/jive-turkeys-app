@@ -9,7 +9,7 @@ export function useDues() {
 
   const load = useCallback(async () => {
     try {
-      const [dues, payments, history, profiles, guests, games, roster] = await Promise.all([
+      const [dues, payments, history, profiles, guests, games, roster, changes] = await Promise.all([
         api.entities.SessionDues.list(),
         api.entities.DuesPayment.list(),
         api.entities.DuesHistory.list('-created_date'),
@@ -18,15 +18,18 @@ export function useDues() {
         api.entities.Game.list('-date'),
         // Who was on each session. Before the database has session lists, today's statuses count for every session.
         api.entities.SessionRoster.list().catch(() => null),
+        // What moved each session's split (fee, custom amounts, roster), once the database keeps it.
+        api.entities.DuesChange.list('-created_date').catch(() => []),
       ]);
       // `profiles` is everyone who splits the dues: app players and guests alike.
-      const members = duesMembers({ profiles: profiles.map(profileAsPlayer), guests, payments, history });
+      const members = duesMembers({ profiles: profiles.map(profileAsPlayer), guests, payments, history, changes });
       setState({
         loading: false,
         failed: false,
         dues,
         payments: members.payments,
         history: members.history,
+        changes: members.changes,
         profiles: members.members,
         guests,
         games,
@@ -45,10 +48,10 @@ export function useDues() {
 }
 
 /**
- * One session's slice: its fee row (or null), payments, history (newest first),
- * and the team as it was that session (`members`, each with that session's
- * status). `started` is false for a session that has no list of its own yet,
- * which uses today's statuses.
+ * One session's slice: its fee row (or null), payments, history and changes
+ * (newest first), and the team as it was that session (`members`, each with
+ * that session's status). `started` is false for a session that has no list
+ * of its own yet, which uses today's statuses.
  */
 export function sessionSlice(data, { year, session }) {
   const same = (r) => r.season_year === Number(year) && r.session === Number(session);
@@ -56,6 +59,7 @@ export function sessionSlice(data, { year, session }) {
     row: data.dues.find(same) || null,
     payments: data.payments.filter(same),
     history: data.history.filter(same),
+    changes: (data.changes || []).filter(same),
     members: membersForSession(data.profiles, data.roster, { year, session }),
     started: hasSessionList(data.roster, { year, session }),
   };
