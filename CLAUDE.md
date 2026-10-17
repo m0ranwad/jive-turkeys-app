@@ -189,7 +189,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   the player stays paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
   session's active roster show under **Paid, not playing** and count in Collected (`notPlaying` in `teamDues()`).
   Anyone can record part of a payment (**Paid part of it?**, up to what's owed; a couple's is split by what each owes,
-  `partPayment()` / `splitPayment()`); the rest shows the same way as a share that went up.
+  `partPayment()` / `splitPayment()`); the rest shows the same way as a share that went up. What moves the split is
+  kept in `dues_changes`, written only by database triggers: the session fee, custom amounts, and anyone coming onto
+  or off a session's active roster (a session's list starting isn't a change). It shows in Team dues' Recent changes
+  and players' history (`changeLine()`), and on My dues as **Why your share changed** (`shareChanges()`); the demo
+  backend's `trackChange()` mirrors the triggers.
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
   current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status

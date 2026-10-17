@@ -3,10 +3,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DUES_DEFAULTS,
+  changeLine,
   cleanPayHandle,
   duesMembers,
   currentSession,
   dollars,
+  duesEvents,
   feeParts,
   feeSentence,
   feeTotal,
@@ -16,6 +18,7 @@ import {
   payOptions,
   profileAsPlayer,
   reminderText,
+  shareChanges,
   splitDues,
   splitPayment,
   stepSession,
@@ -153,6 +156,74 @@ describe('what paid players paid', () => {
     // One partner paid in full, the other hasn't paid: that's still one line, for the unpaid share.
     const mixed = teamDues(400, profiles, [paidAt('alex', 100), paidAt('sam', 100), paidAt('morgan', 100)]);
     expect(mixed.stillToPay).toEqual([{ name: 'Riley', amount: 100, more: false }]);
+  });
+});
+
+describe('changes that move the split', () => {
+  const names = { kim: 'Kim Captain', dana: 'Dana Wells', sam: 'Sam Okafor' };
+  const nameOf = (id) => names[id] || '';
+  const fee = (league_fee, ref_fee, game_count = 7) => ({ league_fee, ref_fee, game_count, total_fee: league_fee + ref_fee * game_count });
+  const line = (change, me = 'sam') => changeLine({ changed_by: 'kim', user_id: null, ...change }, nameOf, me);
+
+  it('say what the session fee was and is, and which part changed', () => {
+    expect(line({ kind: 'fee', old_value: null, new_value: fee(595, 18) })).toBe('Kim C. set the session fee: $721');
+    expect(line({ kind: 'fee', old_value: fee(595, 18), new_value: fee(595, 20) })).toBe('Kim C. changed the session fee: $721 → $735 (refs $18 → $20)');
+    expect(line({ kind: 'fee', old_value: fee(595, 18), new_value: fee(650, 18, 8) }, 'kim')).toBe(
+      'You changed the session fee: $721 → $794 (league $595 → $650, 7 → 8 games)',
+    );
+    // Fees saved before the breakdown existed only have a total.
+    expect(line({ kind: 'fee', old_value: { total_fee: 1150, league_fee: null }, new_value: { total_fee: 1200, league_fee: null } })).toBe(
+      'Kim C. changed the session fee: $1150 → $1200 (league $1150 → $1200)',
+    );
+  });
+
+  it('say whose custom amount changed and how', () => {
+    expect(line({ kind: 'custom_amount', user_id: 'dana', old_value: null, new_value: { amount: 40 } })).toBe('Kim C. gave Dana W. a custom amount of $40');
+    expect(line({ kind: 'custom_amount', user_id: 'dana', old_value: { amount: 40 }, new_value: { amount: 45 } })).toBe(
+      "Kim C. changed Dana W.'s custom amount: $40 → $45",
+    );
+    expect(line({ kind: 'custom_amount', user_id: 'sam', old_value: { amount: 40 }, new_value: { amount: 45 } })).toBe(
+      'Kim C. changed your custom amount: $40 → $45',
+    );
+    expect(line({ kind: 'custom_amount', user_id: 'dana', old_value: { amount: 40 }, new_value: null })).toBe('Kim C. put Dana W. back on the even split');
+    expect(line({ kind: 'custom_amount', user_id: 'kim', old_value: null, new_value: { amount: 0 } }, 'kim')).toBe('You gave yourself a custom amount of $0');
+  });
+
+  it('say who came onto or off the roster, and who did it when it was someone else', () => {
+    const roster = (user_id, status, changed_by = user_id) => ({ kind: 'roster', user_id, changed_by, old_value: null, new_value: { status } });
+    expect(line(roster('dana', 'on_break'))).toBe('Dana W. is sitting out');
+    expect(line(roster('sam', 'active'))).toBe("You're playing");
+    expect(line(roster('dana', 'sub_pool', 'kim'))).toBe('Kim C. moved Dana W. to the sub pool');
+    expect(line(roster('sam', 'on_break', 'kim'))).toBe('Kim C. marked you as sitting out');
+    expect(line(roster('dana', 'active', 'kim'), 'kim')).toBe('You marked Dana W. as playing');
+    expect(line(roster('dana', 'off', 'kim'))).toBe('Kim C. took Dana W. off the roster');
+    expect(line(roster('dana', 'active', null))).toBe('Dana W. is playing');
+  });
+
+  it('go in one list with the paid history, newest first', () => {
+    const events = duesEvents(
+      [{ id: 'h1', created_date: '2026-10-01T12:00:00Z' }, { id: 'h2', created_date: '2026-10-05T12:00:00Z' }],
+      [{ id: 'c1', kind: 'fee', created_date: '2026-10-03T12:00:00Z' }],
+    );
+    expect(events.map((e) => e.id)).toEqual(['h2', 'c1', 'h1']);
+  });
+
+  it('explain a share that changed: what moved it since that player last marked paid', () => {
+    const history = [
+      { user_id: 'sam', paid: true, created_date: '2026-09-30T19:00:00Z' },
+      { user_id: 'dana', paid: true, created_date: '2026-10-06T19:00:00Z' },
+    ];
+    const changes = [
+      { id: 'set', kind: 'fee', user_id: null, created_date: '2026-09-29T18:00:00Z' },
+      { id: 'refs', kind: 'fee', user_id: null, created_date: '2026-10-01T18:00:00Z' },
+      { id: 'jamie', kind: 'roster', user_id: 'jamie', created_date: '2026-10-05T12:00:00Z' },
+      { id: 'kelly', kind: 'custom_amount', user_id: 'kelly', created_date: '2026-10-07T12:00:00Z' },
+      { id: 'mine', kind: 'custom_amount', user_id: 'dana', created_date: '2026-10-07T13:00:00Z' },
+    ];
+    expect(shareChanges(changes, history, 'sam', false).map((c) => c.id)).toEqual(['mine', 'kelly', 'jamie', 'refs']);
+    // A custom amount only moves with its own changes.
+    expect(shareChanges(changes, history, 'dana', true).map((c) => c.id)).toEqual(['mine']);
+    expect(shareChanges(changes, history, 'nobody', false)).toEqual([]);
   });
 });
 

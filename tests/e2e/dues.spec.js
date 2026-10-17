@@ -178,6 +178,8 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await dialog.getByRole('button', { name: 'Save fee' }).click();
   await expect(page.getByText('$595 league + 7 × $20 refs = $735. Rounding up adds $9.')).toBeVisible();
   await expect(page.getByText('$62 each')).toBeVisible();
+  // Everyone can see the fee changed, by whom, and from what.
+  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You changed the session fee: $721 → $735 (refs $18 → $20)');
 
   await page.getByRole('tab', { name: 'My dues' }).click();
   await expect(page.getByTestId('my-dues')).toContainText('$62');
@@ -250,8 +252,12 @@ test('a player whose share went up after they paid sees the difference and pays 
   await openDues(page);
   const card = page.getByTestId('my-dues');
   await expect(card).toContainText('$61');
-  await expect(card).toContainText('Paid Oct 5');
+  await expect(card).toContainText('Paid Sep 30');
   await expect(card).toContainText("You've paid $50 of your $61 share, so there's $11 more to pay.");
+  // Why: the ref fees were added after he paid, and Jamie is sitting out.
+  const why = page.getByTestId('why-share-changed');
+  await expect(why).toContainText('Casey C. changed the session fee: $595 → $721 (refs $0 → $18)');
+  await expect(why).toContainText('Jamie F. is sitting out');
   const difference = page.getByTestId('pay-difference');
   await expect(difference).toContainText('Pay the rest');
   await expect(page.getByRole('link', { name: 'Pay $11 with Venmo' })).toHaveAttribute('href', /amount=11&/);
@@ -356,6 +362,7 @@ test('a captain gives one player a custom amount, and the rest split what is lef
   await sheet.getByLabel('Custom amount').fill('40');
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sheet).toContainText('$40 · custom amount');
+  await expect(sheet).toContainText('You gave Kelly M. a custom amount of $40');
   await page.keyboard.press('Escape');
   // $721 - $40 = $681 across the other 11: $61.91, rounded up.
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$62');
@@ -363,6 +370,7 @@ test('a captain gives one player a custom amount, and the rest split what is lef
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
   await sheet.getByRole('button', { name: 'Use the even split ($62) instead' }).click();
   await expect(sheet).toContainText('$61 · even split');
+  await expect(sheet).toContainText('You put Kelly M. back on the even split');
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$61');
 });

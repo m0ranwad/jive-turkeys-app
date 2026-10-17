@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v20';
+const DB_KEY = 'jt_demo_db_v21';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -264,7 +264,7 @@ function seed() {
             session: 2,
             paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'),
             paid_by: i === 3 ? captainId : p.user_id,
-            ...(i === 2 && { paid_amount: 50 }),
+            ...(i === 2 && { paid_amount: 50, paid_date: dayjs().subtract(8, 'day').format('YYYY-MM-DD') }),
             ...(i === 5 && { paid_amount: 30, paid_by: captainId }),
           }]
         : []),
@@ -330,6 +330,20 @@ function seed() {
     ...profiles.map((p, i) => entry(2, p, p.status, answeredSession2.includes(i))),
     entry(2, { guest_id: teamGuests[0].id }, 'active', false),
     entry(2, { guest_id: teamGuests[1].id }, 'active', true),
+  ];
+
+  // What moved the split: session 2's fee was set at $595 before the league sent the
+  // ref fees (Sam paid his $50 then), and Jamie said she's sitting out session 2.
+  const fees = (league_fee, ref_fee) => ({ league_fee, ref_fee, game_count: 7, total_fee: league_fee + ref_fee * 7 });
+  const change = (session, kind, old_value, new_value, changed_by, created_date, who = {}) => ({
+    id: uid(), season_year: year, session, kind, user_id: null, guest_id: null, ...who, old_value, new_value, changed_by, created_date,
+  });
+  const jamieOut = sessionRoster.find((r) => r.session === 2 && r.user_id === profiles[9].user_id);
+  const duesChanges = [
+    change(1, 'fee', null, fees(595, 18), captainId, at(dayjs().subtract(52, 'day'), 18)),
+    change(2, 'fee', null, fees(595, 0), captainId, at(dayjs().subtract(9, 'day'), 18)),
+    change(2, 'fee', fees(595, 0), fees(595, 18), captainId, at(dayjs().subtract(7, 'day'), 18)),
+    change(2, 'roster', { status: 'active' }, { status: 'on_break' }, profiles[9].user_id, jamieOut.answered_at, { user_id: profiles[9].user_id }),
   ];
 
   return {
@@ -408,6 +422,7 @@ function seed() {
     session_dues: sessionDues,
     dues_payments: duesPayments,
     dues_history: duesHistory,
+    dues_changes: duesChanges,
     team_guests: teamGuests,
     session_roster: sessionRoster,
     // Last changed before session 2 started, so captains are reminded to change it.
@@ -554,16 +569,48 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       sessionOf(r) === `${period.year}-${period.session}` && (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id);
     const patch = { status, answered_at: now(), changed_by: currentUser()?.id ?? null, updated_date: now() };
     const row = db.session_roster.find(mine);
-    if (row) Object.assign(row, patch);
-    else {
-      db.session_roster.push({
+    if (row) {
+      const before = { ...row };
+      Object.assign(row, patch);
+      trackChange('session_roster', before, row);
+    } else {
+      const added = {
         id: uid(), season_year: Number(period.year), session: Number(period.session), user_id: null, guest_id: null, ...who,
         created_date: now(), ...patch,
-      });
+      };
+      db.session_roster.push(added);
+      trackChange('session_roster', null, added);
     }
   };
   const follows = (table, fields) =>
     (table === 'player_profiles' || table === 'team_guests') && ('status' in fields || 'removed' in fields);
+
+  // Same as the database's dues_changes triggers: the session fee, custom amounts, and someone
+  // coming onto or off a session's active roster are kept, with who changed them. A session's
+  // list starting (rows nobody has answered) isn't a change.
+  const feeOf = (r) => r && { league_fee: r.league_fee ?? null, ref_fee: r.ref_fee ?? null, game_count: r.game_count ?? null, total_fee: r.total_fee ?? null };
+  const amountOf = (value) => (value == null ? null : Number(value));
+  const trackChange = (table, before, after) => {
+    const record = (kind, oldValue, newValue, changedBy = currentUser()?.id ?? null) =>
+      db.dues_changes.push({
+        id: uid(), season_year: after.season_year, session: after.session, kind,
+        user_id: kind === 'fee' ? null : (after.user_id ?? null), guest_id: kind === 'fee' ? null : (after.guest_id ?? null),
+        old_value: oldValue, new_value: newValue, changed_by: changedBy, created_date: now(),
+      });
+    if (table === 'session_dues' && JSON.stringify(feeOf(before)) !== JSON.stringify(feeOf(after))) {
+      record('fee', feeOf(before) ?? null, feeOf(after));
+    }
+    if (table === 'dues_payments') {
+      const was = amountOf(before?.override_amount);
+      const is = amountOf(after.override_amount);
+      if (was !== is) record('custom_amount', was == null ? null : { amount: was }, is == null ? null : { amount: is });
+    }
+    if (table === 'session_roster' && (before || after.answered_at)) {
+      if ((before?.status === 'active') !== (after.status === 'active')) {
+        record('roster', before ? { status: before.status } : null, { status: after.status }, currentUser()?.id ?? after.changed_by ?? null);
+      }
+    }
+  };
 
   // Same as the database's potm_open_voting() and potm_voting_open(): posting a
   // result opens Player of the Match voting for the team's window; votes lock at
@@ -678,6 +725,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const record = { id: uid(), created_date: now(), updated_date: now(), ...(table === 'chat_threads' && { visibility: 'team' }), ...row };
         if (table === 'messages') cleanMentions(record);
         db[table].push(record);
+        trackChange(table, null, record);
         if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
         write();
         notify(table, 'onInsert', record);
@@ -700,7 +748,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;
         // Same as chat_thread_named(): renaming a room gives it that name.
         const renamed = table === 'chat_threads' && 'title' in patch && patch.title !== record.title;
+        const before = { ...record };
         Object.assign(record, patch, { updated_date: now() }, edited && { edited_date: now() }, renamed && { named: true });
+        trackChange(table, before, record);
         if (table === 'messages') cleanMentions(record);
         if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
@@ -812,10 +862,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         if (row.paid && !mine.paid) {
           Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, paid_amount: row.paid_amount ?? null });
         }
+        const before = { ...mine };
         mine.override_amount = mine.override_amount ?? row.override_amount ?? null;
+        trackChange('dues_payments', before, mine);
       }
     }
     db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
+    db.dues_changes.filter((c) => c.guest_id === guestId).forEach((c) => Object.assign(c, { user_id: userId, guest_id: null }));
     // Game sign-ups and stat lines: where both have one for a game, the account's own counts.
     for (const table of ['rsvps', 'game_stats']) {
       for (const row of db[table].filter((r) => r.guest_id === guestId)) {
