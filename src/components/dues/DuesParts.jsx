@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { Check, ChevronLeft, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
@@ -224,6 +225,71 @@ export function PayButtons({ amount, note, settings }) {
       })}
       {extra && <p className="px-1 pt-1 text-sm font-medium text-zinc-600">{extra}</p>}
     </div>
+  );
+}
+
+/**
+ * "Paid part of it?": records some of what's owed ($40 cash now, the rest
+ * later). Anyone can, for anyone. `max` is what's still owed (for both, when
+ * `both`); `onSave(amount)` resolves true once it's saved.
+ */
+export function PartPayment({ max, both, busy, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const amount = Number(value);
+  const over = Math.round(amount * 100) > Math.round(max * 100);
+  const valid = value.trim() !== '' && Number.isFinite(amount) && amount > 0 && !over;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs font-bold text-zinc-500 underline underline-offset-2 hover:text-zinc-800"
+      >
+        Paid part of it?
+      </button>
+    );
+  }
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!valid) return;
+    if (await onSave(amount)) {
+      setOpen(false);
+      setValue('');
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="space-y-2 rounded-2xl bg-zinc-50 p-3">
+      <Label htmlFor="part-amount" className={cn(EYEBROW, 'block text-zinc-400')}>
+        Amount paid{both ? ' for both' : ''}
+      </Label>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">$</span>
+          <Input
+            id="part-amount"
+            type="number"
+            inputMode="decimal"
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={`Up to ${dollars(max).slice(1)}`}
+            className="h-11 rounded-xl bg-white pl-7 font-bold"
+          />
+        </div>
+        <Button type="submit" disabled={busy || !valid} className="h-11 rounded-xl bg-lime-400 px-5 font-bold text-black hover:bg-lime-300">
+          Save
+        </Button>
+      </div>
+      <p className={cn('text-[11px] font-medium', over ? 'text-red-700' : 'text-zinc-400')}>
+        {over
+          ? `That's more than the ${dollars(max)} still owed.`
+          : `${both ? "Split by each one's share. " : ''}The rest stays on the list to pay.`}
+      </p>
+    </form>
   );
 }
 

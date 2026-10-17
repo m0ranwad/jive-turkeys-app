@@ -7,10 +7,10 @@ import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveTeamSettings } from '@/lib/actions';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
-import { cleanPayHandle, dollars, feeTotal, notPlayingLabel } from '@/lib/dues';
+import { cleanPayHandle, dollars, feeTotal, notPlayingLabel, partPayment } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { EYEBROW, HistoryList, StatusChip, shortDate } from './DuesParts';
+import { EYEBROW, HistoryList, PartPayment, StatusChip, shortDate } from './DuesParts';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
 const FIELD_LABEL = cn(EYEBROW, 'text-zinc-400');
@@ -223,14 +223,28 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
   const isPaid = share ? share.paid : true;
   // Paid, and the share has gone up since: the difference for them (and their partner) to pay.
   const balance = share?.paid && ids.every((id) => team.shareOf(id).paid) ? team.balanceOf(player.user_id) : 0;
-  // What they paid, when it isn't simply their share.
+  // What they paid, when it isn't simply their share: part of it (or before it went up), or more than it is now.
   const paidLine = share
     ? share.paid &&
       share.paid_amount !== share.amount &&
-      [`Paid ${dollars(share.paid_amount)}`, `share is now ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
+      (share.paid_amount < share.amount
+        ? [`Paid ${dollars(share.paid_amount)} of ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
+        : [`Paid ${dollars(share.paid_amount)}`, `share is now ${dollars(share.amount)}`]
+      )
         .filter(Boolean)
         .join(' · ')
     : out.paid_amount != null && `Paid ${dollars(out.paid_amount)}`;
+  // Still owed by them (and their partner), for "Paid part of it?".
+  const owing = share ? team.owingTogether(player.user_id).filter((p) => p.due > 0) : [];
+  const stillOwed = Math.round(owing.reduce((sum, p) => sum + p.due, 0) * 100) / 100;
+  const payPart = (amount) => {
+    const { userIds, amounts } = partPayment(team, player.user_id, amount);
+    const who = owing.map((p) => profiles.find((x) => x.user_id === p.user_id)?.display_name).filter(Boolean);
+    return run(
+      () => api.dues.markPaid({ year: period.year, session: period.session, userIds, paid: true, paidDate: today(), amounts }),
+      `${dollars(amount)} marked paid for ${who.join(' & ')}`,
+    );
+  };
   const mark = (paid) =>
     run(
       () =>
@@ -298,6 +312,11 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
             Mark {dollars(balance)} more paid
           </Button>
+        )}
+        {stillOwed > 0 && !confirming && (
+          <div className="-mt-1">
+            <PartPayment key={player.user_id} max={stillOwed} both={owing.length > 1} busy={busy} onSave={payPart} />
+          </div>
         )}
         {isPaid && !confirming && (
           <Button variant="outline" onClick={() => setConfirming(true)} disabled={busy} className={BIG_BUTTON}>

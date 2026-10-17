@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v19';
+const DB_KEY = 'jt_demo_db_v20';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -442,9 +442,10 @@ describe('dues', () => {
       const [p] = await api.entities.PlayerProfile.filter({ display_name: name });
       return paid.find((row) => row.user_id === p.user_id).paid_amount;
     };
-    // Everyone paid the $61 share, except Sam, who paid $50 before the ref fees were added.
+    // Everyone paid the $61 share, except Sam, who paid $50 before the ref fees were added, and Morgan, who paid $30 of it.
     expect(await amountFor('Jordan Rivera')).toBe(61);
     expect(await amountFor('Sam Okafor')).toBe(50);
+    expect(await amountFor('Morgan Lee')).toBe(30);
     expect(await amountFor('Jamie Fox')).toBe(61);
     const guests = await api.entities.TeamGuest.list('display_name');
     expect(guests.map((g) => [g.display_name, g.gender, g.status, g.removed])).toEqual([
