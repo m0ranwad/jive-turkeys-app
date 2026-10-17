@@ -143,6 +143,8 @@ select join_test.refused(
   'cannot sign a phone up for chat notifications');
 select public.push_subscribe('https://push.test/zed2', 'k', 'a', 'Phone');
 select join_test.refused($$select public.mark_dues_paid(2026, 1, array[join_test.id('ann')], true, null)$$, 'cannot mark anyone paid');
+select join_test.refused($$select public.mark_dues_paid(2026, 1, array[join_test.id('ann')], true, null, array[61]::numeric[])$$,
+  'cannot mark anyone paid with an amount either');
 select join_test.refused($$select public.set_dues_partner(join_test.id('ann'), join_test.id('cap'))$$, 'cannot link a couple');
 select join_test.refused($$select public.claim_team_guest('00000000-0000-4000-8000-00000000f0b1')$$, 'cannot pick a name on the roster');
 select join_test.refused($$select public.roster_start_current()$$, 'cannot start a session');

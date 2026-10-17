@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v18';
+const DB_KEY = 'jt_demo_db_v19';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -246,7 +246,10 @@ function seed() {
   // Dues: last session all paid; this session half paid, the captain included
   // among those still to pay, so the pay buttons show on "My dues". Alex and
   // Riley are a couple who pay together. Drew was in the sub pool last session
-  // and Chris only joined this one, so neither paid for session 1.
+  // and Chris only joined this one, so neither paid for session 1. Everyone
+  // paid the $61 share, except Sam, who paid $50 before the ref fees were added
+  // (so he has $11 more to pay), and Jamie paid session 2 before deciding to
+  // sit it out.
   profiles[4].pays_with = profiles[7].user_id;
   profiles[7].pays_with = profiles[4].user_id;
   const fee = { league_fee: 595, ref_fee: 18, game_count: 7, total_fee: 721 };
@@ -256,11 +259,16 @@ function seed() {
     .map((p, i) => [p, i])
     .flatMap(([p, i]) => [
       ...(activeInSession1(i) ? [{ session: 1, paid_date: dayjs().subtract(40 + i, 'day').format('YYYY-MM-DD'), paid_by: captainId }] : []),
-      ...([1, 2, 3, 5, 6].includes(i)
-        ? [{ session: 2, paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'), paid_by: i === 3 ? captainId : p.user_id }]
+      ...([1, 2, 3, 5, 6, 9].includes(i)
+        ? [{
+            session: 2,
+            paid_date: dayjs().subtract(1 + i, 'day').format('YYYY-MM-DD'),
+            paid_by: i === 3 ? captainId : p.user_id,
+            ...(i === 2 && { paid_amount: 50 }),
+          }]
         : []),
     ].map((row) => ({
-      id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, ...row, created_date: now(), updated_date: now(),
+      id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, paid_amount: 61, ...row, created_date: now(), updated_date: now(),
     })));
   // Two teammates who aren't on the app: Dana has paid this session, Mike hasn't.
   const guest = (display_name, gender, position) => ({
@@ -269,7 +277,7 @@ function seed() {
   });
   const teamGuests = [guest('Mike Russo', 'M', 'Defense'), guest('Dana Wells', 'F', 'Forward')];
   const guestPaid = (g, session, daysAgo) => ({
-    id: uid(), season_year: year, session, user_id: null, guest_id: g.id, override_amount: null, paid: true,
+    id: uid(), season_year: year, session, user_id: null, guest_id: g.id, override_amount: null, paid: true, paid_amount: 61,
     paid_date: dayjs().subtract(daysAgo, 'day').format('YYYY-MM-DD'), paid_by: captainId, created_date: now(), updated_date: now(),
   });
   duesPayments.push(guestPaid(teamGuests[0], 1, 45), guestPaid(teamGuests[1], 1, 44), guestPaid(teamGuests[1], 2, 3));
@@ -289,14 +297,20 @@ function seed() {
   const at = (date, hour) => dayjs(date).hour(hour).toISOString();
   const duesHistory = duesPayments.map((p) => ({
     id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, guest_id: p.guest_id ?? null, paid: true,
-    paid_date: p.paid_date, changed_by: p.paid_by, created_date: at(p.paid_date, 19),
+    paid_date: p.paid_date, paid_amount: p.paid_amount, changed_by: p.paid_by, created_date: at(p.paid_date, 19),
   }));
   // Taylor was marked not paid by mistake yesterday, and the captain put it back.
   const taylor = duesPayments.find((p) => p.session === 2 && p.user_id === profiles[6].user_id);
   const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   duesHistory.push(
-    { id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: false, paid_date: null, changed_by: profiles[10].user_id, created_date: at(yesterday, 20) },
-    { id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: true, paid_date: yesterday, changed_by: captainId, created_date: at(yesterday, 21) },
+    {
+      id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: false, paid_date: null, paid_amount: null,
+      changed_by: profiles[10].user_id, created_date: at(yesterday, 20),
+    },
+    {
+      id: uid(), season_year: year, session: 2, user_id: taylor.user_id, paid: true, paid_date: yesterday, paid_amount: 61,
+      changed_by: captainId, created_date: at(yesterday, 21),
+    },
   );
   Object.assign(taylor, { paid_date: yesterday, paid_by: captainId });
 
@@ -794,7 +808,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
       else {
         // Where both have one, a payment made under the roster name counts, and so does its custom amount.
-        if (row.paid && !mine.paid) Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by });
+        if (row.paid && !mine.paid) {
+          Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, paid_amount: row.paid_amount ?? null });
+        }
         mine.override_amount = mine.override_amount ?? row.override_amount ?? null;
       }
     }
@@ -1040,20 +1056,27 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const playerKey = (id) => (isGuest(id) ? { user_id: null, guest_id: id } : { user_id: id, guest_id: null });
 
   const dues = {
-    async markPaid({ year, session, userIds, paid, paidDate }) {
+    async markPaid({ year, session, userIds, paid, paidDate, amounts }) {
       requireUser();
       const me = currentUser().id;
+      if (amounts && amounts.length !== userIds.length) throw new Error('Each player needs an amount');
+      if (amounts?.some((a) => a != null && a < 0)) throw new Error("An amount can't be less than $0");
       const where = { season_year: Number(year), session: Number(session) };
-      const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? me : null, updated_date: now() };
-      for (const id of userIds) {
+      userIds.forEach((id, i) => {
         const key = playerKey(id);
+        const amount = paid ? amounts?.[i] ?? null : null;
+        const patch = { paid, paid_date: paid ? paidDate : null, paid_by: paid ? me : null, paid_amount: amount, updated_date: now() };
         const row = db.dues_payments.find((p) => matches(p, where) && (p.user_id ?? p.guest_id) === id);
-        // Only a real change: marking a paid player paid again keeps their original date.
-        if (!!row?.paid === paid) continue;
+        // Only a real change: marking a paid player paid again keeps their original date, unless their
+        // share has gone up since and this pays the difference.
+        const toppingUp = paid && row?.paid && row.paid_amount != null && amount != null && Number(row.paid_amount) < amount;
+        if (!!row?.paid === paid && !toppingUp) return;
         if (row) Object.assign(row, patch);
         else db.dues_payments.push({ id: uid(), ...where, ...key, override_amount: null, created_date: now(), ...patch });
-        db.dues_history.push({ id: uid(), ...where, ...key, paid, paid_date: patch.paid_date, changed_by: me, created_date: now() });
-      }
+        db.dues_history.push({
+          id: uid(), ...where, ...key, paid, paid_date: patch.paid_date, paid_amount: amount, changed_by: me, created_date: now(),
+        });
+      });
       save(db);
       return delay(null);
     },

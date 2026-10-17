@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v18';
+const DB_KEY = 'jt_demo_db_v19';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -435,8 +435,17 @@ describe('dues', () => {
       [1, 595, 18, 7, 721],
       [2, 595, 18, 7, 721],
     ]);
-    // Five app players, plus Dana Wells, who isn't on the app.
-    expect(await api.entities.DuesPayment.filter({ session: 2, paid: true })).toHaveLength(6);
+    // Five app players, plus Dana Wells, who isn't on the app, and Jamie, who paid before deciding to sit it out.
+    const paid = await api.entities.DuesPayment.filter({ session: 2, paid: true });
+    expect(paid).toHaveLength(7);
+    const amountFor = async (name) => {
+      const [p] = await api.entities.PlayerProfile.filter({ display_name: name });
+      return paid.find((row) => row.user_id === p.user_id).paid_amount;
+    };
+    // Everyone paid the $61 share, except Sam, who paid $50 before the ref fees were added.
+    expect(await amountFor('Jordan Rivera')).toBe(61);
+    expect(await amountFor('Sam Okafor')).toBe(50);
+    expect(await amountFor('Jamie Fox')).toBe(61);
     const guests = await api.entities.TeamGuest.list('display_name');
     expect(guests.map((g) => [g.display_name, g.gender, g.status, g.removed])).toEqual([
       ['Dana Wells', 'F', 'active', false],
@@ -476,6 +485,51 @@ describe('dues', () => {
       [false, null, jordan.id],
       [true, '2026-10-09', jordan.id],
     ]);
+  });
+
+  it('records what each player paid, keeps it in the history, and clears it when marked not paid', async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    const ids = [alex.user_id, riley.user_id];
+    const amounts = async () => (await api.entities.DuesPayment.filter({ session: 2, user_id: ids })).map((r) => r.paid_amount);
+
+    await api.dues.markPaid({ year, session: 2, userIds: ids, paid: true, paidDate: '2026-10-09', amounts: [61, 40.5] });
+    expect(await amounts()).toEqual([61, 40.5]);
+    await api.dues.markPaid({ year, session: 2, userIds: [alex.user_id], paid: false, paidDate: '2026-10-09', amounts: [61] });
+    expect(await amounts()).toEqual([null, 40.5]);
+    const history = await api.entities.DuesHistory.filter({ session: 2, user_id: alex.user_id }, '-created_date');
+    expect(history.map((h) => [h.paid, h.paid_amount])).toEqual([
+      [false, null],
+      [true, 61],
+    ]);
+    await expect(api.dues.markPaid({ year, session: 2, userIds: ids, paid: true, amounts: [61] })).rejects.toThrow('Each player needs an amount');
+    await expect(api.dues.markPaid({ year, session: 2, userIds: [alex.user_id], paid: true, amounts: [-1] })).rejects.toThrow("can't be less than $0");
+  });
+
+  it('pays the difference when a share went up after someone paid, and only then', async () => {
+    const { api, me } = await signedIn();
+    const id = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].user_id;
+    const [sam, jordan] = [await id('Sam Okafor'), await id('Jordan Rivera')];
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    const payment = async (userId) => (await api.entities.DuesPayment.filter({ session: 2, user_id: userId }))[0];
+    const historyCount = async () => (await api.entities.DuesHistory.list()).length;
+    const before = await historyCount();
+
+    // Sam paid $50; the share is now $61.
+    await api.dues.markPaid({ year, session: 2, userIds: [sam], paid: true, paidDate: '2026-10-12', amounts: [61] });
+    expect(await payment(sam)).toMatchObject({ paid: true, paid_amount: 61, paid_date: '2026-10-12', paid_by: me.id });
+    const [latest] = await api.entities.DuesHistory.filter({ session: 2, user_id: sam }, '-created_date');
+    expect(latest).toMatchObject({ paid: true, paid_amount: 61, changed_by: me.id });
+    expect(await historyCount()).toBe(before + 1);
+
+    // Jordan paid $61 and the share went down to $56: nothing changes.
+    const jordanBefore = await payment(jordan);
+    await api.dues.markPaid({ year, session: 2, userIds: [jordan], paid: true, paidDate: '2026-10-12', amounts: [56] });
+    expect(await payment(jordan)).toMatchObject({ paid_amount: 61, paid_date: jordanBefore.paid_date });
+    expect(await historyCount()).toBe(before + 1);
   });
 
   it('leaves a player who is already paid alone: same date, nothing added to the history', async () => {
@@ -537,12 +591,12 @@ describe('dues', () => {
     const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
     const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
     const year = (await api.entities.SessionDues.list())[0].season_year;
-    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09' });
+    await api.dues.markPaid({ year, session: 2, userIds: [mike.id], paid: true, paidDate: '2026-10-09', amounts: [61] });
     await api.dues.setPartner(mike.id, kelly.user_id);
 
     await api.users.linkGuest(mike.id, chris.user_id);
     const [moved] = await api.entities.DuesPayment.filter({ session: 2, user_id: chris.user_id });
-    expect(moved).toMatchObject({ guest_id: null, paid: true, paid_date: '2026-10-09' });
+    expect(moved).toMatchObject({ guest_id: null, paid: true, paid_date: '2026-10-09', paid_amount: 61 });
     expect(await api.entities.DuesHistory.filter({ guest_id: mike.id })).toHaveLength(0);
     expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0]).toMatchObject({ linked_user_id: chris.user_id });
     expect((await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' }))[0].pays_with).toBe(chris.user_id);
@@ -558,7 +612,7 @@ describe('dues', () => {
     // Session 1: Mike paid under his roster name (sample data) and Chris under his account.
     await row(1, { user_id: chris.user_id }, { paid: true, paid_date: '2026-09-01' });
     // Session 3: paid under the roster name only. Session 4: a custom amount under the roster name only.
-    await row(3, { guest_id: mike.id }, { paid: true, paid_date: '2026-10-01' });
+    await row(3, { guest_id: mike.id }, { paid: true, paid_date: '2026-10-01', paid_amount: 45 });
     await row(4, { guest_id: mike.id }, { override_amount: 25 });
     await row(3, { user_id: chris.user_id }, { override_amount: 50 });
     await row(4, { user_id: chris.user_id });
@@ -566,7 +620,7 @@ describe('dues', () => {
     await api.users.linkGuest(mike.id, chris.user_id);
     const [three] = await api.entities.DuesPayment.filter({ season_year: year, session: 3, user_id: chris.user_id });
     const [four] = await api.entities.DuesPayment.filter({ season_year: year, session: 4, user_id: chris.user_id });
-    expect(three).toMatchObject({ paid: true, paid_date: '2026-10-01', override_amount: 50 });
+    expect(three).toMatchObject({ paid: true, paid_date: '2026-10-01', paid_amount: 45, override_amount: 50 });
     expect(four).toMatchObject({ paid: false, override_amount: 25 });
     // Both had paid session 1, and nothing is deleted: Mike's own rows stay under his roster name.
     expect(await api.entities.DuesPayment.filter({ guest_id: mike.id })).toHaveLength(3);

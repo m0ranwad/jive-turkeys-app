@@ -45,7 +45,7 @@ vi.mock('@supabase/supabase-js', () => ({
     from: (table) => query(table),
     rpc: (name, params) => {
       calls.push(['rpc', name, params]);
-      return Promise.resolve(result);
+      return Promise.resolve(typeof result === 'function' ? result(name, params) : result);
     },
     channel: (name) => {
       const channel = { name, bindings: [], subscribed: false };
@@ -206,13 +206,21 @@ describe('subscribe', () => {
 });
 
 describe('dues', () => {
-  it('marks players paid through the database function, with the date only when paid', async () => {
-    await api.dues.markPaid({ year: '2026', session: 2, userIds: ['a', 'b'], paid: true, paidDate: '2026-10-09' });
-    await api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: false, paidDate: '2026-10-09' });
+  it('marks players paid through the database function, with the date and amounts only when paid', async () => {
+    await api.dues.markPaid({ year: '2026', session: 2, userIds: ['a', 'b'], paid: true, paidDate: '2026-10-09', amounts: [61, 40.5] });
+    await api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: false, paidDate: '2026-10-09', amounts: [61] });
+    const sent = { p_season_year: 2026, p_session: 2 };
     expect(calls).toEqual([
-      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a', 'b'], p_paid: true, p_paid_date: '2026-10-09' }],
-      ['rpc', 'mark_dues_paid', { p_season_year: 2026, p_session: 2, p_user_ids: ['a'], p_paid: false, p_paid_date: null }],
+      ['rpc', 'mark_dues_paid', { ...sent, p_user_ids: ['a', 'b'], p_paid: true, p_paid_date: '2026-10-09', p_amounts: [61, 40.5] }],
+      ['rpc', 'mark_dues_paid', { ...sent, p_user_ids: ['a'], p_paid: false, p_paid_date: null, p_amounts: null }],
     ]);
+  });
+
+  it('falls back to marking paid without amounts while the database update is on its way', async () => {
+    result = (name, params) =>
+      params.p_amounts !== undefined ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } } : { data: null, error: null };
+    await api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: true, paidDate: '2026-10-09', amounts: [61] });
+    expect(calls.map(([, , params]) => params.p_amounts)).toEqual([[61], undefined]);
   });
 
   it('links and unlinks couples through the database function', async () => {

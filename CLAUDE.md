@@ -181,7 +181,13 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
-  always asks first. Only captains set fees, custom amounts and payment links.
+  always asks first. Only captains set fees, custom amounts and payment links. Marking paid records the share at that
+  moment (`paid_amount`). Payments marked before that were given the share they showed when it went live
+  (`dues_fill_paid_amounts()`); any still null count the current share. The database's copy of the split,
+  `dues_shares()`, must stay the same as `teamDues()` (`supabase/tests/dues_shares.test.sql` and "the database splits
+  the same way" in `tests/unit/dues.test.js` use the same numbers). If a share goes up afterwards
+  the player stays paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
+  session's active roster show under **Paid, not playing** and count in Collected (`notPlaying` in `teamDues()`).
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
   current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status

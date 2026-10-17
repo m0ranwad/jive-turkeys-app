@@ -287,28 +287,30 @@ insert into public.player_profiles (user_id, display_name, status) values (dues_
 
 select dues_test.sign_in('kim');
 insert into public.team_guests (display_name) values ('Lou Late');
-insert into public.dues_payments (season_year, session, guest_id, override_amount, paid, paid_date, paid_by) values
-  (2026, 2, dues_test.guest('Lou Late'), null, true, '2026-10-01', dues_test.id('kim')),
-  (2026, 3, dues_test.guest('Lou Late'), 25, false, null, null),
-  (2026, 4, dues_test.guest('Lou Late'), null, true, '2026-10-02', dues_test.id('kim')),
-  (2026, 5, dues_test.guest('Lou Late'), null, true, '2026-10-04', dues_test.id('kim'));
-insert into public.dues_payments (season_year, session, user_id, override_amount, paid, paid_date, paid_by) values
-  (2026, 2, dues_test.id('late'), 50, false, null, null),
-  (2026, 3, dues_test.id('late'), null, false, null, null),
-  (2026, 5, dues_test.id('late'), null, true, '2026-09-30', dues_test.id('dana'));
+insert into public.dues_payments (season_year, session, guest_id, override_amount, paid, paid_date, paid_by, paid_amount) values
+  (2026, 2, dues_test.guest('Lou Late'), null, true, '2026-10-01', dues_test.id('kim'), 61),
+  (2026, 3, dues_test.guest('Lou Late'), 25, false, null, null, null),
+  (2026, 4, dues_test.guest('Lou Late'), null, true, '2026-10-02', dues_test.id('kim'), 62),
+  (2026, 5, dues_test.guest('Lou Late'), null, true, '2026-10-04', dues_test.id('kim'), 63);
+insert into public.dues_payments (season_year, session, user_id, override_amount, paid, paid_date, paid_by, paid_amount) values
+  (2026, 2, dues_test.id('late'), 50, false, null, null, null),
+  (2026, 3, dues_test.id('late'), null, false, null, null, null),
+  (2026, 5, dues_test.id('late'), null, true, '2026-09-30', dues_test.id('dana'), 60);
 select public.link_team_guest(dues_test.guest('Lou Late'), dues_test.id('late'));
 select dues_test.ok(
-  (select paid and paid_date = '2026-10-01' and paid_by = dues_test.id('kim') and override_amount = 50
+  (select paid and paid_date = '2026-10-01' and paid_by = dues_test.id('kim') and paid_amount = 61 and override_amount = 50
    from public.dues_payments where user_id = dues_test.id('late') and session = 2),
-  'linking: a payment made under the roster name counts, and the account''s custom amount stays');
+  'linking: a payment made under the roster name counts, with what was paid, and the account''s custom amount stays');
 select dues_test.ok(
   (select not paid and override_amount = 25 from public.dues_payments where user_id = dues_test.id('late') and session = 3),
   'linking: a custom amount set under the roster name carries over');
 select dues_test.ok(
-  (select paid and paid_date = '2026-10-02' and guest_id is null from public.dues_payments where user_id = dues_test.id('late') and session = 4),
+  (select paid and paid_date = '2026-10-02' and paid_amount = 62 and guest_id is null
+   from public.dues_payments where user_id = dues_test.id('late') and session = 4),
   'linking: a session only the roster name had moves over');
 select dues_test.ok(
-  (select paid and paid_date = '2026-09-30' and paid_by = dues_test.id('dana') from public.dues_payments where user_id = dues_test.id('late') and session = 5),
+  (select paid and paid_date = '2026-09-30' and paid_by = dues_test.id('dana') and paid_amount = 60
+   from public.dues_payments where user_id = dues_test.id('late') and session = 5),
   'linking: a payment the account already had stays as it was');
 select dues_test.ok(
   (select count(*) = 3 from public.dues_payments where guest_id = dues_test.guest('Lou Late'))
@@ -316,9 +318,78 @@ select dues_test.ok(
   'linking: the roster name''s own rows are kept, not deleted');
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- What each player paid (session 9, so nothing above is touched)
+-- ---------------------------------------------------------------------------
+
+create function dues_test.paid9(who uuid) returns public.dues_payments language sql as $$
+  select * from public.dues_payments where season_year = 2026 and session = 9 and coalesce(user_id, guest_id) = who;
+$$;
+create function dues_test.history9(who uuid) returns integer language sql as $$
+  select count(*)::integer from public.dues_history where season_year = 2026 and session = 9 and coalesce(user_id, guest_id) = who;
+$$;
+grant execute on function dues_test.paid9(uuid), dues_test.history9(uuid) to authenticated;
+
+select dues_test.sign_in('dana');
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dana'), dues_test.id('dex'), dues_test.guest('Pat Lee')], true, '2026-10-09',
+  array[61, 40.50, 30]::numeric[]);
+select dues_test.ok(
+  (select paid and paid_amount = 61 from dues_test.paid9(dues_test.id('dana')))
+  and (select paid and paid_amount = 40.50 from dues_test.paid9(dues_test.id('dex')))
+  and (select paid and paid_amount = 30 from dues_test.paid9(dues_test.guest('Pat Lee'))),
+  'marking players paid records what each one paid, guests included');
+select dues_test.ok(
+  (select paid_amount = 40.50 and paid from public.dues_history where session = 9 and user_id = dues_test.id('dex'))
+  and (select paid_amount = 30 from public.dues_history where session = 9 and guest_id = dues_test.guest('Pat Lee')),
+  'and the history keeps what they paid');
+
+-- Dana's share went up to $63 after she paid $61: marking her paid again pays the difference.
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dana')], true, '2026-10-12', array[63]::numeric[]);
+select dues_test.ok(
+  (select paid_amount = 63 and paid_date = '2026-10-12' and paid_by = dues_test.id('dana') from dues_test.paid9(dues_test.id('dana')))
+  and dues_test.history9(dues_test.id('dana')) = 2
+  and (select array_agg(paid_amount order by paid_amount) from public.dues_history where session = 9 and user_id = dues_test.id('dana')) = '{61,63}',
+  'paying the difference after a share went up records the new amount, and the history keeps both');
+
+-- Dex's share went down to $35 after he paid $40.50: nothing changes, and nothing is added.
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dex')], true, '2026-10-12', array[35]::numeric[]);
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dex')], true, '2026-10-12', array[40.50]::numeric[]);
+select dues_test.ok(
+  (select paid_amount = 40.50 and paid_date = '2026-10-09' from dues_test.paid9(dues_test.id('dex')))
+  and dues_test.history9(dues_test.id('dex')) = 1,
+  'a share that went down, or stayed the same, leaves what was paid as it is');
+
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dex')], false, null, array[40.50]::numeric[]);
+select dues_test.ok(
+  (select not paid and paid_amount is null and paid_date is null from dues_test.paid9(dues_test.id('dex')))
+  and (select paid_amount is null from public.dues_history where session = 9 and user_id = dues_test.id('dex') and not paid),
+  'marking someone not paid clears what they paid (the history still has it)');
+
+-- The site from before this update calls the version without amounts: no amount is recorded, as before.
+select public.mark_dues_paid(2026, 9, array[dues_test.id('kim')], true, '2026-10-09');
+select dues_test.ok((select paid and paid_amount is null from dues_test.paid9(dues_test.id('kim'))),
+  'marking paid without amounts still works (session 9 has no fee, so there is no share to record)');
+select public.mark_dues_paid(2026, 9, array[dues_test.id('kim')], true, '2026-10-12', array[70]::numeric[]);
+select dues_test.ok((select paid_amount is null and paid_date = '2026-10-09' from dues_test.paid9(dues_test.id('kim'))),
+  'a payment with no amount recorded has no difference to pay');
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dana')], false, null);
+select dues_test.ok((select not paid and paid_amount is null from dues_test.paid9(dues_test.id('dana'))),
+  'and marking someone not paid that way clears what they paid too');
+
+select public.mark_dues_paid(2026, 9, array[dues_test.id('dot'), dues_test.id('dot')], true, '2026-10-09', array[61, 61]::numeric[]);
+select dues_test.ok(dues_test.history9(dues_test.id('dot')) = 1, 'a player named twice is marked once');
+select dues_test.refused($$select public.mark_dues_paid(2026, 9, array[dues_test.id('sub'), dues_test.id('kim')], true, '2026-10-09', array[61]::numeric[])$$,
+  'each player needs an amount');
+select dues_test.refused($$select public.mark_dues_paid(2026, 9, array[dues_test.id('sub')], true, '2026-10-09', array[-5]::numeric[])$$,
+  'an amount cannot be below zero');
+select dues_test.touches($$update public.dues_payments set paid_amount = 1$$, 0, 'a player cannot change what anyone paid directly');
+reset role;
+
 set role anon;
 select dues_test.refused($$select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, null)$$,
   'signed-out visitors cannot mark anyone paid');
+select dues_test.refused($$select public.mark_dues_paid(2026, 2, array[dues_test.id('dana')], true, null, array[1]::numeric[])$$,
+  'signed-out visitors cannot mark anyone paid with an amount either');
 select dues_test.refused($$select public.set_dues_partner(dues_test.id('dana'), dues_test.id('dex'))$$,
   'signed-out visitors cannot link players');
 select dues_test.refused($$select count(*) from public.dues_payments$$, 'signed-out visitors cannot see who has paid');
