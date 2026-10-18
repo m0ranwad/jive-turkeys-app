@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { EYEBROW, HistoryList, PartPayment, StatusChip, shortDate } from './DuesParts';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
-const FIELD_LABEL = cn(EYEBROW, 'text-zinc-400');
+const FIELD_LABEL = cn(EYEBROW, 'text-zinc-500');
 const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
 
 /**
@@ -70,7 +70,7 @@ export function FeeDialog({ open, onOpenChange, period, initial, previous, onSav
         {label}
       </Label>
       <div className="relative">
-        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">{prefix}</span>}
+        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">{prefix}</span>}
         <Input
           id={`fee-${key}`}
           type="number"
@@ -200,7 +200,7 @@ export function PaySettingsDialog({ open, onOpenChange, settings, onSaved }) {
         autoCorrect="off"
         className="h-11 rounded-xl"
       />
-      {hint && <p className="text-[11px] font-medium text-zinc-400">{hint}</p>}
+      {hint && <p className="text-[11px] font-medium text-zinc-500">{hint}</p>}
     </div>
   );
 
@@ -346,7 +346,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           <StatusChip paid={isPaid} date={share ? share.paid_date : out.paid_date} />
         </div>
         {isPaid && (
-          <p className="-mt-2 text-xs font-medium text-zinc-400">
+          <p className="-mt-2 text-xs font-medium text-zinc-500">
             {paidLine && `${paidLine}. `}
             Marked paid {shortDate(share ? share.paid_date : out.paid_date)}
             {markedBy}.{out && " They aren't on this session's roster, so they don't owe anything."}
@@ -388,7 +388,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
             </div>
           </div>
         )}
-        {partner && <p className="-mt-2 text-xs font-medium text-zinc-400">Pays together with {partner.display_name}, so both change together.</p>}
+        {partner && <p className="-mt-2 text-xs font-medium text-zinc-500">Pays together with {partner.display_name}, so both change together.</p>}
 
         <div className={SECTION}>
           <Label htmlFor="pays-with" className={FIELD_LABEL}>
@@ -408,7 +408,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
               </option>
             ))}
           </select>
-          <p className="text-[11px] font-medium text-zinc-400">For couples who send one payment for both.</p>
+          <p className="text-[11px] font-medium text-zinc-500">For couples who send one payment for both.</p>
         </div>
 
         {isCaptain && share && (
@@ -418,7 +418,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
             </Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
                 <Input
                   id="custom-amount"
                   type="number"
@@ -474,7 +474,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           {events.length ? (
             <HistoryList events={events} nameOf={nameOf} meId={meId} />
           ) : (
-            <p className="text-sm text-zinc-400">No changes yet this session.</p>
+            <p className="text-sm text-zinc-500">No changes yet this session.</p>
           )}
         </div>
       </DialogContent>

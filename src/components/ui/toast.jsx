@@ -31,7 +31,7 @@ export function ToastProvider({ children }) {
           <div
             key={t.id}
             role="status"
-            className="pointer-events-auto relative mb-2 flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border bg-background p-6 pr-8 text-foreground shadow-lg animate-in fade-in-0 slide-in-from-top-full sm:slide-in-from-bottom-full"
+            className="pointer-events-auto relative mb-2 flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border bg-background p-6 pr-8 text-foreground shadow-lg animate-in fade-in-0 slide-in-from-top-full motion-reduce:animate-none sm:slide-in-from-bottom-full"
           >
             <div className="grid gap-1">
               {t.title && <div className="text-sm font-semibold">{t.title}</div>}

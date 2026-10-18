@@ -18,9 +18,9 @@ import { cn } from '@/lib/utils';
 
 const TEAM = 'Jive Turkeys';
 let nextFillInKey = 0;
-const EYEBROW = 'text-[10px] font-black uppercase tracking-[0.14em]';
+const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 const SMALL_BUTTON =
-  'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-black uppercase tracking-[0.08em] transition';
+  'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-black uppercase tracking-[0.08em] transition';
 
 /** − number + with fingertip-sized buttons, so nobody needs the keyboard. */
 function Stepper({ label, value, onChange, addLabel, removeLabel, valueLabel, canAdd = true, strong = false, tone }) {
@@ -39,7 +39,7 @@ function Stepper({ label, value, onChange, addLabel, removeLabel, valueLabel, ca
         <output aria-label={valueLabel} className="block font-display text-lg font-extrabold">
           {value}
         </output>
-        <span className={cn('mt-0.5 block truncate text-[9px] font-black uppercase tracking-[0.06em]', tone || 'text-zinc-400')}>
+        <span className={cn('mt-0.5 block truncate text-[11px] font-black uppercase tracking-[0.06em]', tone || 'text-zinc-500')}>
           {label}
         </span>
       </div>
@@ -64,7 +64,7 @@ function ScoreBox({ team, value, onChange, dim = false }) {
   const n = Number(value) || 0;
   return (
     <div className="min-w-0">
-      <div className={cn(EYEBROW, 'truncate', dim ? 'text-zinc-400' : 'text-zinc-900')}>{team}</div>
+      <div className={cn(EYEBROW, 'truncate', dim ? 'text-zinc-500' : 'text-zinc-900')}>{team}</div>
       <div className="mt-1.5 flex items-center gap-1">
         <button
           type="button"
@@ -85,7 +85,7 @@ function ScoreBox({ team, value, onChange, dim = false }) {
           onChange={(e) => onChange(e.target.value === '' ? '' : Math.max(0, Math.floor(Number(e.target.value)) || 0))}
           className={cn(
             'h-11 w-full min-w-0 rounded-xl bg-transparent text-center font-display text-3xl font-extrabold outline-none focus:bg-zinc-50',
-            dim && 'text-zinc-400',
+            dim && 'text-zinc-500',
           )}
         />
         <button
@@ -102,7 +102,7 @@ function ScoreBox({ team, value, onChange, dim = false }) {
 }
 
 const genderLetter = (gender) => (gender === 'F' ? 'W' : gender === 'M' ? 'M' : '');
-const META = 'mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-400';
+const META = 'mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-500';
 const LimitTag = () => <span className="rounded-full bg-amber-300 px-1.5 py-px text-black">{MAX_GOALS_MAN}-goal limit</span>;
 
 /** Goals (men stop at two) and assists, for a teammate or a fill-in. */
@@ -172,7 +172,7 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
             type="button"
             aria-label={`${name} didn't play`}
             onClick={() => onChange({ played: false, goals: 0, assists: 0 })}
-            className={cn(SMALL_BUTTON, 'text-zinc-400 hover:text-zinc-900')}
+            className={cn(SMALL_BUTTON, 'text-zinc-500 hover:text-zinc-900')}
           >
             <X className="h-3.5 w-3.5" />
             <span className="hidden min-[360px]:inline">Didn&apos;t play</span>
@@ -197,7 +197,7 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Stepper
             label="Blue"
-            tone="text-sky-600"
+            tone="text-sky-700"
             value={row.blue_cards}
             onChange={set('blue_cards')}
             addLabel={`Add a blue card for ${name}`}
@@ -232,7 +232,7 @@ function FillInRow({ fillIn, label, number, onChange, onRemove }) {
             placeholder="Name, if you know it"
             value={fillIn.display_name}
             onChange={(e) => onChange({ display_name: e.target.value })}
-            className="h-9 w-full min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-zinc-400 focus:border-zinc-900"
+            className="h-9 w-full min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none placeholder:font-medium placeholder:text-zinc-500 focus:border-zinc-900"
           />
           <div className={META}>
             <span>{[genderLetter(fillIn.gender), 'Fill-in, not on the team'].filter(Boolean).join(' · ')}</span>
@@ -243,7 +243,7 @@ function FillInRow({ fillIn, label, number, onChange, onRemove }) {
           type="button"
           aria-label={`Remove ${label}`}
           onClick={onRemove}
-          className={cn(SMALL_BUTTON, 'text-zinc-400 hover:text-zinc-900')}
+          className={cn(SMALL_BUTTON, 'text-zinc-500 hover:text-zinc-900')}
         >
           <X className="h-3.5 w-3.5" />
           <span className="hidden min-[360px]:inline">Remove</span>
@@ -331,14 +331,14 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
         onOpenAutoFocus={(e) => e.preventDefault()}
         className="flex h-[100dvh] max-h-[100dvh] max-w-none flex-col gap-0 overflow-hidden border-0 p-0 sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl sm:border">
         <div className="shrink-0 border-b border-zinc-100 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
-          <div className={cn(EYEBROW, 'text-lime-600')}>vs {game.opponent}</div>
+          <div className={cn(EYEBROW, 'text-lime-700')}>vs {game.opponent}</div>
           <DialogTitle className="mt-0.5 font-display text-lg font-extrabold uppercase tracking-tight">Game result</DialogTitle>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <ScoreBox team={TEAM} value={scoreUs} onChange={setOurScore} />
             <ScoreBox team={game.opponent} value={scoreThem} onChange={setScoreThem} dim />
           </div>
           {ourScore === null ? (
-            <p className="mt-2 text-[11px] font-medium text-zinc-400">Our score adds up as you give players goals.</p>
+            <p className="mt-2 text-[11px] font-medium text-zinc-500">Our score adds up as you give players goals.</p>
           ) : Number(scoreUs) !== goals ? (
             <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] font-semibold text-amber-700">
               <span>
@@ -356,7 +356,7 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6">
-          <div className={cn(EYEBROW, 'mb-2 text-zinc-400')}>Who played · {playedCount}</div>
+          <div className={cn(EYEBROW, 'mb-2 text-zinc-500')}>Who played · {playedCount}</div>
           {rows.length > 0 && listed.length === 0 && (
             <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-500">Nobody&apos;s marked as playing yet. Add who played.</p>
           )}
@@ -389,7 +389,7 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
                 <button
                   type="button"
                   onClick={() => setAdding(false)}
-                  className="rounded-full bg-zinc-950 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-white"
+                  className="rounded-full bg-zinc-950 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white"
                 >
                   Done
                 </button>
@@ -409,7 +409,7 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
                         row.profile.guest ? 'border-dashed border-zinc-300 text-zinc-600' : 'border-zinc-200',
                       )}
                     >
-                      <Plus className="h-3.5 w-3.5 text-zinc-400" />
+                      <Plus className="h-3.5 w-3.5 text-zinc-500" />
                       {row.profile.display_name}
                     </button>
                   ))}
@@ -429,8 +429,8 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
           {/* Someone from outside the team, maybe without a name: their goals count for the score. */}
           <div className="mt-2 flex items-center gap-1.5 rounded-2xl border-2 border-dashed border-zinc-200 py-1.5 pl-4 pr-1.5">
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">Add a fill-in</div>
-              <div className="text-[11px] text-zinc-400">Not on the team</div>
+              <div className="whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-500">Add a fill-in</div>
+              <div className="text-[11px] text-zinc-500">Not on the team</div>
             </div>
             {[
               ['M', 'Man'],

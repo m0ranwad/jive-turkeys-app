@@ -11,7 +11,7 @@ export function ShortBanner({ needTotal = 0, needWomen = 0, className }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white',
+        'inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-white',
         className,
       )}
     >
@@ -52,16 +52,16 @@ export function JerseyDot({ jersey, className }) {
 export function GameCard({ game, headcount, settings }) {
   const final = game.has_result;
   const result = final ? resultOf(game) : null;
-  const chip = 'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em]';
+  const chip = 'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em]';
 
   return (
     <Link
       to={`/games/${game.id}`}
-      className="block rounded-3xl border border-black/5 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.07)] active:translate-y-0"
+      className="block rounded-3xl border border-black/5 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition motion-safe:hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.07)] active:translate-y-0"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-400">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
             {fmtDateShort(game.date)} · {fmtTime(game.time)}
           </div>
           <div className="mt-1 truncate font-display text-lg font-extrabold uppercase tracking-tight">vs {game.opponent}</div>
@@ -79,7 +79,7 @@ export function GameCard({ game, headcount, settings }) {
               <div className="font-display text-2xl font-extrabold leading-none">
                 {game.score_us ?? 0}–{game.score_them ?? 0}
               </div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">Final</div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">Final</div>
             </div>
             <ResultBadge result={result} className="h-9 w-9 rounded-2xl text-sm" />
           </div>
@@ -96,9 +96,9 @@ export function GameCard({ game, headcount, settings }) {
           {/* On phones the banner sits with the counts so the opponent name has room. */}
           <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
           <span className={cn(chip, 'bg-lime-100 text-lime-800')}>{headcount.totalIn} in</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-500')}>{headcount.womenFieldIn} women</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-500')}>{headcount.groups.maybe.length} maybe</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-500')}>{headcount.groups.none.length} no reply</span>
+          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.womenFieldIn} women</span>
+          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.maybe.length} maybe</span>
+          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.none.length} no reply</span>
         </div>
       )}
     </Link>

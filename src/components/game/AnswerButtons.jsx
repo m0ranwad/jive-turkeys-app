@@ -28,7 +28,7 @@ export function AnswerButtons({ label, status, onSet, busy, compact = false }) {
           className={cn(
             'rounded-2xl border-2 font-display font-extrabold uppercase tracking-[0.1em] transition active:scale-[0.98] disabled:opacity-60',
             compact ? 'py-1.5 text-[11px]' : 'py-3.5 text-[13px]',
-            status === answer.value ? answer.active : 'border-zinc-200 bg-white text-zinc-400 hover:border-zinc-300',
+            status === answer.value ? answer.active : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300',
           )}
         >
           {answer.label}
@@ -41,7 +41,7 @@ export function AnswerButtons({ label, status, onSet, busy, compact = false }) {
 /** A red card in the last game with a result sits the player out this one (suspendedIds()). */
 export function SuspendedBadge() {
   return (
-    <span className="rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+    <span className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-white">
       Suspended – red card
     </span>
   );

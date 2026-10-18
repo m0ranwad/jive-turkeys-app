@@ -103,7 +103,7 @@ function ShareCard({ mine }) {
         {refs > 0 && line('League fee', dollars(parts.league_fee))}
         {refs > 0 && line(`Refs · ${parts.game_count} games × ${dollars(parts.ref_fee)}`, dollars(refs))}
         {line('Session total', dollars(feeTotal(parts)), true)}
-        <p className="pt-1 text-xs text-white/40">
+        <p className="pt-1 text-xs text-white/50">
           Split across {team.active.length} active players, rounded up to the next dollar.
         </p>
       </div>
@@ -277,7 +277,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="text-xs font-bold text-zinc-400 underline underline-offset-2 hover:text-zinc-700"
+            className="text-xs font-bold text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
           >
             Not right? Mark as not paid
           </button>
@@ -303,7 +303,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="text-xs font-bold text-zinc-400 underline underline-offset-2 hover:text-zinc-700"
+            className="text-xs font-bold text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
           >
             Not right? Mark as not paid
           </button>

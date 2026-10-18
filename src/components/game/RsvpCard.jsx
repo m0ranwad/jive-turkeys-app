@@ -27,7 +27,7 @@ export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
         >
           <span>
             <span className="block text-sm font-bold">Playing GK</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-zinc-400">
+            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
               A woman in goal doesn't count toward the 3-women minimum
             </span>
           </span>
@@ -43,7 +43,7 @@ export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
       )}
       {status === 'in' && rsvp?.playing_gk && (
         <div className="mt-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-lime-400">
+          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
             <Check className="h-2.5 w-2.5" /> GK
           </span>
         </div>

@@ -81,7 +81,7 @@ export function AnnouncementsPage() {
               </button>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">{a.body}</p>
-            <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400">
+            <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
               {a.author_name || 'Captain'} · {a.created_date ? dayjs(a.created_date).format('MMM D, YYYY') : ''}
             </p>
           </article>

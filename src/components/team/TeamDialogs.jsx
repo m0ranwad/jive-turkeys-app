@@ -36,7 +36,7 @@ export function PickPositionCard({ profile, onSaved }) {
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Select value={position || 'none'} onValueChange={(v) => setPosition(v === 'none' ? '' : v)}>
-          <SelectTrigger className="h-10 w-44 rounded-2xl border-lime-300 bg-white">
+          <SelectTrigger aria-label="Position" className="h-10 w-44 rounded-2xl border-lime-300 bg-white">
             <SelectValue placeholder="Anywhere" />
           </SelectTrigger>
           <SelectContent>
@@ -112,6 +112,7 @@ export function InviteDialog({ open, onOpenChange, isCaptain }) {
                   <button
                     key={opt.v}
                     type="button"
+                    aria-pressed={role === opt.v}
                     onClick={() => setRole(opt.v)}
                     className={cn(
                       'rounded-2xl border-2 py-3 text-xs font-bold uppercase tracking-[0.08em] transition',

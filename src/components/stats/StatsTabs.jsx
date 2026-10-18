@@ -47,7 +47,7 @@ export function StandingsTab({ games, year, session }) {
     <div className="space-y-5">
       <section className={CARD}>
         <h3 className={sectionTitle}>{title}</h3>
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[360px]:grid-cols-4">
           {[
             { l: 'Won', v: overall.w, tone: 'bg-lime-400 text-black' },
             { l: 'Lost', v: overall.l, tone: 'bg-zinc-950 text-white' },
@@ -56,7 +56,7 @@ export function StandingsTab({ games, year, session }) {
           ].map((tile) => (
             <div key={tile.l} className={cn('rounded-2xl px-3 py-3', tile.tone)}>
               <div className="font-display text-xl font-extrabold leading-none">{tile.v}</div>
-              <div className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] opacity-70">{tile.l}</div>
+              <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em]">{tile.l}</div>
             </div>
           ))}
         </div>
@@ -72,7 +72,7 @@ export function StandingsTab({ games, year, session }) {
             {years.map((y) => (
               <RecordRow key={y} label={`${y}`} record={record(games.filter((g) => g.season_year === y))} />
             ))}
-            {years.length === 0 && <p className="text-sm text-zinc-400">No results yet.</p>}
+            {years.length === 0 && <p className="text-sm text-zinc-500">No results yet.</p>}
           </div>
         </section>
       )}
@@ -80,7 +80,7 @@ export function StandingsTab({ games, year, session }) {
       <section className={CARD}>
         <div className="flex items-center justify-between">
           <h3 className={sectionTitle}>By session</h3>
-          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400">W-L-D · GF · GA</span>
+          <span className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">W-L-D · GF · GA</span>
         </div>
         <div className="mt-3 space-y-2">
           {sessions.map((s) => (
@@ -91,7 +91,7 @@ export function StandingsTab({ games, year, session }) {
               highlight={s.y === year && s.s === session}
             />
           ))}
-          {sessions.length === 0 && <p className="text-sm text-zinc-400">No results yet.</p>}
+          {sessions.length === 0 && <p className="text-sm text-zinc-500">No results yet.</p>}
         </div>
       </section>
     </div>
@@ -122,10 +122,11 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
           {LEADER_SORTS.map((s) => (
             <button
               key={s.key}
+              aria-pressed={sortKey === s.key}
               onClick={() => setSortKey(s.key)}
               className={cn(
-                'rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] transition',
-                sortKey === s.key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200',
+                'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] transition',
+                sortKey === s.key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
               )}
             >
               {s.label}
@@ -133,7 +134,7 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
           ))}
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 px-1 pb-2 text-[9px] font-black uppercase tracking-[0.12em] text-zinc-400">
+      <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 px-1 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">
         <span>Player</span>
         <span className="w-8 text-center">GP</span>
         <span className="w-8 text-center">G</span>
@@ -147,7 +148,7 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', r.profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
               <span className="truncate text-sm font-semibold">{r.profile.display_name}</span>
               {r.profile.guest && (
-                <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-zinc-500">
+                <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500">
                   Not joined
                 </span>
               )}
@@ -164,7 +165,7 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
             </span>
           </div>
         ))}
-        {rows.length === 0 && <p className="py-3 text-sm text-zinc-400">No stats recorded for this filter yet.</p>}
+        {rows.length === 0 && <p className="py-3 text-sm text-zinc-500">No stats recorded for this filter yet.</p>}
       </div>
     </section>
   );
@@ -177,7 +178,7 @@ export function OpponentsTab({ games, year, session }) {
   return (
     <section className="space-y-3">
       {rows.length === 0 && (
-        <div className={cn(CARD, 'p-5 text-sm text-zinc-400')}>No results recorded for this filter yet.</div>
+        <div className={cn(CARD, 'p-5 text-sm text-zinc-500')}>No results recorded for this filter yet.</div>
       )}
       {rows.map((row) => {
         const expanded = open === row.opponent;
@@ -193,20 +194,20 @@ export function OpponentsTab({ games, year, session }) {
                   {row.w}-{row.l}-{row.d} · {row.gf} GF, {row.ga} GA
                 </span>
               </span>
-              <ChevronDown className={cn('h-4 w-4 shrink-0 text-zinc-400 transition', expanded && 'rotate-180')} />
+              <ChevronDown className={cn('h-4 w-4 shrink-0 text-zinc-500 transition', expanded && 'rotate-180')} />
             </button>
             {expanded && (
               <div className="border-t border-zinc-100">
                 {row.played.map((g) => (
                   <div key={g.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <span className="w-24 shrink-0 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+                    <span className="w-24 shrink-0 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500">
                       {g.season_year} S{g.session}
                     </span>
                     <span className="flex-1 text-xs font-medium text-zinc-500">{g.date}</span>
                     <span className="font-display text-sm font-extrabold">
                       {g.score_us ?? 0}–{g.score_them ?? 0}
                     </span>
-                    <ResultBadge result={g.result || resultOf(g)} className="h-6 w-6 rounded-lg text-[10px]" />
+                    <ResultBadge result={g.result || resultOf(g)} className="h-6 w-6 rounded-lg text-[11px]" />
                   </div>
                 ))}
               </div>
@@ -243,14 +244,14 @@ export function LegacyTab({ games, stats, profiles, votes }) {
               .slice(0, 3);
             return (
               <div key={cat.key} className="rounded-2xl bg-white/5 p-3.5">
-                <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/40">{cat.label}</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-white/50">{cat.label}</span>
                 <div className="mt-2 space-y-1">
-                  {top.length === 0 && <span className="text-xs text-white/40">—</span>}
+                  {top.length === 0 && <span className="text-xs text-white/50">—</span>}
                   {top.map((x, i) => (
                     <div key={x.name} className="flex items-center gap-2">
                       <span
                         className={cn(
-                          'grid h-6 w-6 place-items-center rounded-lg font-display text-[10px] font-black',
+                          'grid h-6 w-6 place-items-center rounded-lg font-display text-[11px] font-black',
                           i === 0 ? 'bg-lime-400 text-black' : 'bg-white/10 text-white/70',
                         )}
                       >
@@ -282,12 +283,12 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                       {c.profile.display_name}
                     </span>
                     {c.profile.guest && (
-                      <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-zinc-500">
+                      <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500">
                         Not joined
                       </span>
                     )}
                     {c.profile.year_joined && (
-                      <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-lime-800">
+                      <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-800">
                         Since {c.profile.year_joined}
                       </span>
                     )}
@@ -296,11 +297,11 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                     {c.totals.games} GP · {c.totals.goals} G · {c.totals.assists} A · {c.totals.awards} POTM
                   </span>
                 </span>
-                <ChevronDown className={cn('h-4 w-4 shrink-0 text-zinc-400 transition', expanded && 'rotate-180')} />
+                <ChevronDown className={cn('h-4 w-4 shrink-0 text-zinc-500 transition', expanded && 'rotate-180')} />
               </button>
               {expanded && (
                 <div className="border-t border-zinc-100 px-4 py-3">
-                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] gap-2 pb-2 text-[9px] font-black uppercase tracking-[0.1em] text-zinc-400">
+                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] gap-2 pb-2 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
                     <span>Session</span>
                     <span className="w-7 text-center">GP</span>
                     <span className="w-7 text-center">G</span>
@@ -325,14 +326,14 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                       <span className="w-7" />
                     </div>
                   ))}
-                  {c.sessions.length === 0 && <p className="py-2 text-xs text-zinc-400">No sessions recorded.</p>}
+                  {c.sessions.length === 0 && <p className="py-2 text-xs text-zinc-500">No sessions recorded.</p>}
                 </div>
               )}
             </div>
           );
         })}
         {careers.length === 0 && (
-          <div className={cn(CARD, 'p-5 text-sm text-zinc-400')}>Career stats appear once game results are entered.</div>
+          <div className={cn(CARD, 'p-5 text-sm text-zinc-500')}>Career stats appear once game results are entered.</div>
         )}
       </section>
     </div>

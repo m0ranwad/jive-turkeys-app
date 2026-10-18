@@ -28,7 +28,7 @@ export function PotmPrompt({ data }) {
               {g.score_us}–{g.score_them} {resultOf(g)} vs {g.opponent} · Voting closes {closesLabel(g.potm_closes_at)}
             </span>
           </span>
-          <span className="shrink-0 rounded-full bg-zinc-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+          <span className="shrink-0 rounded-full bg-zinc-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white">
             Vote
           </span>
         </Link>

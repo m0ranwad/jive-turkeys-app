@@ -71,17 +71,17 @@ function RoomItem({ room, icon, title, summary, active, unread, mentions, isNew,
           >
             {title}
           </span>
-          <span className={cn('shrink-0 text-[10px] font-semibold', bold ? 'text-lime-700' : 'text-zinc-400')}>
+          <span className={cn('shrink-0 text-[11px] font-semibold', bold ? 'text-lime-700' : 'text-zinc-500')}>
             {shortWhen(summary?.last_message_at)}
           </span>
         </span>
         <span className="mt-0.5 flex items-center gap-2">
-          <span className={cn('min-w-0 flex-1 truncate text-xs', bold ? 'font-semibold text-zinc-700' : 'text-zinc-400')}>
+          <span className={cn('min-w-0 flex-1 truncate text-xs', bold ? 'font-semibold text-zinc-700' : 'text-zinc-500')}>
             {preview}
           </span>
           {!active && mentions > 0 && <MentionCount n={mentions} />}
           {!active && isNew && (
-            <span className="shrink-0 rounded-full bg-lime-400 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-black">
+            <span className="shrink-0 rounded-full bg-lime-400 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-black">
               New
             </span>
           )}
@@ -98,7 +98,7 @@ export function MentionCount({ n, className }) {
     <span
       aria-label={`${n} ${n === 1 ? 'mention' : 'mentions'}`}
       className={cn(
-        'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-zinc-950 px-1.5 text-[10px] font-black leading-none text-lime-400',
+        'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-zinc-950 px-1.5 text-[11px] font-black leading-none text-lime-400',
         className,
       )}
     >
@@ -112,7 +112,7 @@ export function UnreadCount({ n, className }) {
     <span
       aria-label={`${n} unread`}
       className={cn(
-        'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-lime-400 px-1.5 text-[10px] font-black leading-none text-black',
+        'grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-lime-400 px-1.5 text-[11px] font-black leading-none text-black',
         className,
       )}
     >
@@ -169,7 +169,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, notes }) {
       {others.map((room) => item(room))}
       {/* No threads or private chats yet (the Lounge doesn't count): how to start one. */}
       {others.every((room) => isLounge(room.thread)) && (
-        <p className="px-2.5 py-3 text-xs leading-relaxed text-zinc-400">
+        <p className="px-2.5 py-3 text-xs leading-relaxed text-zinc-500">
           Tap <b className="text-zinc-600">New</b> for a thread the whole team can join (carpools, pickup games, the
           fantasy league), or a private chat with teammates you pick.
         </p>
@@ -180,7 +180,7 @@ export function ThreadList({ rooms, activeRoom, me, nameOf, onOpen, notes }) {
           <button
             onClick={() => setShowClosed((v) => !v)}
             aria-expanded={showClosed}
-            className="flex w-full items-center gap-1.5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 transition hover:text-zinc-600"
+            className="flex w-full items-center gap-1.5 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500 transition hover:text-zinc-600"
           >
             <Archive className="h-3 w-3" /> Closed ({closed.length})
             {/* What came in before they closed still counts on the Chat tab, so it shows here too. */}

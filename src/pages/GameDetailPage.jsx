@@ -52,7 +52,7 @@ export function GameDetailPage() {
     return (
       <div className="rounded-3xl border border-black/5 bg-white p-8 text-center">
         <p className="font-display text-lg font-extrabold uppercase tracking-tight">Game not found</p>
-        <Link to="/" className="mt-3 inline-block text-sm font-semibold text-lime-600">
+        <Link to="/" className="mt-3 inline-block text-sm font-semibold text-lime-700">
           Back to schedule
         </Link>
       </div>
@@ -153,14 +153,14 @@ export function GameDetailPage() {
     <div className="space-y-4">
       <button
         onClick={() => navigate('/')}
-        className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 transition hover:text-zinc-900"
+        className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-900"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Schedule
       </button>
 
       <section className="overflow-hidden rounded-3xl bg-zinc-950 text-white">
         <div className="p-5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-400">
+          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-lime-400">
             {game.season_year} · Session {game.session}
           </div>
           <h1 className="mt-1.5 font-display text-3xl font-extrabold uppercase leading-none tracking-tight">vs {game.opponent}</h1>
@@ -190,10 +190,11 @@ export function GameDetailPage() {
                 {['primary', 'backup'].map((jersey) => (
                   <button
                     key={jersey}
+                    aria-pressed={game.jersey === jersey}
                     disabled={!data.isCaptain || busy}
                     onClick={() => setJersey(jersey)}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] transition',
+                      'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
                       game.jersey === jersey ? 'bg-white text-black' : 'text-white/50',
                       !data.isCaptain && 'opacity-70',
                     )}

@@ -173,7 +173,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
                 className="rounded-xl text-base"
               />
               {sorted.existing.length > 0 && (
-                <p className="text-[11px] font-medium text-zinc-400">Already on the roster, so skipped: {sorted.existing.join(', ')}</p>
+                <p className="text-[11px] font-medium text-zinc-500">Already on the roster, so skipped: {sorted.existing.join(', ')}</p>
               )}
               {sorted.tooLong.length > 0 && (
                 <p className="text-[11px] font-medium text-red-700">Too long (60 letters at most): {sorted.tooLong.join(', ')}</p>
@@ -204,7 +204,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
           </form>
           {removed.length > 0 && (
             <div className={SECTION}>
-              <span className={cn(EYEBROW, 'block text-zinc-400')}>Removed earlier</span>
+              <span className={cn(EYEBROW, 'block text-zinc-500')}>Removed earlier</span>
               {removed.map((g) => (
                 <div key={g.id} className="flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold">{g.display_name}</span>

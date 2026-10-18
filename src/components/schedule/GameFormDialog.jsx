@@ -118,6 +118,7 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
                 <button
                   key={opt.v}
                   type="button"
+                  aria-pressed={form.jersey === opt.v}
                   onClick={() => set({ jersey: opt.v })}
                   className={cn(
                     'flex items-center gap-2 rounded-2xl border-2 px-3 py-2.5 text-xs font-bold transition',

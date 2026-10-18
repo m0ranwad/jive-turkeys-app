@@ -87,7 +87,7 @@ export function MessageRow({
         {!mine && (
           <div className="w-8 shrink-0 self-end">
             {last && (
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-lime-400 font-display text-[10px] font-extrabold uppercase text-black">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-lime-400 font-display text-[11px] font-extrabold uppercase text-black">
                 {initials(author)}
               </span>
             )}
@@ -95,10 +95,10 @@ export function MessageRow({
         )}
         <div className={cn('flex min-w-0 max-w-[80%] flex-col sm:max-w-[70%]', mine ? 'items-end' : 'items-start')}>
           {first && !mine && (
-            <div className="mb-1 ml-3 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-zinc-500">
+            <div className="mb-1 ml-3 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
               {shortName(author)}
               {isCaptainAuthor && (
-                <span className="rounded bg-lime-400 px-1 py-px text-[8px] tracking-[0.12em] text-black">Capt</span>
+                <span className="rounded bg-lime-400 px-1 py-px text-[11px] tracking-[0.12em] text-black">Capt</span>
               )}
             </div>
           )}
@@ -148,7 +148,7 @@ export function MessageRow({
               <Body message={m} mine={mine && !big} me={me} people={people} />
             </span>
             {m.edited_date && (
-              <span className={cn('ml-1.5 align-baseline text-[10px] font-semibold', big ? 'text-zinc-400' : 'opacity-60')}>edited</span>
+              <span className={cn('ml-1.5 align-baseline text-[11px] font-semibold', big ? 'text-zinc-500' : 'opacity-75')}>edited</span>
             )}
           </div>
 
@@ -177,7 +177,7 @@ export function MessageRow({
           )}
 
           {(last || selected) && (
-            <div className={cn('mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400', mine ? 'mr-2' : 'ml-3')}>
+            <div className={cn('mt-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500', mine ? 'mr-2' : 'ml-3')}>
               {m.pending ? 'Sending…' : timeLabel(m.created_date)}
             </div>
           )}
@@ -199,7 +199,7 @@ export function MessageRow({
                   aria-label={`React ${emoji}`}
                   aria-pressed={on}
                   className={cn(
-                    'grid h-9 w-9 place-items-center rounded-full text-xl transition hover:scale-110 active:scale-90',
+                    'grid h-9 w-9 place-items-center rounded-full text-xl transition motion-safe:hover:scale-110 active:scale-90',
                     on && 'bg-lime-100',
                   )}
                 >

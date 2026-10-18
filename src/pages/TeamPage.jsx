@@ -23,10 +23,11 @@ function StatusButtons({ current, onPick }) {
   return STATUS_OPTIONS.map((opt) => (
     <button
       key={opt.value}
+      aria-pressed={(current || 'active') === opt.value}
       onClick={() => onPick(opt.value)}
       className={cn(
-        'rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] transition',
-        (current || 'active') === opt.value ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200',
+        'rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
+        (current || 'active') === opt.value ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
       )}
     >
       {opt.label}
@@ -178,7 +179,7 @@ export function TeamPage() {
         ].map((tile) => (
           <div key={tile.l} className={cn('rounded-2xl px-3 py-3', tile.tone)}>
             <div className="font-display text-xl font-extrabold leading-none">{tile.v}</div>
-            <div className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] opacity-70">{tile.l}</div>
+            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em]">{tile.l}</div>
           </div>
         ))}
       </div>
@@ -250,7 +251,7 @@ export function TeamPage() {
                 <span
                   className={cn(
                     'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
-                    p.guest ? 'bg-zinc-200 text-zinc-500' : p.gender === 'F' ? 'bg-lime-400 text-black' : 'bg-zinc-900 text-lime-400',
+                    p.guest ? 'bg-zinc-200 text-zinc-600' : p.gender === 'F' ? 'bg-lime-400 text-black' : 'bg-zinc-900 text-lime-400',
                   )}
                 >
                   {initials(p.display_name)}
@@ -259,7 +260,7 @@ export function TeamPage() {
                   <div className="flex items-center gap-2">
                     <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{p.display_name}</span>
                     {isMe && (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
                         You
                       </span>
                     )}
@@ -267,21 +268,21 @@ export function TeamPage() {
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
                     <span
                       className={cn(
-                        'rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em]',
+                        'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
                         STATUS_CLASS[p.status] || STATUS_CLASS.active,
                       )}
                     >
                       {STATUS_LABEL[p.status] || 'Active'}
                     </span>
-                    <span className={cn(!p.position && 'text-zinc-400')}>{p.position || 'Floater'}</span>
+                    <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
                     {p.guest && (
-                      <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                      <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
                         Not joined yet
                       </span>
                     )}
                     {p.year_joined && <span>Since {p.year_joined}</span>}
                     {p.is_captain && (
-                      <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-lime-400">
+                      <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
                         Captain
                       </span>
                     )}
@@ -315,14 +316,14 @@ export function TeamPage() {
               {(isMe || data.isCaptain) && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
                   {isMe && (
-                    <span className="mr-1 text-[9px] font-black uppercase tracking-[0.12em] text-zinc-400">My status</span>
+                    <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
                   )}
                   <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
                   {p.guest && data.isCaptain && (
                     <button
                       onClick={() => setGuestDialog(guests.find((g) => g.id === p.id))}
                       aria-label={`Edit ${p.display_name}`}
-                      className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500 transition hover:bg-zinc-200"
+                      className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
                     >
                       <Pencil className="h-3 w-3" />
                       Edit
@@ -332,8 +333,8 @@ export function TeamPage() {
                     <button
                       onClick={() => toggleCaptain(p)}
                       className={cn(
-                        'ml-auto rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] transition',
-                        p.is_captain ? 'bg-lime-400 text-black' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200',
+                        'ml-auto rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
+                        p.is_captain ? 'bg-lime-400 text-black' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
                       )}
                     >
                       {p.is_captain ? 'Captain ✓' : 'Make captain'}
@@ -343,7 +344,7 @@ export function TeamPage() {
                     <button
                       onClick={() => setRemoving(p)}
                       aria-label={`Remove ${p.display_name}`}
-                      className="rounded-full px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
+                      className="rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
                     >
                       Remove
                     </button>
@@ -371,7 +372,7 @@ export function TeamPage() {
 
       {removedPlayers.length > 0 && (
         <section className="rounded-3xl border border-black/5 bg-white p-4" data-testid="removed-players">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-zinc-400">Removed from the team</h3>
+          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-zinc-500">Removed from the team</h3>
           <p className="mt-1 text-xs font-medium text-zinc-500">Only captains see this. They can't use the team site until you add them back.</p>
           <div className="mt-3 space-y-2">
             {removedPlayers.map((p) => (
@@ -379,7 +380,7 @@ export function TeamPage() {
                 <span className="text-sm font-semibold">{p.display_name}</span>
                 <button
                   onClick={() => addBack(p)}
-                  className="rounded-full bg-zinc-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
+                  className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
                 >
                   Add back
                 </button>

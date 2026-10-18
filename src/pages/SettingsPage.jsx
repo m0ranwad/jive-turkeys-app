@@ -122,6 +122,7 @@ export function SettingsPage() {
             ].map((opt) => (
               <button
                 key={opt.v}
+                aria-pressed={form.potm_mode === opt.v}
                 onClick={() => set({ potm_mode: opt.v })}
                 className={cn(
                   'rounded-2xl border-2 px-3 py-3 text-xs font-bold uppercase tracking-[0.06em] transition',

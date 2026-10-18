@@ -101,14 +101,14 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
         <div className="flex items-center justify-between px-6 pt-6">
           <span className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-lime-400 font-display text-[11px] font-black text-black">JT</span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
+            <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-500">
               {onProfileStep ? 'New player' : 'How to use'}
             </span>
           </span>
           {!onProfileStep && (
             <button
               onClick={() => (needsProfile ? setStep(STEPS.length) : onClose())}
-              className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400 transition hover:text-zinc-900"
+              className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-900"
             >
               Skip
             </button>
@@ -117,9 +117,9 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
 
         <div className="max-h-[75vh] overflow-y-auto px-6 pb-6 pt-5">
           {/* Each step fades and slides in (a CSS animation; no animation library to download). */}
-          <div key={step} className="duration-200 ease-out animate-in fade-in slide-in-from-bottom-3">
+          <div key={step} className="duration-200 ease-out animate-in fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
             {onProfileStep && names === null ? (
-              <p className="py-10 text-center text-sm text-zinc-400">One moment…</p>
+              <p className="py-10 text-center text-sm text-zinc-500">One moment…</p>
             ) : onProfileStep && names.length > 0 && pick === undefined ? (
               <div>
                 <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
@@ -136,7 +136,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       className="flex items-center justify-between rounded-2xl border-2 border-dashed border-zinc-300 px-4 py-3 text-left text-sm font-bold transition hover:border-zinc-900"
                     >
                       {g.display_name}
-                      <ChevronRight className="h-4 w-4 text-zinc-400" />
+                      <ChevronRight className="h-4 w-4 text-zinc-500" />
                     </button>
                   ))}
                 </div>
@@ -147,7 +147,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                 >
                   I'm not on the list
                 </button>
-                <p className="mt-4 text-center text-xs text-zinc-400">
+                <p className="mt-4 text-center text-xs text-zinc-500">
                   Wrong account?{' '}
                   <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
                     Sign out
@@ -246,7 +246,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                     />
                   </div>
                 )}
-                <p className="mt-4 text-center text-xs text-zinc-400">
+                <p className="mt-4 text-center text-xs text-zinc-500">
                   Wrong account?{' '}
                   <button type="button" onClick={signOut} className="font-semibold text-zinc-600 underline underline-offset-2">
                     Sign out
@@ -255,7 +255,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
               </div>
             ) : (
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-lime-600">{STEPS[step].eyebrow}</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-lime-700">{STEPS[step].eyebrow}</span>
                 <h2 className="mt-2 font-display text-3xl font-extrabold uppercase leading-[1.05] tracking-tight">
                   {STEPS[step].title}
                 </h2>

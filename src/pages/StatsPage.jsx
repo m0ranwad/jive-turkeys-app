@@ -29,7 +29,7 @@ export function StatsPage() {
       <PageHeader title="Stats" subtitle="Results, leaders, and our record against everyone." />
       <div className="grid grid-cols-2 gap-2">
         <Select value={String(yearFilter)} onValueChange={setYearFilter}>
-          <SelectTrigger>
+          <SelectTrigger aria-label="Season">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -42,7 +42,7 @@ export function StatsPage() {
           </SelectContent>
         </Select>
         <Select value={String(sessionFilter)} onValueChange={setSessionFilter}>
-          <SelectTrigger>
+          <SelectTrigger aria-label="Session">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

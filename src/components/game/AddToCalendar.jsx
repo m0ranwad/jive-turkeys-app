@@ -64,7 +64,7 @@ function EventPreview({ game, settings }) {
         aria-hidden="true"
         className="w-14 shrink-0 self-start overflow-hidden rounded-xl bg-white text-center shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/5"
       >
-        <div className="bg-lime-400 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-black">{day.format('MMM')}</div>
+        <div className="bg-lime-400 py-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-black">{day.format('MMM')}</div>
         <div className="py-1.5 font-display text-2xl font-extrabold leading-none">{day.format('D')}</div>
       </div>
       <div className="min-w-0 flex-1">
@@ -127,7 +127,7 @@ export function AddToCalendar({ game, settings, className }) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-white transition hover:bg-white/10',
+          'inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-white transition hover:bg-white/10',
           className,
         )}
       >

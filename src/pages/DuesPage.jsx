@@ -56,7 +56,7 @@ export function DuesPage() {
             onClick={() => setPicked(v.value)}
             className={cn(
               'rounded-xl py-2.5 text-xs font-bold uppercase tracking-[0.08em] transition',
-              view === v.value ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-800',
+              view === v.value ? 'bg-white text-black shadow-sm' : 'text-zinc-600 hover:text-zinc-800',
             )}
           >
             {v.label}

@@ -82,7 +82,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
           <span
             data-testid="potm-deadline"
             className={cn(
-              'text-[10px] font-black uppercase tracking-[0.1em]',
+              'text-[11px] font-black uppercase tracking-[0.1em]',
               open ? 'text-lime-700' : 'text-zinc-500',
             )}
           >
@@ -105,11 +105,11 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
           return (
             <div key={award} className="rounded-2xl bg-zinc-50 p-3.5">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">{AWARD_LABEL[award]}</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">{AWARD_LABEL[award]}</span>
                 {mine && !voting && canVote && (
                   <button
                     onClick={() => setChanging(award)}
-                    className="text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400 transition hover:text-zinc-900"
+                    className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500 transition hover:text-zinc-900"
                   >
                     Change vote
                   </button>
@@ -124,7 +124,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                         <Trophy className="h-3.5 w-3.5" />
                       </span>
                       <span className="font-display text-sm font-extrabold uppercase tracking-tight">{nameOf(userId)}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-400">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500">
                         {count} vote{count === 1 ? '' : 's'}
                       </span>
                     </div>
@@ -133,7 +133,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
               )}
 
               {leaders.length === 0 && !voting && (
-                <p className="mt-2 text-xs font-medium text-zinc-400">
+                <p className="mt-2 text-xs font-medium text-zinc-500">
                   {played.length ? 'No votes yet.' : 'No votes — no stats recorded for this game.'}
                 </p>
               )}
@@ -141,12 +141,13 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
               {voting && (
                 <div className="mt-2">
                   {eligible.length === 0 ? (
-                    <p className="text-xs font-medium text-zinc-400">No eligible teammates.</p>
+                    <p className="text-xs font-medium text-zinc-500">No eligible teammates.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {eligible.map((p) => (
                         <button
                           key={p.user_id}
+                          aria-pressed={mine?.voted_for_id === p.user_id}
                           disabled={busy}
                           onClick={() => castVote(award, p)}
                           className={cn(
@@ -166,7 +167,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                   {mine && (
                     <button
                       onClick={() => setChanging(null)}
-                      className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-400"
+                      className="mt-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500"
                     >
                       Cancel
                     </button>
@@ -175,7 +176,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
               )}
 
               {open && !canVote && leaders.length > 0 && (
-                <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
+                <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
                   Voting is open to players who played this game
                 </p>
               )}

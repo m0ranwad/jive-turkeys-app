@@ -40,7 +40,7 @@ export function SessionPrompt({ profile, roster, games, onAnswered }) {
 
   return (
     <section className="rounded-3xl border-2 border-lime-400 bg-lime-50 p-4" data-testid="session-prompt">
-      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-lime-800">
+      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-800">
         Session {period.session} starts {fmtDateShort(first.date)}
       </span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>

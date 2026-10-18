@@ -64,7 +64,7 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
           <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Search the chat</DialogTitle>
         </DialogHeader>
         <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-zinc-50 px-3 focus-within:border-lime-400 focus-within:bg-white">
-          <Search className="h-4 w-4 shrink-0 text-zinc-400" />
+          <Search className="h-4 w-4 shrink-0 text-zinc-500" />
           <input
             autoFocus
             type="search"
@@ -79,7 +79,7 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
           {error && <p className="py-6 text-center text-sm text-red-600">{error}</p>}
           {!error && results?.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">Nothing found.</p>}
           {!error && results === null && (
-            <p className="py-6 text-center text-sm text-zinc-400">Searches Team Chat, every thread and your private chats.</p>
+            <p className="py-6 text-center text-sm text-zinc-500">Searches Team Chat, every thread and your private chats.</p>
           )}
           <ul className="space-y-1.5">
             {(results || []).map((m) => (
@@ -95,9 +95,9 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
                   <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
                     <span className="truncate text-zinc-900">
                       {shortName(nameOf(m.user_id, m.author_name))}
-                      <span className="font-semibold text-zinc-400"> · {m.thread_id ? roomName(m.thread_id, m.thread_title) || 'Thread' : 'Team Chat'}</span>
+                      <span className="font-semibold text-zinc-500"> · {m.thread_id ? roomName(m.thread_id, m.thread_title) || 'Thread' : 'Team Chat'}</span>
                     </span>
-                    <span className="shrink-0 font-semibold text-zinc-400">{shortWhen(m.created_date)}</span>
+                    <span className="shrink-0 font-semibold text-zinc-500">{shortWhen(m.created_date)}</span>
                   </div>
                   <div className="mt-0.5 line-clamp-2 text-sm text-zinc-700">
                     <Highlighted text={m.body} query={query} />
