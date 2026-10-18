@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v21';
+const DB_KEY = 'jt_demo_db_v24';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -450,8 +450,15 @@ describe('dues', () => {
     const guests = await api.entities.TeamGuest.list('display_name');
     expect(guests.map((g) => [g.display_name, g.gender, g.status, g.removed])).toEqual([
       ['Dana Wells', 'F', 'active', false],
+      ['Kelly M', 'F', 'active', false],
       ['Mike Russo', 'M', 'active', false],
     ]);
+    // Kelly picked "Kelly M" when she joined, so a captain can undo it.
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    expect(guests.find((g) => g.display_name === 'Kelly M').linked_user_id).toBe(kelly.user_id);
+    const [link] = await api.entities.TeamGuestLink.list();
+    expect(link).toMatchObject({ user_id: kelly.user_id, unlinked_at: null });
+    expect(link.moved_payments).toHaveLength(1);
     const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
     const [riley] = await api.entities.PlayerProfile.filter({ display_name: 'Riley Novak' });
     expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
@@ -684,6 +691,96 @@ describe('dues', () => {
     await api.auth.signIn('jordan@demo.test', 'demo1234');
     const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
     await expect(api.users.linkGuest(mike.id, (await api.auth.me()).id)).rejects.toThrow('Only captains');
+  });
+
+  // Everything a pick can touch, leaving out when rows were last saved and who answered a session's list.
+  // An empty field counts the same whether the sample data has it or not.
+  const pickState = async (api) => {
+    const strip = (rows, ...skip) =>
+      rows
+        .map((r) => Object.fromEntries(Object.entries(r).filter(([k, v]) => v != null && !['updated_date', ...skip].includes(k))))
+        .sort((a, b) => (a.id < b.id ? -1 : 1));
+    return {
+      payments: strip(await api.entities.DuesPayment.list()),
+      history: strip(await api.entities.DuesHistory.list()),
+      roster: strip(await api.entities.SessionRoster.list(), 'answered_at', 'changed_by'),
+      rsvps: strip(await api.entities.Rsvp.list()),
+      stats: strip(await api.entities.GameStat.list()),
+      votes: strip(await api.entities.PotmVote.list()),
+      profiles: strip(await api.entities.PlayerProfile.list()),
+      guests: strip(await api.entities.TeamGuest.list()),
+    };
+  };
+
+  it('lets a captain undo a wrong pick: the name and the account are back exactly as they were', async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    await api.entities.TeamGuest.update(mike.id, { status: 'sub_pool' });
+    // Sam Ortiz joins and picks Mike Russo by mistake.
+    await api.auth.signUp('sam.ortiz@demo.test', 'demo1234');
+    const sam = await api.auth.me();
+    await api.entities.PlayerProfile.create({ user_id: sam.id, display_name: 'Sam Ortiz', gender: 'M', position: null, status: 'active' });
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    const before = await pickState(api);
+    const changesBefore = await api.entities.DuesChange.list();
+
+    await api.auth.signIn('sam.ortiz@demo.test', 'demo1234');
+    await api.users.claimGuest(mike.id);
+    expect((await api.entities.PlayerProfile.filter({ user_id: sam.id }))[0]).toMatchObject({ status: 'sub_pool', position: 'Defense' });
+    expect(await api.entities.Rsvp.filter({ user_id: sam.id })).toHaveLength(1);
+    await expect(api.users.unlinkGuest(mike.id)).rejects.toThrow('Only captains');
+
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    await api.users.unlinkGuest(mike.id);
+    expect(await pickState(api)).toEqual(before);
+    // The dues changes are a log: Sam's status going and coming back is added to it.
+    const changes = await api.entities.DuesChange.list();
+    expect(changesBefore.every((c) => changes.some((d) => JSON.stringify(d) === JSON.stringify(c)))).toBe(true);
+    expect((await api.entities.TeamGuestLink.filter({ guest_id: mike.id }))[0]).toMatchObject({ unlinked_at: expect.any(String) });
+    await expect(api.users.unlinkGuest(mike.id)).rejects.toThrow("isn't linked");
+  });
+
+  it("undoes a captain's link: merged payments and both couples go back", async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [dana] = await api.entities.TeamGuest.filter({ display_name: 'Dana Wells' });
+    const [alex] = await api.entities.PlayerProfile.filter({ display_name: 'Alex Chen' });
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    // Mike pays with Dana and has a custom amount for session 2; Alex pays with Riley.
+    await api.dues.setPartner(mike.id, dana.id);
+    await api.entities.DuesPayment.create({ season_year: year, session: 2, user_id: null, guest_id: mike.id, paid: false, override_amount: 40 });
+    const before = await pickState(api);
+
+    await api.users.linkGuest(mike.id, alex.user_id);
+    expect((await api.entities.PlayerProfile.filter({ user_id: alex.user_id }))[0].pays_with_guest).toBe(dana.id);
+    expect((await api.entities.DuesPayment.filter({ session: 2, user_id: alex.user_id }))[0].override_amount).toBe(40);
+    await api.users.unlinkGuest(mike.id);
+    expect(await pickState(api)).toEqual(before);
+  });
+
+  it("puts Kelly M back on the roster, with Kelly's session 1 payment, and can't undo a pick made before undo existed", async () => {
+    const { api } = await signedIn();
+    const [kellyName] = await api.entities.TeamGuest.filter({ display_name: 'Kelly M' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await api.users.unlinkGuest(kellyName.id);
+    expect(await api.entities.DuesPayment.filter({ session: 1, user_id: kelly.user_id })).toHaveLength(0);
+    expect(await api.entities.DuesPayment.filter({ session: 1, guest_id: kellyName.id, paid: true })).toHaveLength(1);
+    // She's on the current session's list again, which started while the name was hers.
+    expect(await api.entities.SessionRoster.filter({ session: 2, guest_id: kellyName.id, status: 'active' })).toHaveLength(1);
+
+    const [dana] = await api.entities.TeamGuest.filter({ display_name: 'Dana Wells' });
+    await api.entities.TeamGuest.update(dana.id, { linked_user_id: kelly.user_id });
+    await expect(api.users.unlinkGuest(dana.id)).rejects.toThrow('before undo was added');
+  });
+
+  it("only lets captains answer the Team page's name checks", async () => {
+    const { api } = await signedIn();
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    await api.entities.TeamNameCheck.create({ kind: 'not_on_roster', user_id: chris.user_id, other_user_id: null });
+    expect(await api.entities.TeamNameCheck.list()).toHaveLength(1);
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    await expect(api.entities.TeamNameCheck.create({ kind: 'not_on_roster', user_id: chris.user_id })).rejects.toThrow('permission');
+    await expect(api.entities.TeamGuestLink.create({ guest_id: 'g', user_id: chris.user_id })).rejects.toThrow('permission');
   });
 
   it('lets a new player pick their name: status, details, payments and history become theirs, once', async () => {

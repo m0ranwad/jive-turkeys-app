@@ -21,6 +21,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.t
 | A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
 | The game is short when IN is under the minimum players or women on the field (8 and 3 unless captains change them). | `[unit]` |
 | Players off the roster (removed, or roster names who joined under their own account) aren't counted. | `[unit]` |
+| A roster name's RSVPs, stat lines and Player of the Match votes move to the account that picks it, and go back to the grey card if a captain unlinks that pick (`supabase/tests/unlink.test.sql`). | `[db]` |
 | A red card sits the player out the next game with a result after it, and only that one. Blue cards never do. | `[unit]` |
 
 ## 2. Games and results

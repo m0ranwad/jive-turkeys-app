@@ -58,6 +58,11 @@ test("the captain's screens", async ({ page }) => {
 
   await visit(page, '/team', 'Team');
   await expectAccessible(page, 'Team');
+  await page.getByRole('button', { name: 'Unlink Kelly M from Kelly Moss' }).click();
+  await expect(page.getByRole('dialog', { name: 'Unlink Kelly M?' })).toBeVisible();
+  await expectAccessible(page, 'Unlink a roster name');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Unlink Kelly M?' })).toHaveCount(0);
 
   await visit(page, '/banter?room=team', 'Team Chat');
   await expectAccessible(page, 'Team Chat');

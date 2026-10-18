@@ -249,6 +249,55 @@ export function sameName(a, b) {
 }
 
 /**
+ * The account a roster name's player probably joined with, or null: a name like
+ * it, on an account that hasn't picked a roster name, and not one a captain
+ * already took this name off (`links` are team_guest_links rows).
+ */
+export function likelyAccount(guest, players, guests = [], links = []) {
+  const taken = new Set(guests.map((g) => g.linked_user_id).filter(Boolean));
+  const undone = new Set(links.filter((l) => l.guest_id === guest.id && l.unlinked_at).map((l) => l.user_id));
+  return players.find((p) => !taken.has(p.user_id) && !undone.has(p.user_id) && sameName(p.display_name, guest.display_name)) || null;
+}
+
+/** "Josh", "Josh and Sam", "Josh, Sam and Kim". */
+export const nameList = (names) => (names.length < 3 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
+
+/** Whether a captain said these two accounts are different people (`checks` are team_name_checks rows). */
+const markedDifferent = (a, b, checks) =>
+  checks.some(
+    (c) => c.kind === 'different_people' && ((c.user_id === a && c.other_user_id === b) || (c.user_id === b && c.other_user_id === a)),
+  );
+
+/**
+ * Other accounts that might be the same person as `player`, signed up twice: a
+ * name like theirs ("Josh A" and "Josh Allen"). Two accounts that each picked a
+ * roster name are two people, and so is a pair a captain marked as different.
+ */
+export function lookalikeAccounts(player, accounts, guests = [], checks = []) {
+  const named = new Set(guests.map((g) => g.linked_user_id).filter(Boolean));
+  return accounts.filter(
+    (o) =>
+      o.user_id !== player.user_id &&
+      sameName(o.display_name, player.display_name) &&
+      !(named.has(o.user_id) && named.has(player.user_id)) &&
+      !markedDifferent(o.user_id, player.user_id, checks),
+  );
+}
+
+/**
+ * Whether `player` joined without picking a roster name while names were
+ * waiting to be picked: they may be one of the grey cards under another name
+ * ("Robert" for "Bob"). Not once a captain says they aren't on the roster.
+ */
+export function skippedRosterName(player, guests = [], checks = []) {
+  if (!guests.some((g) => !g.removed && !g.linked_user_id)) return false;
+  if (guests.some((g) => g.linked_user_id === player.user_id)) return false;
+  if (checks.some((c) => c.kind === 'not_on_roster' && c.user_id === player.user_id)) return false;
+  const rosterStarted = Math.min(...guests.map((g) => new Date(g.created_date).getTime()));
+  return new Date(player.created_date).getTime() > rosterStarted;
+}
+
+/**
  * Names pasted one per line, sorted out against the roster: new ones, ones
  * already on it (same name), ones that look like someone on it, and ones too
  * long to save. Blank lines and repeats are dropped.

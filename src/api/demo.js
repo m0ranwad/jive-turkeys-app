@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v21';
+const DB_KEY = 'jt_demo_db_v24';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -60,7 +60,9 @@ function seed() {
     year_joined: year,
     status: statuses[i],
     is_captain: i === 0 || i === 3,
-    created_date: now(),
+    // On the site before the captains put names on the roster, except Chris, who joined this
+    // session without picking a name, and Kelly, who picked "Kelly M" when she joined after him.
+    created_date: dayjs().subtract(i === 10 ? 10 : i === 11 ? 5 : 60, 'day').toISOString(),
     updated_date: now(),
   }));
 
@@ -272,9 +274,10 @@ function seed() {
       id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, paid_amount: 61, ...row, created_date: now(), updated_date: now(),
     })));
   // Two teammates who aren't on the app: Dana has paid this session, Mike hasn't.
+  const rosterStarted = dayjs().subtract(55, 'day').toISOString();
   const guest = (display_name, gender, position) => ({
     id: uid(), display_name, gender, position, status: 'active', removed: false, pays_with_user: null, pays_with_guest: null,
-    linked_user_id: null, created_by: captainId, created_date: now(), updated_date: now(),
+    linked_user_id: null, created_by: captainId, created_date: rosterStarted, updated_date: rosterStarted,
   });
   const teamGuests = [guest('Mike Russo', 'M', 'Defense'), guest('Dana Wells', 'F', 'Forward')];
   const guestPaid = (g, session, daysAgo) => ({
@@ -338,6 +341,23 @@ function seed() {
   const change = (session, kind, old_value, new_value, changed_by, created_date, who = {}) => ({
     id: uid(), season_year: year, session, kind, user_id: null, guest_id: null, ...who, old_value, new_value, changed_by, created_date,
   });
+  // Kelly picked "Kelly M" on the roster when she joined: the session 1 payment
+  // and place on session 1's list the name had came with it. Captains see it on
+  // her card and can undo the pick.
+  const kelly = profiles[11];
+  const kellyJoined = dayjs().subtract(5, 'day').toISOString();
+  const kellyName = { ...guest('Kelly M', 'F', 'Mid-Field'), linked_user_id: kelly.user_id, updated_date: kellyJoined };
+  const kellys = (rows) => rows.filter((r) => r.user_id === kelly.user_id && r.session === 1).map((r) => r.id);
+  const guestLinks = [
+    {
+      id: uid(), guest_id: kellyName.id, user_id: kelly.user_id, moved_payments: kellys(duesPayments),
+      moved_history: kellys(duesHistory), moved_roster: kellys(sessionRoster), moved_rsvps: [], moved_stats: [],
+      moved_votes: [], moved_changes: [], merged_payments: [], filled: {}, status_before: 'active', status_after: 'active',
+      guest_partner: null, user_partner: null, rebuilt: false, linked_by: kelly.user_id, created_date: kellyJoined,
+      unlinked_by: null, unlinked_at: null,
+    },
+  ];
+
   const jamieOut = sessionRoster.find((r) => r.session === 2 && r.user_id === profiles[9].user_id);
   const duesChanges = [
     change(1, 'fee', null, fees(595, 18), captainId, at(dayjs().subtract(52, 'day'), 18)),
@@ -423,7 +443,10 @@ function seed() {
     dues_payments: duesPayments,
     dues_history: duesHistory,
     dues_changes: duesChanges,
-    team_guests: teamGuests,
+    team_guests: [...teamGuests, kellyName],
+    team_guest_links: guestLinks,
+    // Captains' answers to the Team page's name checks: none yet.
+    team_name_checks: [],
     session_roster: sessionRoster,
     // Last changed before session 2 started, so captains are reminded to change it.
     team_join_code: [
@@ -728,6 +751,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         checkChatWrite(table, 'create', row);
+        // Same as the policies: only captains answer name checks, and only the database functions record picks.
+        if ((table === 'team_name_checks' && currentUser().role !== 'admin') || table === 'team_guest_links') refuse();
         checkAmounts(table, row);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...(table === 'chat_threads' && { visibility: 'team' }), ...row };
         if (table === 'messages') cleanMentions(record);
@@ -858,46 +883,77 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
   };
 
+  const paymentFields = (p) => ({
+    paid: !!p.paid, paid_date: p.paid_date ?? null, paid_by: p.paid_by ?? null, paid_amount: p.paid_amount ?? null,
+    override_amount: p.override_amount ?? null,
+  });
+  const partnerOf = (id) => {
+    const p = db.player_profiles.find((x) => x.user_id === id);
+    const g = db.team_guests.find((x) => x.id === id);
+    return p ? (p.pays_with ?? p.pays_with_guest ?? null) : g ? (g.pays_with_user ?? g.pays_with_guest ?? null) : null;
+  };
+
+  // Same as the database's move_team_guest(): everything that moves is recorded
+  // (team_guest_links), so a captain can undo the pick.
   const moveGuest = async (guestId, userId) => {
     const guest = db.team_guests.find((g) => g.id === guestId && !g.linked_user_id);
     if (!guest) throw new Error('That name has already been picked');
     if (db.team_guests.some((g) => g.linked_user_id === userId)) throw new Error('That player already has a name on the roster');
+    const profile = db.player_profiles.find((p) => p.user_id === userId);
+    const link = {
+      id: uid(), guest_id: guestId, user_id: userId, moved_payments: [], moved_history: [], moved_roster: [], moved_rsvps: [],
+      moved_stats: [], moved_votes: [], moved_changes: [], merged_payments: [], filled: {}, status_before: profile?.status ?? null,
+      status_after: null, guest_partner: null, user_partner: null, rebuilt: false, linked_by: currentUser()?.id ?? null,
+      created_date: now(), unlinked_by: null, unlinked_at: null,
+    };
+    const move = (key, row) => {
+      Object.assign(row, { user_id: userId, guest_id: null });
+      link[key].push(row.id);
+    };
     for (const row of db.dues_payments.filter((p) => p.guest_id === guestId)) {
       const mine = db.dues_payments.find((p) => p.user_id === userId && p.season_year === row.season_year && p.session === row.session);
-      if (!mine) Object.assign(row, { user_id: userId, guest_id: null });
+      if (!mine) move('moved_payments', row);
       else {
         // Where both have one, a payment made under the roster name counts, and so does its custom amount.
+        const was = paymentFields(mine);
         if (row.paid && !mine.paid) {
           Object.assign(mine, { paid: true, paid_date: row.paid_date, paid_by: row.paid_by, paid_amount: row.paid_amount ?? null });
         }
         const before = { ...mine };
         mine.override_amount = mine.override_amount ?? row.override_amount ?? null;
         trackChange('dues_payments', before, mine);
+        const after = paymentFields(mine);
+        if (JSON.stringify(was) !== JSON.stringify(after)) link.merged_payments.push({ id: mine.id, before: was, after });
       }
     }
-    db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => Object.assign(h, { user_id: userId, guest_id: null }));
-    db.dues_changes.filter((c) => c.guest_id === guestId).forEach((c) => Object.assign(c, { user_id: userId, guest_id: null }));
+    db.dues_history.filter((h) => h.guest_id === guestId).forEach((h) => move('moved_history', h));
+    db.dues_changes.filter((c) => c.guest_id === guestId).forEach((c) => move('moved_changes', c));
     // Game sign-ups and stat lines: where both have one for a game, the account's own counts.
-    for (const table of ['rsvps', 'game_stats']) {
+    for (const [table, key] of [['rsvps', 'moved_rsvps'], ['game_stats', 'moved_stats']]) {
       for (const row of db[table].filter((r) => r.guest_id === guestId)) {
-        if (!db[table].some((r) => r.user_id === userId && r.game_id === row.game_id)) Object.assign(row, { user_id: userId, guest_id: null });
+        if (!db[table].some((r) => r.user_id === userId && r.game_id === row.game_id)) move(key, row);
       }
     }
     // Votes for the roster name, except any the player cast for it themselves.
     db.potm_votes
       .filter((v) => v.voted_for_guest_id === guestId && v.voter_id !== userId)
-      .forEach((v) => Object.assign(v, { voted_for_id: userId, voted_for_guest_id: null }));
+      .forEach((v) => {
+        Object.assign(v, { voted_for_id: userId, voted_for_guest_id: null });
+        link.moved_votes.push(v.id);
+      });
     // Sessions the roster name was on and the account wasn't move over; where both were, the account's entry counts.
     for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
-      if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) {
-        Object.assign(row, { user_id: userId, guest_id: null });
-      }
+      if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) move('moved_roster', row);
     }
-    db.player_profiles
-      .filter((p) => p.user_id === userId)
-      .forEach((p) => Object.assign(p, { gender: p.gender || guest.gender, position: p.position || guest.position }));
+    if (profile) {
+      if (!profile.gender && guest.gender) link.filled.gender = guest.gender;
+      if (!profile.position && guest.position) link.filled.position = guest.position;
+      Object.assign(profile, { gender: profile.gender || guest.gender, position: profile.position || guest.position });
+    }
     const partner = guest.pays_with_user ?? guest.pays_with_guest;
+    if (partner) Object.assign(link, { guest_partner: partner, user_partner: profile ? partnerOf(userId) : null });
     Object.assign(guest, { linked_user_id: userId, pays_with_user: null, pays_with_guest: null, updated_date: now() });
+    db.team_guest_links.push(link);
     save(db);
     if (partner) await dues.setPartner(userId, partner);
   };
@@ -934,6 +990,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           p.status = guest.status;
           followStatus('player_profiles', p);
         });
+      db.team_guest_links
+        .filter((l) => l.guest_id === guestId && l.user_id === currentUser().id && !l.unlinked_at)
+        .forEach((l) => Object.assign(l, { status_after: guest.status }));
       save(db);
       return delay(null);
     },
@@ -941,6 +1000,75 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       requireUser();
       if (currentUser().role !== 'admin') throw new Error('Only captains can link a player');
       await moveGuest(guestId, userId);
+      return delay(null);
+    },
+    // Same as the database's unlink_team_guest(): what came with the name goes back to it as
+    // it is now, and what the pick changed on the account is put back unless changed since.
+    async unlinkGuest(guestId) {
+      requireUser();
+      failIfOffline();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can unlink a player');
+      const guest = db.team_guests.find((g) => g.id === guestId);
+      if (!guest?.linked_user_id) throw new Error("That name isn't linked to anyone");
+      const userId = guest.linked_user_id;
+      const link = sortRows(db.team_guest_links.filter((l) => l.guest_id === guestId && l.user_id === userId && !l.unlinked_at), '-created_date')[0];
+      if (!link) throw new Error("That name was picked before undo was added, so it can't be undone here");
+
+      const back = (row) => Object.assign(row, { user_id: null, guest_id: guestId });
+      const ours = (table, key) => db[table].filter((r) => link[key].includes(r.id) && r.user_id === userId);
+      const nameHas = (table, same) => db[table].some((r) => r.guest_id === guestId && same(r));
+      ours('dues_payments', 'moved_payments')
+        .filter((row) => !nameHas('dues_payments', (r) => sessionOf(r) === sessionOf(row)))
+        .forEach(back);
+      for (const { id, before, after } of link.merged_payments) {
+        const row = db.dues_payments.find((p) => p.id === id && p.user_id === userId);
+        if (row && JSON.stringify(paymentFields(row)) === JSON.stringify(after)) {
+          const was = { ...row };
+          Object.assign(row, before, { updated_date: now() });
+          trackChange('dues_payments', was, row);
+        }
+      }
+      ours('dues_history', 'moved_history').forEach(back);
+      ours('dues_changes', 'moved_changes').forEach(back);
+      ours('session_roster', 'moved_roster')
+        .filter((row) => !nameHas('session_roster', (r) => sessionOf(r) === sessionOf(row)))
+        .forEach(back);
+      for (const [table, key] of [['rsvps', 'moved_rsvps'], ['game_stats', 'moved_stats']]) {
+        ours(table, key)
+          .filter((row) => !nameHas(table, (r) => r.game_id === row.game_id))
+          .forEach(back);
+      }
+      db.potm_votes
+        .filter((v) => link.moved_votes.includes(v.id) && v.voted_for_id === userId)
+        .forEach((v) => Object.assign(v, { voted_for_id: null, voted_for_guest_id: guestId }));
+
+      const profile = db.player_profiles.find((p) => p.user_id === userId);
+      if (profile) {
+        for (const field of ['gender', 'position']) {
+          if (field in link.filled && profile[field] === link.filled[field]) profile[field] = null;
+        }
+        if (link.status_after && link.status_before && link.status_before !== link.status_after && profile.status === link.status_after) {
+          profile.status = link.status_before;
+          followStatus('player_profiles', profile);
+        }
+      }
+      Object.assign(guest, { linked_user_id: null, updated_date: now() });
+
+      // Who paid with whom, if nobody has paired them up since.
+      const free = (id) => !partnerOf(id) && !db.team_guests.some((g) => g.id === id && g.linked_user_id);
+      if (link.guest_partner) {
+        if (link.guest_partner !== userId && partnerOf(userId) === link.guest_partner) await dues.setPartner(userId, null);
+        if (free(guestId) && free(link.guest_partner)) await dues.setPartner(guestId, link.guest_partner);
+      }
+      if (link.user_partner && free(userId) && free(link.user_partner)) await dues.setPartner(userId, link.user_partner);
+
+      // Back on the current session's list, if it started while the name was linked.
+      const period = current();
+      const started = db.session_roster.some((r) => sessionOf(r) === `${period.year}-${period.session}`);
+      if (started && !nameHas('session_roster', (r) => sessionOf(r) === `${period.year}-${period.session}`)) followStatus('team_guests', guest);
+
+      Object.assign(link, { unlinked_at: now(), unlinked_by: currentUser().id });
+      save(db);
       return delay(null);
     },
     // Same as the database's set_team_member_removed().

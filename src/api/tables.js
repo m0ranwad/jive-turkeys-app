@@ -12,6 +12,8 @@ export const TABLES = {
   DuesHistory: 'dues_history',
   DuesChange: 'dues_changes',
   TeamGuest: 'team_guests',
+  TeamGuestLink: 'team_guest_links',
+  TeamNameCheck: 'team_name_checks',
   SessionRoster: 'session_roster',
   TeamJoinCode: 'team_join_code',
   Message: 'messages',

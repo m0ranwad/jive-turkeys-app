@@ -202,6 +202,11 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('link_team_guest', { p_guest_id: guestId, p_user_id: userId });
       if (error) fail(error);
     },
+    /** Captains: undo a pick or link. The name is a grey card again with everything that came with it. */
+    async unlinkGuest(guestId) {
+      const { error } = await supabase.rpc('unlink_team_guest', { p_guest_id: guestId });
+      if (error) fail(error);
+    },
 
     /** Captains: take a signed-up player off the team (they lose access), or add them back. */
     async setRemoved(userId, removed) {
