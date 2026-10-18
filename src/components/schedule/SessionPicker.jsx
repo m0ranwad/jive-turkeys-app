@@ -8,6 +8,7 @@ export function SessionPicker({ value, onChange, className, buttonClassName = 'p
         <button
           key={s}
           type="button"
+          aria-pressed={Number(value) === s}
           onClick={() => onChange(s)}
           className={cn(
             'rounded-xl border-2 font-bold transition',

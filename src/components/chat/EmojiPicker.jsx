@@ -24,7 +24,7 @@ export function EmojiPicker({ onPick, keepFocus, className }) {
             {g.icon}
           </button>
         ))}
-        <span className="ml-auto self-center pr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
+        <span className="ml-auto self-center pr-1 text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-500">
           {EMOJI_GROUPS[group].label}
         </span>
       </div>

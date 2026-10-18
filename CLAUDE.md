@@ -166,6 +166,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   expose the same interface. `tables.js` maps entity names to tables.
 - Match the existing look: Tailwind, lime/zinc palette, `font-display` uppercase headings, the `CARD`
   style from `src/lib/constants.js`, and mobile-first layouts (most players use phones).
+- Keep it easy to read: no text smaller than 11px; grey text on white is `text-zinc-500` or darker (`text-zinc-600`
+  on grey chips), green text on white is `text-lime-700`; toggle buttons say which is picked with `aria-pressed`;
+  movement gets a `motion-safe:` / `motion-reduce:` variant. `tests/e2e/accessibility.spec.js` checks every screen
+  (contrast, button and field names); give a new screen or dialog a line there.
 - Previews of non-main branches run in **demo mode with sample data** (`vite.config.js`). Make new
   features show up there. Demo mode signs visitors in as the sample captain (`autoSignIn` in
   `src/api/demo.js`) until they sign out; the sign-in screens then offer one-tap captain and player

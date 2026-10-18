@@ -57,6 +57,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
             <button
               key={opt.v}
               type="button"
+              aria-pressed={form.gender === opt.v}
               onClick={() => set({ gender: opt.v })}
               className={cn(
                 'rounded-2xl border-2 py-3 text-sm font-bold uppercase tracking-wide transition',
@@ -86,9 +87,9 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         </div>
         {!hidePosition && (
           <div className="space-y-2">
-            <Label>Preferred position (optional)</Label>
+            <Label htmlFor={`${id}-position`}>Preferred position (optional)</Label>
             <Select value={form.position || 'none'} onValueChange={(v) => set({ position: v === 'none' ? '' : v })}>
-              <SelectTrigger>
+              <SelectTrigger id={`${id}-position`}>
                 <SelectValue placeholder="Anywhere" />
               </SelectTrigger>
               <SelectContent>

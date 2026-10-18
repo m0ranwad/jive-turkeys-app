@@ -38,7 +38,7 @@ export function JoinTeamPage() {
       footer={
         <>
           Wrong account?{' '}
-          <button type="button" onClick={signOut} className="font-medium text-primary hover:underline">
+          <button type="button" onClick={signOut} className="font-medium text-lime-700 hover:underline">
             Sign out
           </button>
         </>

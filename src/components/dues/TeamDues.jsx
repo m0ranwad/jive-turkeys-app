@@ -185,7 +185,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
           <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{p.display_name}</span>
-            {details.length > 0 && <span className="block truncate text-[11px] font-medium text-zinc-400">{details.join(' · ')}</span>}
+            {details.length > 0 && <span className="block truncate text-[11px] font-medium text-zinc-500">{details.join(' · ')}</span>}
           </span>
         </button>
         <span className="text-sm font-bold tabular-nums text-zinc-700" aria-label={`Amount for ${p.display_name}`}>
@@ -197,7 +197,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             onClick={() => markPaid(p)}
             disabled={busyId === p.user_id}
             aria-label={`Mark ${dollars(balance)} more paid for ${p.display_name}`}
-            className="h-8 min-w-[78px] shrink-0 whitespace-nowrap rounded-full bg-lime-400 px-3 text-[10px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
+            className="h-8 min-w-[78px] shrink-0 whitespace-nowrap rounded-full bg-lime-400 px-3 text-[11px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
           >
             Mark {dollars(balance)} paid
           </button>
@@ -209,7 +209,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             onClick={() => markPaid(p)}
             disabled={busyId === p.user_id}
             aria-label={`Mark ${p.display_name} paid`}
-            className="h-8 w-[78px] shrink-0 rounded-full bg-lime-400 text-[10px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
+            className="h-8 w-[78px] shrink-0 rounded-full bg-lime-400 text-[11px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
           >
             Mark paid
           </button>
@@ -238,7 +238,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
           <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{p.display_name}</span>
-            <span className="block truncate text-[11px] font-medium text-zinc-400">{details.join(' · ')}</span>
+            <span className="block truncate text-[11px] font-medium text-zinc-500">{details.join(' · ')}</span>
           </span>
         </button>
         {entry.paid_amount != null && (
@@ -349,28 +349,28 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         {startsLater}
         {unpaid.length > 0 && (
           <div data-testid="dues-unpaid">
-            <h3 className={cn(EYEBROW, 'text-zinc-400')}>Still to pay · {unpaid.length}</h3>
+            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Still to pay · {unpaid.length}</h3>
             <ul className="divide-y divide-zinc-100">{unpaid.map(playerRow)}</ul>
           </div>
         )}
         {paid.length > 0 && (
           <div data-testid="dues-paid" className={cn(unpaid.length > 0 && 'mt-4')}>
-            <h3 className={cn(EYEBROW, 'text-zinc-400')}>Paid · {paid.length}</h3>
+            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid · {paid.length}</h3>
             <ul className="divide-y divide-zinc-100">{paid.map(playerRow)}</ul>
           </div>
         )}
         {team.notPlaying.length > 0 && (
           <div data-testid="dues-not-playing" className={cn((unpaid.length > 0 || paid.length > 0) && 'mt-4')}>
-            <h3 className={cn(EYEBROW, 'text-zinc-400')}>Paid, not playing · {team.notPlaying.length}</h3>
+            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid, not playing · {team.notPlaying.length}</h3>
             <ul className="divide-y divide-zinc-100">{team.notPlaying.map(notPlayingRow)}</ul>
-            <p className="text-[11px] font-medium text-zinc-400">
+            <p className="text-[11px] font-medium text-zinc-500">
               They paid for this session but aren't on its roster, so they don't owe anything. What they paid counts in
               Collected.
             </p>
           </div>
         )}
         {team.active.length === 0 && (
-          <p className="py-3 text-sm text-zinc-400">No active players yet. Set roster statuses on the Team page.</p>
+          <p className="py-3 text-sm text-zinc-500">No active players yet. Set roster statuses on the Team page.</p>
         )}
         {isCaptain && (
           <Link
@@ -391,7 +391,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             Change who was on session {period.session}
           </button>
         )}
-        <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-400">
+        <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
           Tap a player to see their history, link a couple who pay together, or fix a mistake.
         </p>
       </section>

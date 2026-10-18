@@ -3,6 +3,7 @@ import { ArrowDown, LoaderCircle } from 'lucide-react';
 import { MessageRow } from './MessageRow';
 import { buildTimeline, summarizeReactions } from '@/lib/chat';
 import { plural } from '@/lib/format';
+import { scrollBehavior } from '@/lib/utils';
 
 const NEAR_BOTTOM_PX = 96;
 
@@ -106,7 +107,7 @@ export function Conversation({
   useEffect(() => {
     if (!selectedId) return;
     const row = scroller.current?.querySelector(`[data-message-id="${selectedId}"]`);
-    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    row?.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
   }, [selectedId]);
 
   useEffect(() => {
@@ -125,7 +126,7 @@ export function Conversation({
   const jumpTo = (id) => {
     const row = scroller.current?.querySelector(`[data-message-id="${id}"]`);
     if (!row) return;
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
     setHighlightId(id);
     setTimeout(() => setHighlightId((current) => (current === id ? null : current)), 1600);
   };
@@ -162,7 +163,7 @@ export function Conversation({
             <button
               onClick={onLoadEarlier}
               disabled={loadingEarlier}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:bg-zinc-200"
+              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-600 transition hover:bg-zinc-200"
             >
               {loadingEarlier && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
               Load earlier messages
@@ -172,7 +173,7 @@ export function Conversation({
 
         {messages.length === 0 && (
           <div className="grid h-full place-items-center px-6 text-center">
-            <p className="text-sm font-semibold text-zinc-400">{emptyText}</p>
+            <p className="text-sm font-semibold text-zinc-500">{emptyText}</p>
           </div>
         )}
 
@@ -180,7 +181,7 @@ export function Conversation({
           if (item.type === 'day') {
             return (
               <div key={item.key} className="flex justify-center pb-1 pt-4">
-                <span className="rounded-full bg-zinc-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+                <span className="rounded-full bg-zinc-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-zinc-600">
                   {item.label}
                 </span>
               </div>
@@ -190,7 +191,7 @@ export function Conversation({
             return (
               <div key={item.key} data-unread-divider className="mt-4 flex items-center gap-3">
                 <span className="h-px flex-1 bg-lime-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-lime-700">New messages</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">New messages</span>
                 <span className="h-px flex-1 bg-lime-400" />
               </div>
             );

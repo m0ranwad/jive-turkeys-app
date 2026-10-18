@@ -12,7 +12,7 @@ function PlayerChip({ player }) {
   return (
     <span className="inline-flex max-w-[46%] items-center gap-1.5 rounded-full bg-white/95 px-2 py-1 shadow-sm">
       <span className={cn('h-2 w-2 shrink-0 rounded-full', player.gender === 'F' ? 'bg-lime-500' : 'bg-zinc-900')} />
-      <span className="truncate text-[10px] font-bold text-zinc-800">{player.display_name}</span>
+      <span className="truncate text-[11px] font-bold text-zinc-800">{player.display_name}</span>
     </span>
   );
 }
@@ -30,7 +30,7 @@ export function Formation({ players = [] }) {
           <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">On the field</h3>
           <p className="mt-1 text-xs font-medium text-zinc-500">Where everyone likes to play.</p>
         </div>
-        <span className="shrink-0 rounded-full bg-lime-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-black">
+        <span className="shrink-0 rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
           {placed.length} placed
         </span>
       </div>
@@ -52,7 +52,7 @@ export function Formation({ players = [] }) {
               style={{ top: l.top, transform: 'translateY(-50%)' }}
             >
               {here.length === 0 ? (
-                <span className="rounded-full border border-dashed border-white/25 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-white/40">
+                <span className="rounded-full border border-dashed border-white/25 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">
                   {l.label}
                 </span>
               ) : (
@@ -64,7 +64,7 @@ export function Formation({ players = [] }) {
       </div>
       {floaters.length > 0 && (
         <div className="mt-3">
-          <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
             Floaters · none chosen · {floaters.length}
           </span>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -83,7 +83,7 @@ export function Formation({ players = [] }) {
         </div>
       )}
       {players.length === 0 && (
-        <p className="mt-3 text-xs font-medium text-zinc-400">Teammates show up here once they set a position.</p>
+        <p className="mt-3 text-xs font-medium text-zinc-500">Teammates show up here once they set a position.</p>
       )}
     </section>
   );

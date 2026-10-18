@@ -72,7 +72,7 @@ export function SchedulePage() {
       <div className="flex items-center gap-3">
         <h2 className="font-display text-lg font-extrabold uppercase tracking-[0.08em]">{seasonLabel(s.year, s.session)}</h2>
         <span className="h-px flex-1 bg-zinc-200" />
-        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+        <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
           {s.games.length} game{s.games.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function SchedulePage() {
       )}
       {s.past.length > 0 && (
         <div className="space-y-2.5 pt-1">
-          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-400">Played</span>
+          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-500">Played</span>
           {s.past.map((g) => (
             <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
           ))}

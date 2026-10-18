@@ -62,7 +62,7 @@ function VerifyEmail({ email }) {
       </Button>
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Didn't receive the code?{' '}
-        <button onClick={resend} className="font-medium text-primary hover:underline">
+        <button onClick={resend} className="font-medium text-lime-700 hover:underline">
           Resend
         </button>
       </p>
@@ -109,7 +109,7 @@ export function RegisterPage() {
           Already have an account?{' '}
           <Link
             to={'/login' + (returnTo === '/' ? '' : `?returnTo=${encodeURIComponent(returnTo)}`)}
-            className="font-medium text-primary hover:underline"
+            className="font-medium text-lime-700 hover:underline"
           >
             Log in
           </Link>

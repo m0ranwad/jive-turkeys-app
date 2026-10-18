@@ -21,18 +21,18 @@ export function ResultCard({ game, stats, fillIns = [] }) {
       <div className="mt-3 flex items-baseline gap-3">
         <span className="font-display text-4xl font-extrabold leading-none">{game.score_us ?? 0}</span>
         <span className="text-sm font-bold text-zinc-300">–</span>
-        <span className="font-display text-4xl font-extrabold leading-none text-zinc-400">{game.score_them ?? 0}</span>
-        <span className="ml-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-400">vs {game.opponent}</span>
+        <span className="font-display text-4xl font-extrabold leading-none text-zinc-500">{game.score_them ?? 0}</span>
+        <span className="ml-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">vs {game.opponent}</span>
       </div>
       <div className="mt-4 space-y-2">
-        {rows.length + fillInRows.length === 0 && <p className="text-sm text-zinc-400">No player stats recorded.</p>}
+        {rows.length + fillInRows.length === 0 && <p className="text-sm text-zinc-500">No player stats recorded.</p>}
         {[...rows, ...fillInRows].map((row) => (
           <div key={row.id} className="flex items-center gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
             <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', row.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold">
               {row.player_name}
               {row.fillIn && row.display_name?.trim() && (
-                <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-400">fill-in</span>
+                <span className="ml-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-500">fill-in</span>
               )}
             </span>
             <div className="flex items-center gap-2 text-[11px] font-bold">

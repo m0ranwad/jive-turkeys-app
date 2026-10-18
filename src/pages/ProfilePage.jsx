@@ -71,11 +71,11 @@ export function ProfilePage() {
             <h1 className="truncate font-display text-xl font-extrabold uppercase tracking-tight">{name}</h1>
             <p className="mt-0.5 truncate text-xs font-medium text-white/50">{user?.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-lime-400 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-black">
+              <span className="rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
                 {isCaptain ? 'Captain' : 'Player'}
               </span>
               {profile?.status && (
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white/70">
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-white/70">
                   {STATUS_LABEL[profile.status]}
                 </span>
               )}
@@ -119,6 +119,7 @@ export function ProfilePage() {
             {STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
+                aria-pressed={(profile.status || 'active') === opt.value}
                 onClick={() => setStatus(opt.value)}
                 disabled={busy}
                 className={cn(

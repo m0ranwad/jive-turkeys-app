@@ -32,7 +32,7 @@ export function ForgotPasswordPage() {
       title="Reset password"
       subtitle="We'll send you a link to reset it"
       footer={
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to="/login" className="font-medium text-lime-700 hover:underline">
           <ArrowLeft className="mr-1 inline h-3 w-3" />
           Back to log in
         </Link>
@@ -116,7 +116,7 @@ export function ResetPasswordPage() {
         title="Invalid reset link"
         subtitle="This password reset link is missing or invalid"
         footer={
-          <Link to="/forgot-password" className="font-medium text-primary hover:underline">
+          <Link to="/forgot-password" className="font-medium text-lime-700 hover:underline">
             Request a new link
           </Link>
         }

@@ -108,7 +108,7 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
               placeholder="⚽ Sunday pickup"
               autoFocus
             />
-            <p className="text-xs text-zinc-400">Tip: start with an emoji and it becomes the {chat ? "chat's" : "thread's"} icon.</p>
+            <p className="text-xs text-zinc-500">Tip: start with an emoji and it becomes the {chat ? "chat's" : "thread's"} icon.</p>
           </div>
           {!renaming && (
             <div className="space-y-2">
@@ -138,10 +138,10 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
 }
 
 // The same labels, buttons and badges as the Team and Dues popups.
-const EYEBROW = 'text-[10px] font-black uppercase tracking-[0.14em]';
+const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 const FIELD_LABEL = 'text-xs font-semibold text-zinc-500';
 const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
-const PILL = 'rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em]';
+const PILL = 'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]';
 
 /** Initials in a circle, colored like the Team page (women lime, men black). */
 function Avatar({ person, small }) {
@@ -150,7 +150,7 @@ function Avatar({ person, small }) {
       aria-hidden
       className={cn(
         'grid shrink-0 place-items-center rounded-full font-display font-extrabold uppercase',
-        small ? 'h-9 w-9 text-[10px]' : 'h-10 w-10 text-xs',
+        small ? 'h-9 w-9 text-[11px]' : 'h-10 w-10 text-xs',
         person.gender === 'F' ? 'bg-lime-400 text-black' : 'bg-zinc-900 text-lime-400',
       )}
     >
@@ -181,7 +181,7 @@ function PeoplePicker({ people, picked, onToggle }) {
     <div className="space-y-2">
       {people.length > 6 && (
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -220,7 +220,7 @@ function PeoplePicker({ people, picked, onToggle }) {
             </label>
           );
         })}
-        {shown.length === 0 && <p className="px-2.5 py-3 text-sm text-zinc-400">Nobody by that name.</p>}
+        {shown.length === 0 && <p className="px-2.5 py-3 text-sm text-zinc-500">Nobody by that name.</p>}
       </div>
     </div>
   );
@@ -289,7 +289,7 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
         </p>
         <form onSubmit={save} className="space-y-4">
           <div className="space-y-1.5">
-            <span className={cn(EYEBROW, 'flex items-center justify-between text-zinc-400')}>
+            <span className={cn(EYEBROW, 'flex items-center justify-between text-zinc-500')}>
               With
               {picked.size > 0 && <span className="text-zinc-950">{picked.size} picked</span>}
             </span>
@@ -308,7 +308,7 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
               placeholder="🚗 Ride to Thursday's game"
               className="h-11 rounded-xl"
             />
-            <p className="text-[11px] font-medium text-zinc-400">Leave it blank to name it after the people in it.</p>
+            <p className="text-[11px] font-medium text-zinc-500">Leave it blank to name it after the people in it.</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="private-first" className={FIELD_LABEL}>
@@ -412,7 +412,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
                 <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">{m.person.name}</span>
                 {(m.user_id === me || m.user_id === thread.created_by || m.person.captain) && (
                   <span className="mt-1 flex flex-wrap gap-1.5">
-                    {m.user_id === me && <span className={cn(PILL, 'bg-zinc-100 text-zinc-500')}>You</span>}
+                    {m.user_id === me && <span className={cn(PILL, 'bg-zinc-100 text-zinc-600')}>You</span>}
                     {m.user_id === thread.created_by && <span className={cn(PILL, 'bg-lime-400 text-black')}>Started it</span>}
                     {m.person.captain && <span className={cn(PILL, 'bg-zinc-950 text-lime-400')}>Captain</span>}
                   </span>
@@ -423,7 +423,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
                   type="button"
                   onClick={() => onRemove(m)}
                   aria-label={`Take ${m.person.name} out`}
-                  className="shrink-0 rounded-full px-2 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
+                  className="shrink-0 rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
                 >
                   Remove
                 </button>
@@ -436,7 +436,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
           <p className="rounded-2xl bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-500">This chat is closed, so nobody can be added.</p>
         ) : adding ? (
           <div className="space-y-3 border-t border-zinc-100 pt-4">
-            <span className={cn(EYEBROW, 'block text-zinc-400')}>Add people</span>
+            <span className={cn(EYEBROW, 'block text-zinc-500')}>Add people</span>
             <PeoplePicker people={addable} picked={picked} onToggle={(id) => setPicked((set) => toggle(set, id))} />
             {addable.length > 0 && (
               <>
@@ -451,7 +451,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
             <button
               type="button"
               onClick={() => setAdding(false)}
-              className="block w-full text-center text-xs font-bold uppercase tracking-[0.1em] text-zinc-400 transition hover:text-zinc-900"
+              className="block w-full text-center text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:text-zinc-900"
             >
               Cancel
             </button>

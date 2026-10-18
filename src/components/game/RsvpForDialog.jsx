@@ -41,7 +41,7 @@ export function RsvpForDialog({ player, rsvp, busy, onSet, onToggleGk, onClose }
               type="button"
               disabled={busy}
               onClick={() => onSet(null)}
-              className="text-xs font-bold uppercase tracking-[0.1em] text-zinc-400 transition hover:text-zinc-900"
+              className="text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:text-zinc-900"
             >
               Clear (no reply)
             </button>

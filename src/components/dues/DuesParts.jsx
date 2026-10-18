@@ -12,7 +12,7 @@ import { shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export const HEADING = 'font-display text-sm font-extrabold uppercase tracking-[0.12em]';
-export const EYEBROW = 'text-[10px] font-black uppercase tracking-[0.14em]';
+export const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 
 export const shortDate = (date) => (date ? dayjs(date).format('MMM D') : '');
 
@@ -28,7 +28,7 @@ export function SessionStepper({ period, note, onStep }) {
         <div className="font-display text-sm font-extrabold uppercase tracking-[0.12em]" data-testid="dues-session">
           Session {period.session} · {period.year}
         </div>
-        {note && <div className={cn(EYEBROW, 'mt-0.5 text-zinc-400')}>{note}</div>}
+        {note && <div className={cn(EYEBROW, 'mt-0.5 text-zinc-500')}>{note}</div>}
       </div>
       <button type="button" onClick={() => onStep(1)} aria-label="Next session" className={arrow}>
         <ChevronRight className="h-5 w-5" />
@@ -42,7 +42,7 @@ export function StatusChip({ paid, date, dateOnly, className }) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em]',
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]',
         paid ? 'bg-lime-100 text-lime-900' : 'bg-amber-100 text-amber-900',
         className,
       )}
@@ -137,7 +137,7 @@ export function HistoryList({ events, nameOf, meId, limit }) {
               <span className="block text-sm font-semibold text-zinc-800">
                 {event.kind ? changeLine(event, nameOf, meId) : historyLine(event, nameOf, meId, changeBefore(events, index))}
               </span>
-              <span className="block text-[11px] font-medium text-zinc-400">
+              <span className="block text-[11px] font-medium text-zinc-500">
                 {dayjs(event.created_date).format('ddd, MMM D · h:mm A')}
               </span>
             </span>
@@ -200,7 +200,7 @@ export function PayButtons({ amount, note, settings }) {
                 type="button"
                 onClick={() => copy(option.handle)}
                 aria-label={`Copy ${option.label} details`}
-                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-zinc-600 transition hover:bg-zinc-200"
+                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600 transition hover:bg-zinc-200"
               >
                 <Copy className="h-3.5 w-3.5" />
                 Copy
@@ -224,7 +224,7 @@ export function PayButtons({ amount, note, settings }) {
                 {option.prefilled ? option.handle : `Opens PayPal. Enter ${dollars(amount)}.`}
               </span>
             </span>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950 px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] text-lime-400">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
               Pay {dollars(amount)}
               <ExternalLink className="h-3 w-3" />
             </span>
@@ -271,12 +271,12 @@ export function PartPayment({ max, both, busy, onSave }) {
 
   return (
     <form onSubmit={save} className="space-y-2 rounded-2xl bg-zinc-50 p-3">
-      <Label htmlFor="part-amount" className={cn(EYEBROW, 'block text-zinc-400')}>
+      <Label htmlFor="part-amount" className={cn(EYEBROW, 'block text-zinc-500')}>
         Amount paid{both ? ' for both' : ''}
       </Label>
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
           <Input
             id="part-amount"
             type="number"
@@ -292,7 +292,7 @@ export function PartPayment({ max, both, busy, onSave }) {
           Save
         </Button>
       </div>
-      <p className={cn('text-[11px] font-medium', over ? 'text-red-700' : 'text-zinc-400')}>
+      <p className={cn('text-[11px] font-medium', over ? 'text-red-700' : 'text-zinc-500')}>
         {over
           ? `That's more than the ${dollars(max)} still owed.`
           : `${both ? "Split by each one's share. " : ''}The rest stays on the list to pay.`}

@@ -186,7 +186,7 @@ export const Composer = forwardRef(function Composer(
             >
               <span
                 className={cn(
-                  'grid h-8 w-8 shrink-0 place-items-center rounded-full font-display text-[10px] font-extrabold uppercase',
+                  'grid h-8 w-8 shrink-0 place-items-center rounded-full font-display text-[11px] font-extrabold uppercase',
                   choice.id === TEAM ? 'bg-zinc-950 text-lime-400' : 'bg-lime-400 text-black',
                 )}
               >
@@ -210,7 +210,7 @@ export const Composer = forwardRef(function Composer(
       {editing && (
         <div className="mb-2 flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
           <Pencil className="h-4 w-4 shrink-0 text-amber-700" />
-          <div className="min-w-0 flex-1 text-[10px] font-black uppercase tracking-[0.1em] text-amber-800">Editing message</div>
+          <div className="min-w-0 flex-1 text-[11px] font-black uppercase tracking-[0.1em] text-amber-800">Editing message</div>
           <button
             type="button"
             onClick={stopEditing}
@@ -225,7 +225,7 @@ export const Composer = forwardRef(function Composer(
         <div className="mb-2 flex items-center gap-2 rounded-2xl bg-lime-50 px-3 py-2 ring-1 ring-lime-200">
           <CornerUpLeft className="h-4 w-4 shrink-0 text-lime-700" />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-lime-800">Replying to {replyName}</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.1em] text-lime-800">Replying to {replyName}</div>
             <div className="truncate text-xs text-zinc-600">{replyTo.body}</div>
           </div>
           <button
@@ -253,7 +253,7 @@ export const Composer = forwardRef(function Composer(
           aria-pressed={emojiOpen}
           className={cn(
             'grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
-            emojiOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700',
+            emojiOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700',
           )}
         >
           <Smile className="h-6 w-6" />
@@ -275,7 +275,7 @@ export const Composer = forwardRef(function Composer(
           placeholder={placeholder}
           maxLength={MAX_LENGTH}
           aria-label="Message"
-          className="block max-h-36 min-h-11 flex-1 resize-none rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-400 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
+          className="block max-h-36 min-h-11 flex-1 resize-none rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-500 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
         />
         <button
           type="submit"

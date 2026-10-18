@@ -7,13 +7,13 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   return (
     <div data-group={label}>
       <div className="flex items-center gap-2">
-        <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em]', tone)}>
+        <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]', tone)}>
           {label} · {entries.length}
         </span>
-        {note && <span className="text-[11px] font-medium text-zinc-400">{note}</span>}
+        {note && <span className="text-[11px] font-medium text-zinc-500">{note}</span>}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {entries.length === 0 && <span className="text-xs font-medium text-zinc-400">Nobody yet</span>}
+        {entries.length === 0 && <span className="text-xs font-medium text-zinc-500">Nobody yet</span>}
         {entries.map((entry) => {
           const Chip = onPick ? 'button' : 'span';
           return (
@@ -33,9 +33,9 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
               )}
             >
               {entry.profile.display_name}
-              {entry.playing_gk && <span className="text-[9px] font-black uppercase text-zinc-500">GK</span>}
+              {entry.playing_gk && <span className="text-[11px] font-black uppercase text-zinc-500">GK</span>}
               {suspendedIds.includes(entry.profile.user_id) && (
-                <span className="text-[9px] font-black uppercase text-red-600">Susp</span>
+                <span className="text-[11px] font-black uppercase text-red-600">Susp</span>
               )}
             </Chip>
           );
@@ -51,9 +51,9 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
     { label: 'Women field', value: `${headcount.womenFieldIn}/${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
     { label: 'MAYBE', value: headcount.groups.maybe.length, tone: 'bg-amber-300 text-black' },
-    { label: 'OUT', value: headcount.groups.out.length, tone: 'bg-zinc-100 text-zinc-500' },
-    { label: 'No reply', value: headcount.groups.none.length, tone: 'bg-zinc-100 text-zinc-500' },
-    { label: 'Men', value: headcount.totalIn - headcount.womenIn, tone: 'bg-zinc-100 text-zinc-500' },
+    { label: 'OUT', value: headcount.groups.out.length, tone: 'bg-zinc-100 text-zinc-600' },
+    { label: 'No reply', value: headcount.groups.none.length, tone: 'bg-zinc-100 text-zinc-600' },
+    { label: 'Men', value: headcount.totalIn - headcount.womenIn, tone: 'bg-zinc-100 text-zinc-600' },
   ];
   const shortParts = [
     headcount.needTotal ? `${headcount.needTotal} player${headcount.needTotal === 1 ? '' : 's'}` : null,
@@ -75,7 +75,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
         {tiles.map((tile) => (
           <div key={tile.label} className={cn('rounded-2xl px-3 py-2.5', tile.tone)}>
             <div className="font-display text-xl font-extrabold leading-none">{tile.value}</div>
-            <div className="mt-1 text-[9px] font-black uppercase tracking-[0.12em] opacity-70">{tile.label}</div>
+            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em]">{tile.label}</div>
           </div>
         ))}
       </div>
@@ -100,7 +100,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
             note="Sub Pool and On Break, no reply"
             entries={headcount.groups.subs}
             suspendedIds={suspendedIds}
-            tone="bg-zinc-100 text-zinc-500"
+            tone="bg-zinc-100 text-zinc-600"
             onPick={onPick}
           />
         )}

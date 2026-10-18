@@ -12,7 +12,7 @@ import { saveFailedToast } from '@/lib/errors';
 import { CARD, DEFAULT_SETTINGS } from '@/lib/constants';
 import { mapsUrl } from '@/lib/format';
 import { groupRules, isCardsRule, isThreeLineRule } from '@/lib/rules';
-import { cn } from '@/lib/utils';
+import { cn, scrollBehavior } from '@/lib/utils';
 
 const toLines = (list) => (list || []).join('\n');
 const fromLines = (text) =>
@@ -202,7 +202,7 @@ export function RulesPage() {
                 key={section.i}
                 type="button"
                 onClick={() =>
-                  document.getElementById(sectionId(section.i))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  document.getElementById(sectionId(section.i))?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
                 }
                 className={cn(
                   'rounded-full px-3 py-1.5 text-[11px] font-bold transition',
@@ -239,7 +239,7 @@ export function RulesPage() {
               <RuleList rules={section.rules} sectionIndex={i} spots={spots} dark={section.coed} />
             </div>
           ))}
-          {sections.length === 0 && <p className="text-sm text-zinc-400">No rules posted yet.</p>}
+          {sections.length === 0 && <p className="text-sm text-zinc-500">No rules posted yet.</p>}
         </div>
         {s.rules_footer && (
           <p className="mt-5 border-t border-zinc-100 pt-3 text-xs font-medium italic leading-relaxed text-zinc-500">

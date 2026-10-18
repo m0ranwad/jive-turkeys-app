@@ -110,9 +110,9 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
               className="flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 transition hover:border-lime-400 hover:bg-lime-50/40"
             >
               {busy ? (
-                <LoaderCircle className="h-7 w-7 animate-spin text-zinc-400" />
+                <LoaderCircle className="h-7 w-7 animate-spin text-zinc-500" />
               ) : (
-                <Upload className="h-7 w-7 text-zinc-400" />
+                <Upload className="h-7 w-7 text-zinc-500" />
               )}
               <span className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
                 {busy ? 'Reading schedule…' : 'Upload .xlsx or .csv'}
@@ -139,7 +139,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
                 {ready.length} row{ready.length === 1 ? '' : 's'} ready for {year} · Session {session}
               </p>
               {duplicates > 0 && (
-                <span className="rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-black">
+                <span className="rounded-full bg-amber-300 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
                   {duplicates} possible duplicate{duplicates === 1 ? '' : 's'}
                 </span>
               )}
@@ -158,12 +158,12 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
                     )}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-400">
+                      <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
                         {dupe ? 'Possible duplicate' : incomplete ? 'Needs fixing' : 'Ready'}
                       </span>
                       <button
                         onClick={() => removeRow(row.key)}
-                        className="text-zinc-400 transition hover:text-red-600"
+                        className="text-zinc-500 transition hover:text-red-600"
                         aria-label="Remove row"
                       >
                         <X className="h-4 w-4" />

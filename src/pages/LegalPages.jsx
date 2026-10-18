@@ -14,7 +14,7 @@ function LegalBody({ children }) {
 }
 
 const backLink = (
-  <Link to="/" className="font-medium text-primary hover:underline">
+  <Link to="/" className="font-medium text-lime-700 hover:underline">
     Back to the team hub
   </Link>
 );

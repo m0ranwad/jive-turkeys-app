@@ -65,7 +65,7 @@ export function NotificationsButton({ state, onClick }) {
       aria-label={state === 'on' ? 'Notifications: on' : 'Notifications: off'}
       className={cn(
         'grid h-9 w-9 shrink-0 place-items-center rounded-full transition hover:bg-zinc-100',
-        state === 'on' ? 'text-lime-600' : 'text-zinc-400',
+        state === 'on' ? 'text-lime-600' : 'text-zinc-500',
       )}
     >
       <Icon className="h-5 w-5" />
