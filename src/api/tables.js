@@ -10,6 +10,7 @@ export const TABLES = {
   SessionDues: 'session_dues',
   DuesPayment: 'dues_payments',
   DuesHistory: 'dues_history',
+  DuesChange: 'dues_changes',
   TeamGuest: 'team_guests',
   SessionRoster: 'session_roster',
   TeamJoinCode: 'team_join_code',

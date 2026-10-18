@@ -3,6 +3,7 @@
 // together, and the links players pay with.
 
 import { SESSIONS } from './constants';
+import { shortName } from './format';
 
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
@@ -117,13 +118,13 @@ export function guestAsPlayer(g) {
  * belong to. Like everyone else, a guest counts while their roster status is
  * Active.
  */
-export function duesMembers({ profiles, guests = [], payments, history }) {
+export function duesMembers({ profiles, guests = [], payments, history, changes = [] }) {
   const members = [
     ...profiles.map((p) => ({ ...p, pays_with: p.pays_with ?? p.pays_with_guest ?? null })),
     ...guests.map(guestAsPlayer),
   ];
-  const keyed = (row) => ({ ...row, user_id: row.user_id ?? row.guest_id });
-  return { members, payments: payments.map(keyed), history: history.map(keyed) };
+  const keyed = (row) => ({ ...row, user_id: row.user_id ?? row.guest_id ?? null });
+  return { members, payments: payments.map(keyed), history: history.map(keyed), changes: changes.map(keyed) };
 }
 
 const NOT_PLAYING = { on_break: 'sitting out', sub_pool: 'sub pool' };
@@ -221,6 +222,70 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
     notPlayingPaid,
     notPlayingOf,
   };
+}
+
+const ROSTER_LABEL = { active: 'playing', on_break: 'sitting out', sub_pool: 'in the sub pool' };
+
+/**
+ * One line for a change that moves the split (dues_changes): the session fee,
+ * a custom amount, or someone coming onto or off the session's active roster.
+ * "Casey C. changed the session fee: $721 → $735 (refs $18 → $20)".
+ */
+export function changeLine(change, nameOf, meId) {
+  const name = (id) => (id === meId ? 'you' : shortName(nameOf(id)));
+  const actor = !change.changed_by ? 'Someone' : change.changed_by === meId ? 'You' : shortName(nameOf(change.changed_by));
+  const before = change.old_value;
+  const after = change.new_value;
+
+  if (change.kind === 'fee') {
+    const now = feeParts(after);
+    if (!before) return `${actor} set the session fee: ${dollars(feeTotal(now))}`;
+    const was = feeParts(before);
+    const what = [
+      num(was.league_fee) !== num(now.league_fee) && `league ${dollars(was.league_fee)} → ${dollars(now.league_fee)}`,
+      num(was.ref_fee) !== num(now.ref_fee) && `refs ${dollars(was.ref_fee)} → ${dollars(now.ref_fee)}`,
+      num(was.game_count) !== num(now.game_count) && `${num(was.game_count)} → ${num(now.game_count)} games`,
+    ].filter(Boolean);
+    return `${actor} changed the session fee: ${dollars(feeTotal(was))} → ${dollars(feeTotal(now))}${what.length ? ` (${what.join(', ')})` : ''}`;
+  }
+
+  const self = change.user_id === change.changed_by;
+  if (change.kind === 'custom_amount') {
+    const who = self ? (actor === 'You' ? 'yourself' : 'themselves') : name(change.user_id);
+    const whose = self ? (actor === 'You' ? 'your' : 'their') : change.user_id === meId ? 'your' : `${who}'s`;
+    if (!before) return `${actor} gave ${who} a custom amount of ${dollars(after.amount)}`;
+    if (!after) return `${actor} put ${who} back on the even split`;
+    return `${actor} changed ${whose} custom amount: ${dollars(before.amount)} → ${dollars(after.amount)}`;
+  }
+
+  // Someone coming onto or off the session's active roster.
+  const status = after?.status;
+  if (status === 'off' || !ROSTER_LABEL[status]) return `${actor} took ${name(change.user_id)} off the roster`;
+  if (self || !change.changed_by) {
+    return change.user_id === meId ? `You're ${ROSTER_LABEL[status]}` : `${shortName(nameOf(change.user_id))} is ${ROSTER_LABEL[status]}`;
+  }
+  const who = name(change.user_id);
+  if (status === 'sub_pool') return `${actor} moved ${who} to the sub pool`;
+  return `${actor} marked ${who} as ${ROSTER_LABEL[status]}`;
+}
+
+/** Paid / not paid history and the changes that move the split, as one list, newest first. */
+export const duesEvents = (history, changes = []) =>
+  [...history, ...changes].sort((a, b) => (a.created_date < b.created_date ? 1 : a.created_date > b.created_date ? -1 : 0));
+
+/**
+ * The changes behind "share is now $62": the ones made after a player last
+ * marked paid that can move their share. A custom amount only moves with its
+ * own changes; an even share moves with the fee, the roster and anyone's
+ * custom amount.
+ */
+export function shareChanges(changes, history, userId, custom) {
+  const paidAt = history.filter((e) => e.user_id === userId && e.paid).map((e) => e.created_date).sort().at(-1);
+  if (!paidAt) return [];
+  return changes
+    .filter((c) => c.created_date > paidAt)
+    .filter((c) => (custom ? c.kind === 'custom_amount' && c.user_id === userId : true))
+    .sort((a, b) => (a.created_date < b.created_date ? 1 : -1));
 }
 
 /**

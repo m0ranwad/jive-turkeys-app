@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
-import { DUES_DEFAULTS, cleanPayHandle, dollars, feeParts, feeTotal, notPlayingLabel, reminderText, teamDues } from '@/lib/dues';
+import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
@@ -84,7 +84,9 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   const [rosterOpen, setRosterOpen] = useState(false);
 
   // The team as it was that session, so later status changes don't rewrite it.
-  const { row, payments, history, members, started } = sessionSlice(data, period);
+  const { row, payments, history, changes, members, started } = sessionSlice(data, period);
+  // Paid / not paid, and what moved the split (the fee, custom amounts, the roster), newest first.
+  const events = duesEvents(history, changes);
   const total = row ? Number(row.total_fee) || 0 : 0;
   const team = teamDues(total, members, payments, data.profiles);
   const past = !!current && isEarlier(period, current);
@@ -278,7 +280,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         player={data.profiles.find((p) => p.user_id === sheetFor) || null}
         team={team}
         payments={payments}
-        history={history}
+        history={events}
         profiles={data.profiles}
         period={period}
         meId={user.id}
@@ -392,10 +394,10 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         </p>
       </section>
 
-      {history.length > 0 && (
+      {events.length > 0 && (
         <section className={CARD}>
           <h3 className={cn(HEADING, 'mb-3')}>Recent changes</h3>
-          <HistoryList events={history} nameOf={nameOf} meId={user.id} limit={5} />
+          <HistoryList events={events} nameOf={nameOf} meId={user.id} limit={5} />
         </section>
       )}
 

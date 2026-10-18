@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v20';
+const DB_KEY = 'jt_demo_db_v21';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -486,6 +486,44 @@ describe('dues', () => {
       [false, null, jordan.id],
       [true, '2026-10-09', jordan.id],
     ]);
+  });
+
+  it('has sample changes: session 2\'s fee set without refs, then with them, and Jamie sitting out', async () => {
+    const { api } = await signedIn();
+    const changes = await api.entities.DuesChange.filter({ session: 2 }, 'created_date');
+    expect(changes.map((c) => [c.kind, c.old_value?.total_fee ?? c.old_value?.status ?? null, c.new_value.total_fee ?? c.new_value.status])).toEqual([
+      ['fee', null, 595],
+      ['fee', 595, 721],
+      ['roster', 'active', 'on_break'],
+    ]);
+  });
+
+  it('keeps fee, custom amount and roster changes like the database, and nothing for marking paid', async () => {
+    const { api, me } = await signedIn();
+    const [row] = await api.entities.SessionDues.filter({ session: 2 });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    const count = async () => (await api.entities.DuesChange.list()).length;
+    const before = await count();
+    const latest = async () => (await api.entities.DuesChange.list('-created_date'))[0];
+
+    await api.entities.SessionDues.update(row.id, { ref_fee: 20, total_fee: 735 });
+    expect(await latest()).toMatchObject({ kind: 'fee', old_value: { ref_fee: 18, total_fee: 721 }, new_value: { ref_fee: 20, total_fee: 735 }, changed_by: me.id });
+    await api.entities.SessionDues.update(row.id, { total_fee: 735 });
+    expect(await count()).toBe(before + 1);
+
+    const payment = await api.entities.DuesPayment.create({ season_year: row.season_year, session: 2, user_id: kelly.user_id, override_amount: 40 });
+    expect(await latest()).toMatchObject({ kind: 'custom_amount', user_id: kelly.user_id, old_value: null, new_value: { amount: 40 } });
+    await api.entities.DuesPayment.update(payment.id, { override_amount: null });
+    expect(await latest()).toMatchObject({ kind: 'custom_amount', old_value: { amount: 40 }, new_value: null });
+
+    await api.dues.markPaid({ year: row.season_year, session: 2, userIds: [kelly.user_id], paid: true, paidDate: '2026-10-09', amounts: [62] });
+    expect(await count()).toBe(before + 3);
+
+    // Kelly sits out the current session (session 2).
+    await api.entities.PlayerProfile.update(kelly.id, { status: 'on_break' });
+    expect(await latest()).toMatchObject({ kind: 'roster', session: 2, user_id: kelly.user_id, old_value: { status: 'active' }, new_value: { status: 'on_break' } });
+    await api.entities.PlayerProfile.update(kelly.id, { status: 'sub_pool' });
+    expect(await count()).toBe(before + 4);
   });
 
   it('records what each player paid, keeps it in the history, and clears it when marked not paid', async () => {

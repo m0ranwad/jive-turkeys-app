@@ -49,6 +49,8 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026');
   await expect(paidHeading(page, '6 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
+  // The dues history says why the split changed.
+  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText("You're sitting out");
   await page.getByRole('button', { name: 'Previous session' }).click();
   await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026');
   await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
