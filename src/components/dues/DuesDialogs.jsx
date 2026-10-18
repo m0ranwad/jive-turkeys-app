@@ -7,7 +7,7 @@ import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveTeamSettings } from '@/lib/actions';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
-import { cleanPayHandle, dollars, feeTotal, notPlayingLabel, partPayment } from '@/lib/dues';
+import { cleanPayHandle, dollars, feeProblem, feeTotal, feeWarning, notPlayingLabel, partPayment } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { EYEBROW, HistoryList, PartPayment, StatusChip, shortDate } from './DuesParts';
@@ -16,10 +16,15 @@ const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
 const FIELD_LABEL = cn(EYEBROW, 'text-zinc-400');
 const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
 
-/** Captains: the session fee as the league bills it. */
-export function FeeDialog({ open, onOpenChange, period, initial, onSave }) {
+/**
+ * Captains: the session fee as the league bills it. Every box needs a number of
+ * $0 or more. A $0 fee, or one more than double `previous` ({ total, now }: the
+ * fee it replaces, or last session's), asks before it saves.
+ */
+export function FeeDialog({ open, onOpenChange, period, initial, previous, onSave }) {
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(null);
 
   useEffect(() => {
     if (open) {
@@ -28,18 +33,28 @@ export function FeeDialog({ open, onOpenChange, period, initial, onSave }) {
         ref_fee: String(initial.ref_fee),
         game_count: String(initial.game_count),
       });
+      setConfirming(null);
     }
     // Only when it opens, so a reload behind it doesn't wipe what's typed.
   }, [open]);
 
+  // Nothing to say until the boxes are filled in from the saved fee.
+  const problem = 'league_fee' in form ? feeProblem(form) : null;
   const parts = {
     league_fee: Number(form.league_fee) || 0,
     ref_fee: Number(form.ref_fee) || 0,
     game_count: Math.max(0, Math.floor(Number(form.game_count) || 0)),
   };
+  const total = feeTotal(parts);
 
   const save = async (e) => {
     e.preventDefault();
+    if (problem) return;
+    const warning = feeWarning(total, previous?.total);
+    if (warning && !confirming) {
+      setConfirming(warning);
+      return;
+    }
     setBusy(true);
     try {
       await onSave(parts);
@@ -60,8 +75,12 @@ export function FeeDialog({ open, onOpenChange, period, initial, onSave }) {
           id={`fee-${key}`}
           type="number"
           inputMode={prefix ? 'decimal' : 'numeric'}
+          min="0"
           value={form[key] ?? ''}
-          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+          onChange={(e) => {
+            setForm((f) => ({ ...f, [key]: e.target.value }));
+            setConfirming(null);
+          }}
           className={cn('h-11 rounded-xl font-display text-lg font-extrabold', prefix && 'pl-7')}
         />
       </div>
@@ -82,15 +101,46 @@ export function FeeDialog({ open, onOpenChange, period, initial, onSave }) {
             {field('Ref fee / game', 'ref_fee', '$')}
             {field('Games', 'game_count')}
           </div>
-          <div className="flex items-baseline justify-between rounded-2xl bg-zinc-50 px-4 py-3">
-            <span className="text-sm font-semibold text-zinc-500">
-              {dollars(parts.league_fee)} + {parts.game_count} × {dollars(parts.ref_fee)}
-            </span>
-            <span className="font-display text-2xl font-extrabold">{dollars(feeTotal(parts))}</span>
-          </div>
-          <Button type="submit" disabled={busy} className={BIG_BUTTON}>
-            {busy ? 'Saving…' : 'Save fee'}
-          </Button>
+          {problem ? (
+            <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert">
+              {problem}
+            </p>
+          ) : (
+            <div className="flex items-baseline justify-between rounded-2xl bg-zinc-50 px-4 py-3">
+              <span className="text-sm font-semibold text-zinc-500">
+                {dollars(parts.league_fee)} + {parts.game_count} × {dollars(parts.ref_fee)}
+              </span>
+              <span className="font-display text-2xl font-extrabold">{dollars(total)}</span>
+            </div>
+          )}
+          {confirming ? (
+            <div className="space-y-3 rounded-2xl bg-amber-50 p-4" role="alert">
+              <p className="text-sm text-amber-950">
+                {confirming === 'zero' ? (
+                  <>
+                    Set the session fee to <b>$0</b>? Nobody will owe anything.
+                  </>
+                ) : (
+                  <>
+                    That's <b>{dollars(total)}</b>, more than double{' '}
+                    {previous.now ? `the ${dollars(previous.total)} it is now` : `last session's ${dollars(previous.total)}`}. Save it?
+                  </>
+                )}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" onClick={() => setConfirming(null)} className="h-11 rounded-xl bg-white font-bold">
+                  Go back
+                </Button>
+                <Button type="submit" disabled={busy} className="h-11 rounded-xl font-bold">
+                  {busy ? 'Saving…' : confirming === 'zero' ? 'Set to $0' : 'Save it'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button type="submit" disabled={busy || !!problem} className={BIG_BUTTON}>
+              {busy ? 'Saving…' : 'Save fee'}
+            </Button>
+          )}
         </form>
       </DialogContent>
     </Dialog>

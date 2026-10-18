@@ -588,6 +588,12 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   // Same as the database's dues_changes triggers: the session fee, custom amounts, and someone
   // coming onto or off a session's active roster are kept, with who changed them. A session's
   // list starting (rows nobody has answered) isn't a change.
+  // Same as the database's checks: a session fee or a custom amount can't be below $0.
+  const checkAmounts = (table, row) => {
+    const below = (value) => value != null && Number(value) < 0;
+    if (table === 'session_dues' && ['total_fee', 'league_fee', 'ref_fee'].some((k) => below(row[k]))) throw new Error("A fee can't be below $0.");
+    if (table === 'dues_payments' && below(row.override_amount)) throw new Error("A custom amount can't be below $0.");
+  };
   const feeOf = (r) => r && { league_fee: r.league_fee ?? null, ref_fee: r.ref_fee ?? null, game_count: r.game_count ?? null, total_fee: r.total_fee ?? null };
   const amountOf = (value) => (value == null ? null : Number(value));
   const trackChange = (table, before, after) => {
@@ -722,6 +728,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         checkChatWrite(table, 'create', row);
+        checkAmounts(table, row);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...(table === 'chat_threads' && { visibility: 'team' }), ...row };
         if (table === 'messages') cleanMentions(record);
         db[table].push(record);
@@ -743,6 +750,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         if (!record) throw new Error('Not found');
         if (table === 'potm_votes') checkVotingOpen(record.game_id);
         checkChatWrite(table, 'update', record, patch);
+        checkAmounts(table, { ...record, ...patch });
         const opensVoting = table === 'games' && patch.has_result && !record.has_result && !record.potm_opened_at;
         // Same as the database's message_edited(): changing the text marks it edited.
         const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;

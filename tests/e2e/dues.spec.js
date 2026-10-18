@@ -337,6 +337,48 @@ test('a player who paid and is sitting out the session sees that they owe nothin
   await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
 });
 
+test("the fee box won't save a blank or negative fee, and asks before $0 or a fee more than double", async ({ page }) => {
+  await signIn(page);
+  await openDues(page);
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Session 2 fee' });
+  const save = dialog.getByRole('button', { name: 'Save fee' });
+
+  // Clearing a box to retype it doesn't save $0 by mistake.
+  await dialog.getByLabel('League fee').fill('');
+  await expect(dialog).toContainText('Enter the league fee.');
+  await expect(save).toBeDisabled();
+  await dialog.getByLabel('League fee').fill('-595');
+  await expect(dialog).toContainText("A fee can't be below $0.");
+  await expect(save).toBeDisabled();
+
+  // A typo ten times the fee asks first; Go back changes nothing.
+  await dialog.getByLabel('League fee').fill('7084');
+  await save.click();
+  await expect(dialog).toContainText("That's $7210, more than double the $721 it is now. Save it?");
+  await dialog.getByRole('button', { name: 'Go back' }).click();
+  await expect(save).toBeVisible();
+  await dialog.getByLabel('League fee').fill('595');
+
+  // A free session: $0 saves once it's confirmed.
+  await dialog.getByLabel('League fee').fill('0');
+  await dialog.getByLabel('Ref fee / game').fill('0');
+  await save.click();
+  await expect(dialog).toContainText('Set the session fee to $0? Nobody will owe anything.');
+  await dialog.getByRole('button', { name: 'Set to $0' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('$0 session fee')).toBeVisible();
+  await expect(page.getByText('$0 each')).toBeVisible();
+
+  // Back to the real fee: from $0 there's nothing to double, so it saves straight away.
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  await dialog.getByLabel('League fee').fill('595');
+  await dialog.getByLabel('Ref fee / game').fill('18');
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('$61 each')).toBeVisible();
+});
+
 test('a captain pastes payment links, and players get the buttons', async ({ page }) => {
   await signIn(page);
   await openDues(page);
