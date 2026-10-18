@@ -1,12 +1,13 @@
 // Captains put the whole team on the roster by name; players who haven't
 // joined yet show as grey cards until they sign up and pick their name.
-// Captains set their status, edit them, link an account, or take them off the
-// team. Their roster status decides whether they split the dues, like
+// Captains set their status, edit them, link an account, undo a pick, or take
+// them off the team. Their roster status decides whether they split the dues, like
 // everyone else's.
 // The database enforces who can do what (supabase/tests/dues.test.sql).
-import { expect, signIn, test } from './helpers';
+import { enterTeamCode, expect, signIn, test } from './helpers';
 
 // Mike Russo (man, Defense) and Dana Wells (woman, Forward) are Active and haven't joined yet in the sample data.
+// Kelly Moss picked "Kelly M" on the roster when she joined.
 async function openTeam(page) {
   await page.locator('a[href="/team"]:visible').first().click();
   await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
@@ -28,8 +29,9 @@ test('everyone sees players who have not joined yet as grey cards, in the counts
   await expect(card(page, 'Mike Russo')).toContainText('Not joined yet');
   await expect(card(page, 'Mike Russo')).toHaveClass(/border-dashed/);
   await expect(card(page, 'Dana Wells')).toContainText('Forward');
-  // Players can't change them.
+  // Players can't change them, or see which roster name someone joined as.
   await expect(page.getByRole('button', { name: 'Edit Mike Russo' })).toHaveCount(0);
+  await expect(page.getByTestId('joined-as')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add players to the roster' })).toHaveCount(0);
 
   const notJoined = page.getByTestId('not-joined');
@@ -155,7 +157,9 @@ test('a captain links a player who joined without picking their name', async ({ 
   await dialog.getByRole('button', { name: 'Move them' }).click();
   await expect(page.getByText("Mike Russo moved to Chris Dunn's account")).toBeVisible();
   await expect(page.getByText('11 active · 2 subs (incl. on break) · 1 not joined yet')).toBeVisible();
-  await expect(page.getByText('Mike Russo', { exact: true })).toHaveCount(0);
+  // The grey card is gone; captains see the name on Chris's card instead.
+  await expect(page.getByRole('button', { name: 'Edit Mike Russo' })).toHaveCount(0);
+  await expect(card(page, 'Chris Dunn').getByTestId('joined-as')).toHaveText(/Joined as Mike Russo/);
 
   await openDues(page);
   await expect(page.getByRole('heading', { name: '7 of 11 paid' })).toBeVisible();
@@ -186,4 +190,94 @@ test('a captain edits a player who has not joined, removes them, and adds them b
   await add.getByRole('button', { name: 'Add back' }).click();
   await expect(page.getByText('Dana Wells-Ortiz added back')).toBeVisible();
   await expect(page.getByText('12 active · 2 subs (incl. on break) · 2 not joined yet')).toBeVisible();
+});
+
+test('a captain undoes a pick: the roster name goes back to a grey card with its dues', async ({ page }) => {
+  await signIn(page);
+  await openTeam(page);
+  const kelly = card(page, 'Kelly Moss');
+  await expect(kelly.getByTestId('joined-as')).toHaveText(/Joined as Kelly M/);
+  await kelly.getByRole('button', { name: 'Unlink Kelly M from Kelly Moss' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Unlink Kelly M?' });
+  await expect(dialog).toContainText("Kelly M's spot and dues go back to a grey card. Kelly Moss keeps their account.");
+  await dialog.getByRole('button', { name: 'Unlink', exact: true }).click();
+  await expect(page.getByText('Kelly M is a grey card again')).toBeVisible();
+  await expect(page.getByText('13 active · 2 subs (incl. on break) · 3 not joined yet')).toBeVisible();
+  await expect(card(page, 'Kelly M')).toContainText('Not joined yet');
+  await expect(page.getByTestId('joined-as')).toHaveCount(0);
+  // Kelly Moss isn't suggested for it again: a captain just took it off her account.
+  await expect(card(page, 'Kelly M')).not.toContainText('Joined as Kelly Moss?');
+
+  // Its session 1 payment came back with it, and it's in this session's split.
+  await openDues(page);
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Kelly Mnot joined yet');
+
+  // It was right after all: move it back.
+  await openTeam(page);
+  await page.getByRole('button', { name: 'Edit Kelly M' }).click();
+  const edit = page.getByRole('dialog', { name: 'Kelly M' });
+  await expect(edit.getByLabel('Joined without picking their name?')).toHaveValue('');
+  await edit.getByLabel('Joined without picking their name?').selectOption({ label: 'Kelly Moss' });
+  await edit.getByRole('button', { name: 'Move', exact: true }).click();
+  await edit.getByRole('button', { name: 'Move them' }).click();
+  await expect(page.getByText("Kelly M moved to Kelly Moss's account")).toBeVisible();
+  await expect(page.getByText('12 active · 2 subs (incl. on break) · 2 not joined yet')).toBeVisible();
+  await expect(card(page, 'Kelly Moss').getByRole('button', { name: 'Unlink Kelly M from Kelly Moss' })).toBeVisible();
+});
+
+test('when someone signs up twice, captains see it and can move the roster spot to the account they use', async ({ page }) => {
+  // Kelly makes a second account and says she isn't the Kelly already on the site.
+  await page.goto('/register');
+  await page.locator('#email').fill('kelly.again@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.locator('#confirm').fill('demo1234');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Kelly M.');
+  await page.getByRole('button', { name: 'Female' }).click();
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  const reloaded = page.waitForEvent('load');
+  await page.getByTestId('already-on-site').getByRole('button', { name: "No, that's someone else" }).click();
+  await reloaded;
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.locator('#email').fill('captain@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('button', { name: 'Skip' }).click();
+
+  // Captains see both accounts, and which one has her roster spot.
+  await openTeam(page);
+  await expect(card(page, 'Kelly Moss').getByTestId('two-accounts')).toContainText('Two accounts? Kelly M. looks like the same person.');
+  await expect(card(page, 'Kelly M.').getByTestId('two-accounts')).toContainText('Kelly Moss looks like the same person.');
+  // She signs in with the new one. Removing the old one first warns that it has her spot.
+  await card(page, 'Kelly Moss').getByRole('button', { name: 'Remove Kelly Moss' }).click();
+  const remove = page.getByRole('dialog', { name: 'Remove Kelly Moss?' });
+  await expect(remove.getByTestId('remove-has-name')).toContainText('Kelly joined as Kelly M, so that spot\'s dues are on this account.');
+  await expect(remove.getByTestId('remove-has-name')).toContainText('cancel and unlink Kelly M first');
+  await remove.getByRole('button', { name: 'Cancel' }).click();
+
+  await card(page, 'Kelly Moss').getByRole('button', { name: 'Unlink Kelly M from Kelly Moss' }).click();
+  await page.getByRole('dialog', { name: 'Unlink Kelly M?' }).getByRole('button', { name: 'Unlink', exact: true }).click();
+  await expect(page.getByText('Kelly M is a grey card again')).toBeVisible();
+  // The new account is the one suggested now.
+  await expect(card(page, 'Kelly M')).toContainText('Joined as Kelly M.? Tap Edit to move this spot to their account.');
+  await page.getByRole('button', { name: 'Edit Kelly M' }).click();
+  const edit = page.getByRole('dialog', { name: 'Kelly M' });
+  await expect(edit.getByLabel('Joined without picking their name?').locator('option:checked')).toHaveText('Kelly M.');
+  await edit.getByRole('button', { name: 'Move', exact: true }).click();
+  await edit.getByRole('button', { name: 'Move them' }).click();
+  await expect(page.getByText("Kelly M moved to Kelly M.'s account")).toBeVisible();
+  await expect(card(page, 'Kelly M.').getByTestId('joined-as')).toHaveText(/Joined as Kelly M/);
+
+  // Then the old account comes off the team.
+  await card(page, 'Kelly Moss').getByRole('button', { name: 'Remove Kelly Moss' }).click();
+  await expect(page.getByRole('dialog', { name: 'Remove Kelly Moss?' }).getByTestId('remove-has-name')).toHaveCount(0);
+  await page.getByRole('dialog', { name: 'Remove Kelly Moss?' }).getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(page.getByText('Kelly Moss removed from the team')).toBeVisible();
+  await expect(page.getByTestId('two-accounts')).toHaveCount(0);
 });

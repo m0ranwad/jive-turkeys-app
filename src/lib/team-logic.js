@@ -249,6 +249,17 @@ export function sameName(a, b) {
 }
 
 /**
+ * The account a roster name's player probably joined with, or null: a name like
+ * it, on an account that hasn't picked a roster name, and not one a captain
+ * already took this name off (`links` are team_guest_links rows).
+ */
+export function likelyAccount(guest, players, guests = [], links = []) {
+  const taken = new Set(guests.map((g) => g.linked_user_id).filter(Boolean));
+  const undone = new Set(links.filter((l) => l.guest_id === guest.id && l.unlinked_at).map((l) => l.user_id));
+  return players.find((p) => !taken.has(p.user_id) && !undone.has(p.user_id) && sameName(p.display_name, guest.display_name)) || null;
+}
+
+/**
  * Names pasted one per line, sorted out against the roster: new ones, ones
  * already on it (same name), ones that look like someone on it, and ones too
  * long to save. Blank lines and repeats are dropped.

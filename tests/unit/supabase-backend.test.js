@@ -239,12 +239,14 @@ describe('dues', () => {
 });
 
 describe('roster names', () => {
-  it('picks a name and links one through the database functions', async () => {
+  it('picks a name, links one and undoes it through the database functions', async () => {
     await api.users.claimGuest('g1');
     await api.users.linkGuest('g2', 'u1');
+    await api.users.unlinkGuest('g2');
     expect(calls).toEqual([
       ['rpc', 'claim_team_guest', { p_guest_id: 'g1' }],
       ['rpc', 'link_team_guest', { p_guest_id: 'g2', p_user_id: 'u1' }],
+      ['rpc', 'unlink_team_guest', { p_guest_id: 'g2' }],
     ]);
   });
 

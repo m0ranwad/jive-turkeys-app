@@ -213,7 +213,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough
   (`src/components/Walkthrough.jsx`, `claim_team_guest()`), which brings over their status and moves their dues
   payments and history to their account; captains can also link one (`link_team_guest()`); both use
-  `move_team_guest()`. Names that look alike ("Sam Ortiz" and "Sam O"; `sameName()` in
+  `move_team_guest()`, which records exactly what it moved and overwrote in `team_guest_links`. Captains see
+  "Joined as …" on a player's card and can **Unlink** a wrong pick (`unlink_team_guest()`, `UnlinkGuestDialog`):
+  the name is a grey card again with what came with it, and the account gets back what the pick changed. Picks made
+  before records were kept got one worked out from the data when the account was new (`team_guest_links_rebuild()`);
+  older captain links can't be undone. Someone who signs up twice shows as **Two accounts?** to captains. Names that look alike ("Sam Ortiz" and "Sam O"; `sameName()` in
   `src/lib/team-logic.js`) are caught when captains paste names, when a new player types a name instead of picking
   theirs ("Is that you?"), and on grey cards for captains ("Joined as …?"). In dues they split, pay and pair like
   everyone else (payments and history rows have `guest_id` instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds).

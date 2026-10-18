@@ -5,7 +5,7 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
-import { PickPositionCard, RemovePlayerDialog } from '@/components/team/TeamDialogs';
+import { PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
@@ -14,7 +14,7 @@ import { guestAsPlayer } from '@/lib/dues';
 import { initials, today } from '@/lib/format';
 import { beforeFirstGame, sessionRows, unanswered } from '@/lib/roster';
 import { codeIsStale } from '@/lib/team-code';
-import { sameName } from '@/lib/team-logic';
+import { likelyAccount, sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STATUS_ORDER = { active: 0, sub_pool: 1, on_break: 2 };
@@ -41,15 +41,20 @@ export function TeamPage() {
   // Teammates who aren't on the app: on the roster like everyone else. `guestDialog` is null, 'new' or a guest.
   const [guests, setGuests] = useState([]);
   const [guestDialog, setGuestDialog] = useState(null);
-  // Captains: the signed-up player being removed.
+  // Which account picked which name (team_guest_links), so captains can undo a wrong pick.
+  const [links, setLinks] = useState([]);
+  // Captains: the signed-up player being removed, and the pick being undone ({ guest, player }).
   const [removing, setRemoving] = useState(null);
+  const [unlinking, setUnlinking] = useState(null);
 
   const loadGuests = useCallback(async () => {
-    try {
-      setGuests(await api.entities.TeamGuest.list('display_name'));
-    } catch {
-      setGuests([]);
-    }
+    // Together, so a grey card never shows before we know which accounts it was taken off.
+    const [rows, picks] = await Promise.all([
+      api.entities.TeamGuest.list('display_name').catch(() => []),
+      api.entities.TeamGuestLink.list().catch(() => []),
+    ]);
+    setGuests(rows);
+    setLinks(picks);
   }, []);
 
   useEffect(() => {
@@ -89,6 +94,9 @@ export function TeamPage() {
   if (data.loading) return <PageSpinner />;
 
   const removedPlayers = data.isCaptain ? (data.profiles || []).filter((p) => p.removed) : [];
+  // Captains: the roster name an account picked (or was linked to), and whether that can be undone here.
+  const pickedName = (p) => (data.isCaptain && !p.guest ? guests.find((g) => g.linked_user_id === p.user_id) || null : null);
+  const canUnlink = (name) => !!name && links.some((l) => l.guest_id === name.id && l.user_id === name.linked_user_id && !l.unlinked_at);
   const addBack = async (profile) => {
     try {
       await api.users.setRemoved(profile.user_id, false);
@@ -237,7 +245,13 @@ export function TeamPage() {
         {roster.map((p) => {
           const isMe = p.user_id === data.user.id;
           // Captains: someone on the app with a name like this one probably joined without picking it.
-          const joinedAs = p.guest && data.isCaptain ? (data.profiles || []).find((a) => sameName(a.display_name, p.display_name)) : null;
+          const joinedAs = p.guest && data.isCaptain ? likelyAccount(p, data.profiles || [], guests, links) : null;
+          // Captains: the roster name this account came with, and another account that looks like the same person.
+          const picked = pickedName(p);
+          const twin =
+            data.isCaptain && !p.guest
+              ? roster.find((o) => !o.guest && o.user_id !== p.user_id && sameName(o.display_name, p.display_name))
+              : null;
           return (
             <div
               key={p.id}
@@ -312,6 +326,29 @@ export function TeamPage() {
                 <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
                   Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
                 </p>
+              )}
+              {twin && (
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="two-accounts">
+                  Two accounts? {twin.display_name} looks like the same person. If so, keep the one they sign in with and
+                  remove the other.
+                </p>
+              )}
+              {picked && (
+                <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500" data-testid="joined-as">
+                  <span className="min-w-0 flex-1">
+                    Joined as <b className="text-zinc-700">{picked.display_name}</b>
+                    {!canUnlink(picked) && ' · picked before undo was added'}
+                  </span>
+                  {canUnlink(picked) && (
+                    <button
+                      onClick={() => setUnlinking({ guest: picked, player: p })}
+                      aria-label={`Unlink ${picked.display_name} from ${p.display_name}`}
+                      className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
+                    >
+                      Unlink
+                    </button>
+                  )}
+                </div>
               )}
               {(isMe || data.isCaptain) && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
@@ -396,6 +433,7 @@ export function TeamPage() {
           onOpenChange={(open) => !open && setGuestDialog(null)}
           guest={guestDialog === 'new' ? null : guestDialog}
           guests={guests}
+          links={links}
           appPlayers={(data.profiles || []).filter((p) => !p.removed).sort((a, b) => a.display_name.localeCompare(b.display_name))}
           meId={data.user.id}
           onChanged={async () => {
@@ -405,7 +443,23 @@ export function TeamPage() {
         />
       )}
       {data.isCaptain && (
-        <RemovePlayerDialog player={removing} onOpenChange={(open) => !open && setRemoving(null)} onRemoved={data.reload} />
+        <RemovePlayerDialog
+          player={removing}
+          pickedName={removing && pickedName(removing)}
+          canUnlink={!!removing && canUnlink(pickedName(removing))}
+          onOpenChange={(open) => !open && setRemoving(null)}
+          onRemoved={data.reload}
+        />
+      )}
+      {data.isCaptain && (
+        <UnlinkGuestDialog
+          unlinking={unlinking}
+          onOpenChange={(open) => !open && setUnlinking(null)}
+          onUnlinked={async () => {
+            await loadGuests();
+            await data.reload();
+          }}
+        />
       )}
     </div>
   );

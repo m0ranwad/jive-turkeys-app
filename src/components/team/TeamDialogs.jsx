@@ -144,7 +144,62 @@ export function InviteDialog({ open, onOpenChange, isCaptain }) {
 }
 
 /** Captains: take a signed-up player off the team, after saying what that means. */
-export function RemovePlayerDialog({ player, onOpenChange, onRemoved }) {
+/**
+ * Captains: undo a "Find your name" pick (or a link). `unlinking` is
+ * { guest, player }: the roster name and the account that has it.
+ */
+export function UnlinkGuestDialog({ unlinking, onOpenChange, onUnlinked }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const { guest, player } = unlinking || {};
+
+  const unlink = async () => {
+    setBusy(true);
+    try {
+      await api.users.unlinkGuest(guest.id);
+      toast({ title: `${guest.display_name} is a grey card again`, description: 'Tap Edit on it to move it to the right account.' });
+      onOpenChange(false);
+      await onUnlinked?.();
+    } catch (err) {
+      toast(saveFailedToast(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!unlinking} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Unlink {guest?.display_name}?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+          <p>
+            {guest?.display_name}'s spot and dues go back to a grey card. {player?.display_name} keeps their account.
+          </p>
+          <p>
+            Then the right person picks it when they join, or you move it to their account with Edit on the grey card.
+            Anything added for {player?.display_name} since stays with them.
+          </p>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={unlink} disabled={busy}>
+            {busy ? 'Unlinking…' : 'Unlink'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Captains: take a signed-up player off the team. `pickedName` is the roster
+ * name the account has, if any, and `canUnlink` whether that pick can be undone.
+ */
+export function RemovePlayerDialog({ player, pickedName, canUnlink, onOpenChange, onRemoved }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const first = player?.display_name.split(' ')[0] || '';
@@ -177,6 +232,14 @@ export function RemovePlayerDialog({ player, onOpenChange, onRemoved }) {
             the team site or the chat anymore, and the team code won't let them back in.
           </p>
           <p>Their past stats, dues payments and chat messages stay. You can add them back from the bottom of this page.</p>
+          {pickedName && (
+            <p className="font-semibold" data-testid="remove-has-name">
+              {first} joined as {pickedName.display_name}, so that spot's dues are on this account.
+              {canUnlink
+                ? ` If this is a spare account, cancel and unlink ${pickedName.display_name} first, then move it to the account they use.`
+                : ''}
+            </p>
+          )}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>

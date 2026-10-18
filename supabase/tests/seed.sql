@@ -201,3 +201,28 @@ begin
   end if;
 end;
 $$;
+
+-- A roster name a new player picked when she joined (once that exists): the
+-- name's payment is on her account, and the name is linked to her. Once picks
+-- are recorded (team_guest_links), so is this one.
+do $$
+begin
+  if to_regclass('public.team_guests') is not null then
+    insert into auth.users (id, email, raw_user_meta_data) values
+      ('44444444-4444-4444-8444-444444444444', 'rosa@seed.test', '{"full_name": "Rosa Diaz"}');
+    insert into public.player_profiles (user_id, email, display_name, gender, status) values
+      ('44444444-4444-4444-8444-444444444444', 'rosa@seed.test', 'Rosa Diaz', 'F', 'active');
+    insert into public.dues_payments (season_year, session, user_id, paid, paid_date, paid_by, created_date) values
+      (2026, 2, '44444444-4444-4444-8444-444444444444', true, '2026-10-05', '11111111-1111-4111-8111-111111111111', '2026-10-05 18:00+00');
+    insert into public.team_guests (id, display_name, gender, status, linked_user_id, created_by) values
+      ('f2222222-2222-4222-8222-222222222222', 'Rosa D', 'F', 'active', '44444444-4444-4444-8444-444444444444',
+        '11111111-1111-4111-8111-111111111111');
+    if to_regclass('public.team_guest_links') is not null then
+      insert into public.team_guest_links (guest_id, user_id, moved_payments, status_before, status_after, linked_by)
+      select 'f2222222-2222-4222-8222-222222222222', '44444444-4444-4444-8444-444444444444', array_agg(id), 'active', 'active',
+        '44444444-4444-4444-8444-444444444444'
+      from public.dues_payments where user_id = '44444444-4444-4444-8444-444444444444';
+    end if;
+  end if;
+end;
+$$;

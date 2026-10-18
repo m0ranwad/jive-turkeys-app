@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { DIALOG, DIALOG_TITLE, POSITIONS } from '@/lib/constants';
-import { sameName, sortPastedNames } from '@/lib/team-logic';
+import { likelyAccount, sortPastedNames } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
@@ -75,7 +75,7 @@ function GuestFields({ form, setForm }) {
  * the account they joined with, or taking them off the team. Those last two
  * ask first.
  */
-export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meId, onChanged }) {
+export function GuestDialog({ open, onOpenChange, guest, guests, links, appPlayers, meId, onChanged }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ display_name: '', gender: null, position: null });
   const [names, setNames] = useState('');
@@ -90,7 +90,7 @@ export function GuestDialog({ open, onOpenChange, guest, guests, appPlayers, meI
       setNames('');
       setAddLookalikes(false);
       // Someone on the app with a name like this one probably joined without picking it.
-      setLinkTo((guest && appPlayers.find((p) => sameName(p.display_name, guest.display_name))?.user_id) || '');
+      setLinkTo((guest && likelyAccount(guest, appPlayers, guests, links)?.user_id) || '');
       setConfirm(null);
     }
     // Only when it opens, so a reload behind it doesn't wipe what's typed.
