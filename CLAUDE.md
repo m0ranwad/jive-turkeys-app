@@ -217,7 +217,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   "Joined as …" on a player's card and can **Unlink** a wrong pick (`unlink_team_guest()`, `UnlinkGuestDialog`):
   the name is a grey card again with what came with it, and the account gets back what the pick changed. Picks made
   before records were kept got one worked out from the data when the account was new (`team_guest_links_rebuild()`);
-  older captain links can't be undone. Someone who signs up twice shows as **Two accounts?** to captains. Names that look alike ("Sam Ortiz" and "Sam O"; `sameName()` in
+  older captain links can't be undone. Captains also see **Two accounts?** on accounts whose names look alike
+  (`lookalikeAccounts()`; not two accounts that each picked a roster name) and **Didn't pick a roster name** on
+  someone who joined while grey cards were waiting (`skippedRosterName()`); their answers ("They're different
+  people", "Not on the roster") are kept in `team_name_checks` for every captain. At sign-up, a name exactly like a
+  teammate's ("Josh" when there's a Josh) has to get a last name or initial (`nameTakenBy()` in the walkthrough). Names that look alike ("Sam Ortiz" and "Sam O"; `sameName()` in
   `src/lib/team-logic.js`) are caught when captains paste names, when a new player types a name instead of picking
   theirs ("Is that you?"), and on grey cards for captains ("Joined as …?"). In dues they split, pay and pair like
   everyone else (payments and history rows have `guest_id` instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds).

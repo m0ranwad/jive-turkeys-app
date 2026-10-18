@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v22';
+const DB_KEY = 'jt_demo_db_v23';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -60,7 +60,9 @@ function seed() {
     year_joined: year,
     status: statuses[i],
     is_captain: i === 0 || i === 3,
-    created_date: now(),
+    // On the site before the captains put names on the roster, except Kelly, who picked
+    // "Kelly M" when she joined, and Chris, who joined this session without picking a name.
+    created_date: dayjs().subtract(i === 10 ? 10 : i === 11 ? 50 : 60, 'day').toISOString(),
     updated_date: now(),
   }));
 
@@ -272,9 +274,10 @@ function seed() {
       id: uid(), season_year: year, user_id: p.user_id, override_amount: null, paid: true, paid_amount: 61, ...row, created_date: now(), updated_date: now(),
     })));
   // Two teammates who aren't on the app: Dana has paid this session, Mike hasn't.
+  const rosterStarted = dayjs().subtract(55, 'day').toISOString();
   const guest = (display_name, gender, position) => ({
     id: uid(), display_name, gender, position, status: 'active', removed: false, pays_with_user: null, pays_with_guest: null,
-    linked_user_id: null, created_by: captainId, created_date: now(), updated_date: now(),
+    linked_user_id: null, created_by: captainId, created_date: rosterStarted, updated_date: rosterStarted,
   });
   const teamGuests = [guest('Mike Russo', 'M', 'Defense'), guest('Dana Wells', 'F', 'Forward')];
   const guestPaid = (g, session, daysAgo) => ({
@@ -343,7 +346,7 @@ function seed() {
   // can undo the pick.
   const kelly = profiles[11];
   const kellyJoined = dayjs().subtract(50, 'day').toISOString();
-  const kellyName = { ...guest('Kelly M', 'F', 'Mid-Field'), linked_user_id: kelly.user_id, created_date: kellyJoined, updated_date: kellyJoined };
+  const kellyName = { ...guest('Kelly M', 'F', 'Mid-Field'), linked_user_id: kelly.user_id, updated_date: kellyJoined };
   const kellys = (rows) => rows.filter((r) => r.user_id === kelly.user_id && r.session === 1).map((r) => r.id);
   const guestLinks = [
     {
@@ -442,6 +445,8 @@ function seed() {
     dues_changes: duesChanges,
     team_guests: [...teamGuests, kellyName],
     team_guest_links: guestLinks,
+    // Captains' answers to the Team page's name checks: none yet.
+    team_name_checks: [],
     session_roster: sessionRoster,
     // Last changed before session 2 started, so captains are reminded to change it.
     team_join_code: [
@@ -746,6 +751,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         checkChatWrite(table, 'create', row);
+        // Same as the policies: only captains answer name checks, and only the database functions record picks.
+        if ((table === 'team_name_checks' && currentUser().role !== 'admin') || table === 'team_guest_links') refuse();
         checkAmounts(table, row);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...(table === 'chat_threads' && { visibility: 'team' }), ...row };
         if (table === 'messages') cleanMentions(record);

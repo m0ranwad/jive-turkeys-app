@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v22';
+const DB_KEY = 'jt_demo_db_v23';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -771,6 +771,16 @@ describe('dues', () => {
     const [dana] = await api.entities.TeamGuest.filter({ display_name: 'Dana Wells' });
     await api.entities.TeamGuest.update(dana.id, { linked_user_id: kelly.user_id });
     await expect(api.users.unlinkGuest(dana.id)).rejects.toThrow('before undo was added');
+  });
+
+  it("only lets captains answer the Team page's name checks", async () => {
+    const { api } = await signedIn();
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    await api.entities.TeamNameCheck.create({ kind: 'not_on_roster', user_id: chris.user_id, other_user_id: null });
+    expect(await api.entities.TeamNameCheck.list()).toHaveLength(1);
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    await expect(api.entities.TeamNameCheck.create({ kind: 'not_on_roster', user_id: chris.user_id })).rejects.toThrow('permission');
+    await expect(api.entities.TeamGuestLink.create({ guest_id: 'g', user_id: chris.user_id })).rejects.toThrow('permission');
   });
 
   it('lets a new player pick their name: status, details, payments and history become theirs, once', async () => {

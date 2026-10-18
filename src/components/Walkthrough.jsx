@@ -32,6 +32,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [asking, setAsking] = useState(null);
   const [askError, setAskError] = useState('');
   const [players, setPlayers] = useState([]);
+  // Their details again, after the name they typed turned out to be exactly someone else's (`taken`).
+  const [retry, setRetry] = useState(null);
 
   useEffect(() => {
     if (!open || !needsProfile) return;
@@ -73,6 +75,26 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const backToNames = () => {
     setPick(undefined);
     setAsking(null);
+    setRetry(null);
+  };
+
+  // Someone on the team with exactly this name ("Josh" when there's already a Josh): teammates
+  // couldn't tell them apart. The roster name being picked doesn't count; it becomes this player.
+  const nameTakenBy = (name, chosen) => {
+    const same = (other) => other.trim().toLowerCase() === name.trim().toLowerCase();
+    return (
+      players.find((p) => !p.removed && same(p.display_name))?.display_name ??
+      (names || []).find((g) => g.id !== chosen?.id && same(g.display_name))?.display_name ??
+      null
+    );
+  };
+
+  const createOrRetry = async (values, chosen) => {
+    const taken = nameTakenBy(values.display_name, chosen);
+    if (!taken) return createProfile(values, chosen);
+    setAsking(null);
+    if (chosen) setPick(chosen);
+    setRetry({ values, taken });
   };
 
   const submitProfile = async (values) => {
@@ -83,13 +105,13 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
       setAsking(matches.length ? { values, matches } : { values, accounts });
       return;
     }
-    await createProfile(values, pick);
+    await createOrRetry(values, pick);
   };
 
   const answer = async (chosen) => {
     setAskError('');
     try {
-      await createProfile(asking.values, chosen);
+      await createOrRetry(asking.values, chosen);
     } catch (err) {
       setAskError(err.message || "Couldn't save your profile.");
     }
@@ -236,9 +258,17 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                   </div>
                 ) : (
                   <div className="mt-5">
+                    {retry && (
+                      <p className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-950" role="alert" data-testid="name-taken">
+                        There's already a {retry.taken} on the team. Add your last name or an initial so teammates can tell
+                        you apart.
+                      </p>
+                    )}
                     <ProfileForm
-                      key={pick?.id || 'new'}
-                      initial={pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile}
+                      key={retry ? 'retry' : pick?.id || 'new'}
+                      initial={
+                        retry ? retry.values : pick ? { display_name: pick.display_name, gender: pick.gender, position: pick.position } : profile
+                      }
                       onSubmit={submitProfile}
                       submitLabel="Start using the app"
                       busy={busy}

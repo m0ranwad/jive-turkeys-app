@@ -18,6 +18,32 @@ async function openDues(page) {
   await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
 }
 
+// A new account: signs up, enters the team code and skips the welcome slides.
+async function register(page, email) {
+  await page.goto('/register');
+  await page.locator('#email').fill(email);
+  await page.locator('#password').fill('demo1234');
+  await page.locator('#confirm').fill('demo1234');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
+  await page.getByRole('button', { name: 'Skip' }).click();
+}
+
+// Says "No, that's someone else" to "Already on the site?"; with a name nobody has, that makes the profile.
+async function notThem(page) {
+  await page.getByTestId('already-on-site').getByRole('button', { name: "No, that's someone else" }).click();
+}
+
+async function signOutAndInAsCaptain(page) {
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.locator('#email').fill('captain@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await page.getByRole('button', { name: 'Skip' }).click();
+}
+
 const card = (page, name) => page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
 
 test('everyone sees players who have not joined yet as grey cards, in the counts, with an invite to copy', async ({ page, context }) => {
@@ -227,28 +253,16 @@ test('a captain undoes a pick: the roster name goes back to a grey card with its
 
 test('when someone signs up twice, captains see it and can move the roster spot to the account they use', async ({ page }) => {
   // Kelly makes a second account and says she isn't the Kelly already on the site.
-  await page.goto('/register');
-  await page.locator('#email').fill('kelly.again@demo.test');
-  await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await register(page, 'kelly.again@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Kelly M.');
   await page.getByRole('button', { name: 'Female' }).click();
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const reloaded = page.waitForEvent('load');
-  await page.getByTestId('already-on-site').getByRole('button', { name: "No, that's someone else" }).click();
+  await notThem(page);
   await reloaded;
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
-  await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('button', { name: /Sign out/ }).click();
-  await expect(page).toHaveURL(/\/login$/);
-  await page.locator('#email').fill('captain@demo.test');
-  await page.locator('#password').fill('demo1234');
-  await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
+  await signOutAndInAsCaptain(page);
 
   // Captains see both accounts, and which one has her roster spot.
   await openTeam(page);
@@ -280,4 +294,46 @@ test('when someone signs up twice, captains see it and can move the roster spot 
   await page.getByRole('dialog', { name: 'Remove Kelly Moss?' }).getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(page.getByText('Kelly Moss removed from the team')).toBeVisible();
   await expect(page.getByTestId('two-accounts')).toHaveCount(0);
+});
+
+test('two different people with names alike: the second adds a last name if needed, and a captain clears the notes once', async ({ page }) => {
+  // Another Kelly joins and types "Kelly Moss", the same as a teammate's name.
+  await register(page, 'kelly.two@demo.test');
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Kelly Moss');
+  await page.getByRole('button', { name: 'Female' }).click();
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  await notThem(page);
+  await expect(page.getByTestId('name-taken')).toContainText(
+    "There's already a Kelly Moss on the team. Add your last name or an initial so teammates can tell you apart.",
+  );
+  await expect(page.getByLabel('Display name')).toHaveValue('Kelly Moss');
+  // Just "Kelly" isn't anyone's name: she's asked once more if she's the Kelly on the site, then joins.
+  await page.getByLabel('Display name').fill('Kelly');
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  const reloaded = page.waitForEvent('load');
+  await notThem(page);
+  await reloaded;
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+  await signOutAndInAsCaptain(page);
+
+  await openTeam(page);
+  await expect(card(page, 'Kelly').getByTestId('two-accounts')).toContainText('Two accounts? Kelly Moss looks like the same person.');
+  await expect(card(page, 'Kelly').getByTestId('no-roster-name')).toContainText("Didn't pick a roster name.");
+  // Chris Dunn joined this session without picking a name too.
+  await expect(card(page, 'Chris Dunn').getByTestId('no-roster-name')).toBeVisible();
+
+  await card(page, 'Kelly').getByRole('button', { name: "They're different people: Kelly and Kelly Moss" }).click();
+  await expect(page.getByText('Got it: Kelly and Kelly Moss are different people')).toBeVisible();
+  await expect(page.getByTestId('two-accounts')).toHaveCount(0);
+  await card(page, 'Kelly').getByRole('button', { name: 'Not on the roster: Kelly' }).click();
+  await expect(page.getByText("Got it: Kelly isn't on the roster")).toBeVisible();
+  await expect(card(page, 'Kelly').getByTestId('no-roster-name')).toHaveCount(0);
+
+  // The answers stay.
+  await openDues(page);
+  await openTeam(page);
+  await expect(page.getByTestId('two-accounts')).toHaveCount(0);
+  await expect(card(page, 'Kelly').getByTestId('no-roster-name')).toHaveCount(0);
+  await expect(card(page, 'Chris Dunn').getByTestId('no-roster-name')).toBeVisible();
 });

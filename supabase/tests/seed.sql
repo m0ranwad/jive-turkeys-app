@@ -226,3 +226,15 @@ begin
   end if;
 end;
 $$;
+
+-- Captains' answers to the Team page's name checks (once those exist).
+do $$
+begin
+  if to_regclass('public.team_name_checks') is not null then
+    insert into public.team_name_checks (kind, user_id, other_user_id, checked_by) values
+      ('different_people', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333',
+        '11111111-1111-4111-8111-111111111111'),
+      ('not_on_roster', '33333333-3333-4333-8333-333333333333', null, '11111111-1111-4111-8111-111111111111');
+  end if;
+end;
+$$;

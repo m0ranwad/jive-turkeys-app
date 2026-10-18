@@ -10,11 +10,12 @@ import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
+import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer } from '@/lib/dues';
 import { initials, today } from '@/lib/format';
 import { beforeFirstGame, sessionRows, unanswered } from '@/lib/roster';
 import { codeIsStale } from '@/lib/team-code';
-import { likelyAccount, sameName } from '@/lib/team-logic';
+import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STATUS_ORDER = { active: 0, sub_pool: 1, on_break: 2 };
@@ -41,20 +42,24 @@ export function TeamPage() {
   // Teammates who aren't on the app: on the roster like everyone else. `guestDialog` is null, 'new' or a guest.
   const [guests, setGuests] = useState([]);
   const [guestDialog, setGuestDialog] = useState(null);
-  // Which account picked which name (team_guest_links), so captains can undo a wrong pick.
+  // Which account picked which name (team_guest_links), so captains can undo a wrong pick, and
+  // captains' answers to the name checks below (team_name_checks).
   const [links, setLinks] = useState([]);
+  const [checks, setChecks] = useState([]);
   // Captains: the signed-up player being removed, and the pick being undone ({ guest, player }).
   const [removing, setRemoving] = useState(null);
   const [unlinking, setUnlinking] = useState(null);
 
   const loadGuests = useCallback(async () => {
     // Together, so a grey card never shows before we know which accounts it was taken off.
-    const [rows, picks] = await Promise.all([
+    const [rows, picks, answers] = await Promise.all([
       api.entities.TeamGuest.list('display_name').catch(() => []),
       api.entities.TeamGuestLink.list().catch(() => []),
+      api.entities.TeamNameCheck.list().catch(() => []),
     ]);
     setGuests(rows);
     setLinks(picks);
+    setChecks(answers);
   }, []);
 
   useEffect(() => {
@@ -97,6 +102,16 @@ export function TeamPage() {
   // Captains: the roster name an account picked (or was linked to), and whether that can be undone here.
   const pickedName = (p) => (data.isCaptain && !p.guest ? guests.find((g) => g.linked_user_id === p.user_id) || null : null);
   const canUnlink = (name) => !!name && links.some((l) => l.guest_id === name.id && l.user_id === name.linked_user_id && !l.unlinked_at);
+  // Captains answer a name check once, for every captain.
+  const answerCheck = async (rows, title) => {
+    try {
+      await api.entities.TeamNameCheck.bulkCreate(rows.map((r) => ({ other_user_id: null, ...r, checked_by: data.user.id })));
+      await loadGuests();
+      toast({ title });
+    } catch (err) {
+      toast(saveFailedToast(err));
+    }
+  };
   const addBack = async (profile) => {
     try {
       await api.users.setRemoved(profile.user_id, false);
@@ -246,12 +261,12 @@ export function TeamPage() {
           const isMe = p.user_id === data.user.id;
           // Captains: someone on the app with a name like this one probably joined without picking it.
           const joinedAs = p.guest && data.isCaptain ? likelyAccount(p, data.profiles || [], guests, links) : null;
-          // Captains: the roster name this account came with, and another account that looks like the same person.
+          // Captains: the roster name this account came with, other accounts that look like the same
+          // person, and whether they joined without picking a roster name while names were waiting.
           const picked = pickedName(p);
-          const twin =
-            data.isCaptain && !p.guest
-              ? roster.find((o) => !o.guest && o.user_id !== p.user_id && sameName(o.display_name, p.display_name))
-              : null;
+          const lookalikes = data.isCaptain && !p.guest ? lookalikeAccounts(p, roster.filter((o) => !o.guest), guests, checks) : [];
+          const lookalikeNames = nameList(lookalikes.map((o) => o.display_name));
+          const skipped = data.isCaptain && !p.guest && skippedRosterName(p, guests, checks);
           return (
             <div
               key={p.id}
@@ -327,11 +342,41 @@ export function TeamPage() {
                   Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
                 </p>
               )}
-              {twin && (
-                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="two-accounts">
-                  Two accounts? {twin.display_name} looks like the same person. If so, keep the one they sign in with and
-                  remove the other.
-                </p>
+              {lookalikes.length > 0 && (
+                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="two-accounts">
+                  <p>
+                    {lookalikes.length === 1
+                      ? `Two accounts? ${lookalikeNames} looks like the same person. If so, keep the one they sign in with and remove the other.`
+                      : `More than one account? ${lookalikeNames} look like the same person. If so, keep the one they sign in with and remove the others.`}
+                  </p>
+                  <button
+                    onClick={() =>
+                      answerCheck(
+                        lookalikes.map((o) => ({ kind: 'different_people', user_id: p.user_id, other_user_id: o.user_id })),
+                        `Got it: ${p.display_name} and ${lookalikeNames} are different people`,
+                      )
+                    }
+                    aria-label={`They're different people: ${p.display_name} and ${lookalikeNames}`}
+                    className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
+                  >
+                    They're different people
+                  </button>
+                </div>
+              )}
+              {skipped && (
+                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="no-roster-name">
+                  <p>
+                    Didn't pick a roster name. If they're one of the grey cards, tap Edit on that card to move it to this
+                    account.
+                  </p>
+                  <button
+                    onClick={() => answerCheck([{ kind: 'not_on_roster', user_id: p.user_id }], `Got it: ${p.display_name} isn't on the roster`)}
+                    aria-label={`Not on the roster: ${p.display_name}`}
+                    className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
+                  >
+                    Not on the roster
+                  </button>
+                </div>
               )}
               {picked && (
                 <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500" data-testid="joined-as">
