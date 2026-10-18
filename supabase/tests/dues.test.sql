@@ -167,6 +167,16 @@ select dues_test.touches($$update public.session_dues set league_fee = 600, tota
   'a captain can change the fee breakdown');
 select dues_test.touches($$update public.dues_payments set override_amount = 50 where user_id = dues_test.id('dex')$$, 1,
   'a captain can change a custom amount');
+select dues_test.refused($$update public.session_dues set league_fee = -5, total_fee = 121 where session = 2$$,
+  'a league fee cannot be below $0');
+select dues_test.refused($$update public.session_dues set ref_fee = -1 where session = 2$$, 'a ref fee cannot be below $0');
+select dues_test.refused($$update public.session_dues set total_fee = -721 where session = 2$$, 'a session fee cannot be below $0');
+select dues_test.refused($$update public.dues_payments set override_amount = -10 where user_id = dues_test.id('dex')$$,
+  'a custom amount cannot be below $0');
+select dues_test.touches($$update public.session_dues set league_fee = 0, ref_fee = 0, total_fee = 0 where session = 2$$, 1,
+  'a $0 fee is allowed (a free session)');
+select dues_test.touches($$update public.session_dues set league_fee = 600, ref_fee = 18, total_fee = 726 where session = 2$$, 1,
+  'and back');
 select dues_test.touches($$update public.team_settings set pay_venmo = 'kim-pays', pay_paypal = 'kimpays', pay_note = 'Cash at the field works too'$$, 1,
   'a captain can set how players pay');
 select dues_test.touches($$delete from public.dues_history$$, 0, 'a captain cannot remove the history either');

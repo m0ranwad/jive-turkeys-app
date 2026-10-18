@@ -19,6 +19,29 @@ export function feeTotal({ league_fee, ref_fee, game_count }) {
   return fromCents(cents(league_fee) + cents(ref_fee) * Math.max(0, Math.floor(num(game_count))));
 }
 
+/**
+ * What's wrong with a fee as typed in the fee box (strings), or null: every box
+ * filled in, nothing below $0, and a whole number of games.
+ */
+export function feeProblem({ league_fee, ref_fee, game_count }) {
+  const blank = (value) => String(value ?? '').trim() === '';
+  if (blank(league_fee)) return 'Enter the league fee.';
+  if (blank(ref_fee)) return 'Enter the ref fee per game (0 if there is none).';
+  if (blank(game_count)) return 'Enter the number of games.';
+  const values = [league_fee, ref_fee, game_count].map(Number);
+  if (values.some((value) => !Number.isFinite(value))) return 'Use numbers only.';
+  if (values.some((value) => value < 0)) return "A fee can't be below $0.";
+  if (!Number.isInteger(values[2])) return 'Games is a whole number.';
+  return null;
+}
+
+/** A fee worth a second look before it saves: 'zero', or 'big' for more than double the one before. */
+export function feeWarning(total, previous) {
+  if (cents(total) === 0) return 'zero';
+  if (cents(previous) > 0 && cents(total) > 2 * cents(previous)) return 'big';
+  return null;
+}
+
 /** A saved session_dues row's fee parts. Rows saved before the breakdown existed only have a total. */
 export function feeParts(row) {
   if (row.league_fee == null) return { league_fee: num(row.total_fee), ref_fee: 0, game_count: DUES_DEFAULTS.game_count };

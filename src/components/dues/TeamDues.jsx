@@ -98,6 +98,8 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   // A new session's fee starts from the last one saved, so there's usually nothing to type.
   const latest = [...data.dues].sort((a, b) => b.season_year - a.season_year || b.session - a.session)[0];
   const feeStart = row ? feeParts(row) : latest ? feeParts(latest) : DUES_DEFAULTS;
+  // What a new fee is checked against ("more than double…"): this session's fee, or the last one set.
+  const previousFee = row ? { total: Number(row.total_fee) || 0, now: true } : latest ? { total: Number(latest.total_fee) || 0, now: false } : null;
 
   const saveFee = async (parts) => {
     const fields = { ...parts, total_fee: feeTotal(parts) };
@@ -272,7 +274,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
 
   const dialogs = (
     <>
-      {isCaptain && <FeeDialog open={feeOpen} onOpenChange={setFeeOpen} period={period} initial={feeStart} onSave={saveFee} />}
+      {isCaptain && <FeeDialog open={feeOpen} onOpenChange={setFeeOpen} period={period} initial={feeStart} previous={previousFee} onSave={saveFee} />}
       {isCaptain && <PaySettingsDialog open={payOpen} onOpenChange={setPayOpen} settings={settings} onSaved={onSettingsSaved} />}
       <PlayerSheet
         open={!!sheetFor}

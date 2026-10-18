@@ -10,8 +10,10 @@ import {
   dollars,
   duesEvents,
   feeParts,
+  feeProblem,
   feeSentence,
   feeTotal,
+  feeWarning,
   notPlayingLabel,
   partPayment,
   payNote,
@@ -42,6 +44,30 @@ describe('the session fee', () => {
   it('describes itself in plain words', () => {
     expect(feeSentence(DUES_DEFAULTS)).toBe('the $595 league fee plus $18 refs × 7 games = $721');
     expect(feeSentence({ league_fee: 1200, ref_fee: 0, game_count: 7 })).toBe('the $1200 session fee');
+  });
+
+  it('needs every box filled in, nothing below $0, and whole games before it saves', () => {
+    const fee = (league_fee, ref_fee, game_count) => feeProblem({ league_fee, ref_fee, game_count });
+    expect(fee('595', '18', '7')).toBeNull();
+    expect(fee('0', '0', '0')).toBeNull();
+    expect(fee('', '18', '7')).toBe('Enter the league fee.');
+    expect(fee('595', ' ', '7')).toBe('Enter the ref fee per game (0 if there is none).');
+    expect(fee('595', '18', '')).toBe('Enter the number of games.');
+    expect(fee('-5', '18', '7')).toBe("A fee can't be below $0.");
+    expect(fee('595', '-1', '7')).toBe("A fee can't be below $0.");
+    expect(fee('595', '18', '6.5')).toBe('Games is a whole number.');
+    expect(fee('abc', '18', '7')).toBe('Use numbers only.');
+  });
+
+  it('asks first about a $0 fee, or one more than double the fee before it', () => {
+    expect(feeWarning(0, 721)).toBe('zero');
+    expect(feeWarning(0, null)).toBe('zero');
+    expect(feeWarning(7210, 721)).toBe('big');
+    expect(feeWarning(1442, 721)).toBeNull();
+    expect(feeWarning(1442.01, 721)).toBe('big');
+    expect(feeWarning(735, 721)).toBeNull();
+    expect(feeWarning(721, null)).toBeNull();
+    expect(feeWarning(721, 0)).toBeNull();
   });
 
   it('shows whole dollars without cents', () => {

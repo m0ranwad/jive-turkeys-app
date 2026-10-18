@@ -498,6 +498,19 @@ describe('dues', () => {
     ]);
   });
 
+  it("refuses a fee or a custom amount below $0, like the database", async () => {
+    const { api } = await signedIn();
+    const [row] = await api.entities.SessionDues.filter({ session: 2 });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await expect(api.entities.SessionDues.update(row.id, { league_fee: -5 })).rejects.toThrow("can't be below $0");
+    await expect(api.entities.SessionDues.create({ season_year: row.season_year, session: 3, total_fee: -1 })).rejects.toThrow("can't be below $0");
+    await expect(
+      api.entities.DuesPayment.create({ season_year: row.season_year, session: 2, user_id: kelly.user_id, override_amount: -10 }),
+    ).rejects.toThrow("can't be below $0");
+    expect((await api.entities.SessionDues.filter({ session: 2 }))[0].league_fee).toBe(595);
+    await api.entities.SessionDues.update(row.id, { league_fee: 0, ref_fee: 0, total_fee: 0 });
+  });
+
   it('keeps fee, custom amount and roster changes like the database, and nothing for marking paid', async () => {
     const { api, me } = await signedIn();
     const [row] = await api.entities.SessionDues.filter({ session: 2 });
