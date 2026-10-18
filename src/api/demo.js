@@ -8,7 +8,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v23';
+const DB_KEY = 'jt_demo_db_v24';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -60,9 +60,9 @@ function seed() {
     year_joined: year,
     status: statuses[i],
     is_captain: i === 0 || i === 3,
-    // On the site before the captains put names on the roster, except Kelly, who picked
-    // "Kelly M" when she joined, and Chris, who joined this session without picking a name.
-    created_date: dayjs().subtract(i === 10 ? 10 : i === 11 ? 50 : 60, 'day').toISOString(),
+    // On the site before the captains put names on the roster, except Chris, who joined this
+    // session without picking a name, and Kelly, who picked "Kelly M" when she joined after him.
+    created_date: dayjs().subtract(i === 10 ? 10 : i === 11 ? 5 : 60, 'day').toISOString(),
     updated_date: now(),
   }));
 
@@ -341,11 +341,11 @@ function seed() {
   const change = (session, kind, old_value, new_value, changed_by, created_date, who = {}) => ({
     id: uid(), season_year: year, session, kind, user_id: null, guest_id: null, ...who, old_value, new_value, changed_by, created_date,
   });
-  // Kelly picked "Kelly M" on the roster when she joined: her session 1 payment
-  // and place on session 1's list came with it. Captains see it on her card and
-  // can undo the pick.
+  // Kelly picked "Kelly M" on the roster when she joined: the session 1 payment
+  // and place on session 1's list the name had came with it. Captains see it on
+  // her card and can undo the pick.
   const kelly = profiles[11];
-  const kellyJoined = dayjs().subtract(50, 'day').toISOString();
+  const kellyJoined = dayjs().subtract(5, 'day').toISOString();
   const kellyName = { ...guest('Kelly M', 'F', 'Mid-Field'), linked_user_id: kelly.user_id, updated_date: kellyJoined };
   const kellys = (rows) => rows.filter((r) => r.user_id === kelly.user_id && r.session === 1).map((r) => r.id);
   const guestLinks = [
