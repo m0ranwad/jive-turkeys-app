@@ -264,6 +264,35 @@ export function insertMessage(list, message) {
   return [...real.slice(0, i), message, ...real.slice(i), ...pending];
 }
 
+/**
+ * Brings a room's messages up to date with its latest `pageSize` from the server, fetched when live
+ * updates may have missed some (the page was out of view, the connection dropped): new ones go in,
+ * edits are applied, and nothing is taken away. If even that whole page is newer than everything that
+ * was on screen, more could be missing in between, so the room starts again from that page
+ * (`restarted`: there are earlier messages to load). Returns { messages, restarted }.
+ */
+export function catchUpMessages(list, page, pageSize) {
+  const end = page.at(-1);
+  if (!end) return { messages: list, restarted: false };
+  // What was on screen up to the page's newest message; anything later arrived live meanwhile.
+  const known = list.filter((m) => !m.pending && !isAfter(m.created_date, end.created_date));
+  const restarted = page.length >= pageSize && (!known.length || isAfter(page[0].created_date, known.at(-1).created_date));
+  const kept = restarted ? list.filter((m) => m.pending || isAfter(m.created_date, end.created_date)) : list;
+  const fresh = new Map(page.map((m) => [m.id, m]));
+  const updated = kept.map((m) => (fresh.has(m.id) ? { ...m, ...fresh.get(m.id) } : m));
+  return { messages: page.reduce(insertMessage, updated), restarted };
+}
+
+/**
+ * The message a room is marked read up to: the newest one from someone else, since your own never
+ * count as unread. So a message you send never marks read one that hasn't reached your screen. With
+ * only yours in it, the newest of those, so the room counts as opened.
+ */
+export function readUpTo(messages, me) {
+  const saved = messages.filter((m) => !m.pending);
+  return saved.findLast((m) => m.user_id !== me) ?? saved.at(-1) ?? null;
+}
+
 /** Adds a reaction, replacing any copy of the same player + message + emoji. */
 export function addReaction(list, reaction) {
   const same = (r) => r.message_id === reaction.message_id && r.user_id === reaction.user_id && r.emoji === reaction.emoji;
