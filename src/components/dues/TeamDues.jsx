@@ -90,7 +90,9 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   const total = row ? Number(row.total_fee) || 0 : 0;
   const team = teamDues(total, members, payments, data.profiles);
   const past = !!current && isEarlier(period, current);
-  const notStarted = !started && !!current && isEarlier(current, period);
+  // A later session hasn't started. It has a list already only if captains asked who's playing it ahead.
+  const notStarted = !!current && isEarlier(current, period);
+  const askedAhead = notStarted && started;
   const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid);
   const paid = team.active.filter((p) => team.shareOf(p.user_id).paid);
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
@@ -305,8 +307,10 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
 
   const startsLater = notStarted && (
     <p className="mb-3 rounded-2xl bg-zinc-50 px-3.5 py-2.5 text-xs font-medium text-zinc-500" data-testid="dues-not-started">
-      Session {period.session} hasn't started, so this uses today's roster. When it starts, everyone's status is kept
-      for it and players can say if they're playing.
+      Session {period.session} hasn't started, so this uses today's roster.{' '}
+      {askedAhead
+        ? `Answers so far to "Playing session ${period.session}?" count too.`
+        : "When it starts, everyone's status is kept for it and players can say if they're playing."}
     </p>
   );
 

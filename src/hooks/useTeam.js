@@ -11,14 +11,18 @@ let cache = { at: 0, promise: null, data: null };
 
 /**
  * Who's on the team each session: starts the current session's list if it
- * hasn't been yet, then reads every session's. Null if that fails (before the
- * database has session lists), and everything uses today's statuses.
+ * hasn't been yet, then reads every session's, and the sessions captains asked
+ * about ahead ("Playing session N?"). Null if that fails (before the database
+ * has session lists), and everything uses today's statuses.
  */
 async function loadRoster() {
   try {
     const current = await api.roster.start();
-    const rows = await api.entities.SessionRoster.list();
-    return { current: { year: current.season_year, session: current.session }, rows };
+    const [rows, asks] = await Promise.all([
+      api.entities.SessionRoster.list(),
+      api.entities.SessionAsk.list().catch(() => []),
+    ]);
+    return { current: { year: current.season_year, session: current.session }, rows, asks };
   } catch {
     return null;
   }
