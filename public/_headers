@@ -1,0 +1,18 @@
+# Security headers, served by Cloudflare with every page and file (issue #32).
+#
+# Content-Security-Policy-Report-Only lists what the site may load: its own
+# files, the Supabase project (data, sign-in and live chat) and Google Fonts.
+# The pay, map and calendar links are ordinary links and aren't affected.
+# Inline styles are allowed because the code-entry boxes and dialogs add them.
+# For now the browser only reports what the policy would block (in the console
+# as "[Report Only]"). Once Google sign-in, live chat, notifications and the
+# pay links are checked on the live site, rename it Content-Security-Policy.
+# A new outside service (a script, font, image or API host) has to be added
+# here first. vite.config.js stops the live build if the Supabase project
+# below isn't the one the site is set up with.
+/*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://alsskultsdgcbxlukznv.supabase.co wss://alsskultsdgcbxlukznv.supabase.co; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

@@ -35,6 +35,11 @@ README.md has the service inventory and the current setup status.
   on `main`, using the `SUPABASE_ACCESS_TOKEN` secret. The workflow made the sending keys (`VAPID_*`
   function secrets) once. Never replace them: everyone's notifications would stop until they turn them on
   again. Previews only show a sample notification. Rules: section 7 of `docs/chat.md`.
+- `public/_headers` sets the site's security headers. Its Content-Security-Policy (report-only until it's
+  checked on the live site) lists the only outside sites the pages may load from: the Supabase project and
+  Google Fonts. Anything new from another site (a script, font, image or API) has to be added there, or it
+  will break once the policy is enforced. Plain links (pay, maps, calendar) aren't affected. The live build
+  stops if the Supabase settings are missing, so the site never goes live on sample data (`vite.config.js`).
 
 ## Who you're working with
 
@@ -310,8 +315,9 @@ live database when they reach `main`. So:
 
 GitHub runs all of them on every pull request and on `main` (`.github/workflows/tests.yml`).
 `@playwright/test` is pinned to the version matching the Chromium in cloud sessions (`/opt/pw-browsers`);
-don't upgrade it on its own. Never skip, delete or loosen a test to get a check green: fix the code, or, if
-the behavior changed on purpose, update the test and `docs/chat.md` together.
+don't upgrade it on its own (Dependabot skips it, `.github/dependabot.yml`). Never skip, delete or loosen
+a test to get a check green: fix the code, or, if the behavior changed on purpose, update the test and
+`docs/chat.md` together.
 
 ## Don't
 

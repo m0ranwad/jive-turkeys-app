@@ -27,9 +27,11 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      # Pinned so a new Supabase CLI release can't break a publish. Bump it on purpose,
+      # in database.yml too.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.121.0
       - name: The access token can see the project's functions and secrets
         run: |
           if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
@@ -53,9 +55,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # Pinned so a new Supabase CLI release can't break a publish. Bump it on purpose,
+      # in database.yml too.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.121.0
       - name: Create the notification keys (first time only)
         run: |
           # New keys would cut off every phone already signed up, so stop if the list can't be read.
