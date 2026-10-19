@@ -53,8 +53,9 @@ vi.mock('@supabase/supabase-js', () => ({
         channel.bindings.push({ type, filter, handler });
         return channel;
       };
-      channel.subscribe = () => {
+      channel.subscribe = (callback) => {
         channel.subscribed = true;
+        channel.status = callback;
         return channel;
       };
       channels.push(channel);
@@ -202,6 +203,23 @@ describe('subscribe', () => {
   it('only listens for inserts when that is all it was given', () => {
     api.entities.Message.subscribe(() => {});
     expect(channels[0].bindings.map((b) => b.filter.event)).toEqual(['INSERT']);
+  });
+
+  it('says when live updates come back after the connection dropped, not when they first start', () => {
+    const onReconnect = vi.fn();
+    api.entities.Message.subscribe(() => {}, { onReconnect });
+    const [channel] = channels;
+    channel.status('SUBSCRIBED');
+    expect(onReconnect).not.toHaveBeenCalled();
+    channel.status('CHANNEL_ERROR');
+    channel.status('TIMED_OUT');
+    expect(onReconnect).not.toHaveBeenCalled();
+    channel.status('SUBSCRIBED');
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    // Without one to call, a reconnect is fine too.
+    api.entities.ChatThread.subscribe(() => {});
+    channels[1].status('SUBSCRIBED');
+    channels[1].status('SUBSCRIBED');
   });
 });
 

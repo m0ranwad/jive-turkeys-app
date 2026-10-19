@@ -31,6 +31,7 @@ import {
   bumpOverview,
   canDeleteAny,
   canManageRoom,
+  catchUpMessages,
   directChat,
   insertMessage,
   isAfter,
@@ -38,6 +39,7 @@ import {
   isPrivate,
   organizeRooms,
   privateChatTitle,
+  readUpTo,
   roomOf,
   roomTitle,
   rememberChatRoom,
@@ -243,6 +245,47 @@ export function ChatPage() {
       .catch(() => {});
   }, []);
 
+  const loadReactions = useCallback(async (messages) => {
+    const ids = messages.filter((m) => !m.pending).map((m) => m.id);
+    if (!ids.length) return;
+    try {
+      const rows = await api.entities.MessageReaction.filter({ message_id: ids });
+      setReactions((list) => rows.reduce(addReaction, list));
+    } catch {
+      // Reactions are extras; the messages still show.
+    }
+  }, []);
+
+  // Each catch-up started; only the latest one's answer lets the room be marked read again.
+  const catchUps = useRef(0);
+
+  /**
+   * Live updates miss whatever is posted while the page is out of view (a phone asleep, the app in
+   * the background) or the connection is down, so then fetch the room summaries and the open room's
+   * latest messages, together like opening a room. Until they're in, the room isn't marked read.
+   * If this fails, the next return or reconnect tries again.
+   */
+  const catchUp = useCallback(() => {
+    const target = live.current.viewing;
+    if (target === undefined) {
+      refreshOverview();
+      return;
+    }
+    const run = ++catchUps.current;
+    setLoaded((current) => (current?.room === target ? { ...current, behind: true } : current));
+    Promise.all([api.chat.history(target, { limit: PAGE }), api.chat.overview()])
+      .then(([rows, summary]) => {
+        setOverview(summary);
+        setLoaded((current) => {
+          if (current?.room !== target) return current;
+          const { messages, restarted } = catchUpMessages(current.messages, rows, PAGE);
+          return { ...current, messages, hasMore: current.hasMore || restarted, behind: run !== catchUps.current };
+        });
+        loadReactions(rows);
+      })
+      .catch(() => {});
+  }, [refreshOverview, loadReactions]);
+
   // Rooms, who's in the private ones, room summaries, and live updates for the whole page.
   useEffect(() => {
     let alive = true;
@@ -327,6 +370,8 @@ export function ChatPage() {
           clearTimeout(refreshTimer);
           refreshTimer = setTimeout(refreshOverview, 500);
         },
+        // The connection dropped and came back: what was posted in between never arrived.
+        onReconnect: catchUp,
       },
     );
     const offReactions = api.entities.MessageReaction.subscribe((r) => setReactions((list) => addReaction(list, r)), {
@@ -335,7 +380,7 @@ export function ChatPage() {
     const onVisibility = () => {
       setVisible(!document.hidden);
       if (document.hidden) return;
-      refreshOverview();
+      catchUp();
       if (membersRef.current === null) fetchMembers();
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -349,18 +394,7 @@ export function ChatPage() {
       offReactions();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [toast, refreshOverview]);
-
-  const loadReactions = useCallback(async (messages) => {
-    const ids = messages.filter((m) => !m.pending).map((m) => m.id);
-    if (!ids.length) return;
-    try {
-      const rows = await api.entities.MessageReaction.filter({ message_id: ids });
-      setReactions((list) => rows.reduce(addReaction, list));
-    } catch {
-      // Reactions are extras; the messages still show.
-    }
-  }, []);
+  }, [toast, refreshOverview, catchUp]);
 
   // Open a room: its latest messages, and where the player left off.
   useEffect(() => {
@@ -421,13 +455,14 @@ export function ChatPage() {
     return () => clearInterval(timer);
   }, [loaded?.room, visible]);
 
-  // Mark the open room read while it's on screen: right away when it opens (so
-  // a quick look counts), then shortly after new messages settle.
+  // Mark the open room read while it's on screen: right away when it opens or has
+  // caught up on what it missed (so a quick look counts), then shortly after new
+  // messages settle. Never while it's catching up.
   const markedRoom = useRef(undefined);
   useEffect(() => {
-    if (!loaded) markedRoom.current = undefined;
-    if (!loaded || !visible) return undefined;
-    const last = [...loaded.messages].reverse().find((m) => !m.pending);
+    if (!loaded || loaded.behind) markedRoom.current = undefined;
+    if (!loaded || !visible || loaded.behind) return undefined;
+    const last = readUpTo(loaded.messages, me);
     if (!last) return undefined;
     const mark = () => {
       const summary = overviewRef.current.find((o) => o.thread_id === loaded.room);
@@ -456,7 +491,7 @@ export function ChatPage() {
     }
     const timer = setTimeout(mark, 600);
     return () => clearTimeout(timer);
-  }, [loaded, visible]);
+  }, [loaded, visible, me]);
 
   const profilesById = useMemo(() => new Map(profiles.map((p) => [p.user_id, p])), [profiles]);
   const nameOf = useCallback(
