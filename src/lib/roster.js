@@ -50,5 +50,15 @@ export function beforeFirstGame(games, period, today) {
   return list.length > 0 && list[0].date >= today;
 }
 
+/**
+ * Whether "Playing session N?" is still being asked: none of the session's games
+ * has been played, and either its schedule is up or the captains asked ahead
+ * (`startsOn`, before the league sends the schedule).
+ */
+export function stillAsking(games, period, today, startsOn) {
+  const list = sessionGames(games, period);
+  return list.length > 0 ? list[0].date >= today : !!startsOn;
+}
+
 /** Whether `a` comes before `b`. */
 export const isEarlier = (a, b) => Number(a.year) < Number(b.year) || (Number(a.year) === Number(b.year) && Number(a.session) < Number(b.session));

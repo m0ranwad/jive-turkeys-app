@@ -1,26 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { Plus, Upload } from 'lucide-react';
+import { CalendarPlus, Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { InstallCard, useInstall } from '@/components/InstallApp';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
-import { SessionPrompt, SessionQuestionPanel, sessionQuestion } from '@/components/SessionPrompt';
+import { NextSessionCard, SessionPrompt, SessionQuestionPanel, sessionAsk, sessionQuestion } from '@/components/SessionPrompt';
 import { GameCard, LaterGameCard, PlayedList } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
 import { NextGameCard } from '@/components/schedule/NextGame';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { ImportScheduleDialog } from '@/components/schedule/ImportScheduleDialog';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
+import { stepSession } from '@/lib/dues';
+import { saveFailedToast } from '@/lib/errors';
 import { seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount, isRosterStatus, suspendedIds } from '@/lib/team-logic';
 
 /** Captains only: one small button for adding games, so the top of Schedule stays for everyone's next game. */
-function AddGamesMenu({ onAdd, onImport }) {
+function AddGamesMenu({ onAdd, onImport, askNext, onAsk }) {
   const [open, setOpen] = useState(false);
   const item = 'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-zinc-900 transition hover:bg-zinc-100';
   return (
@@ -36,17 +41,77 @@ function AddGamesMenu({ onAdd, onImport }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-11 z-20 w-56 rounded-2xl border border-black/5 bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+          <div className="absolute right-0 top-11 z-20 w-72 rounded-2xl border border-black/5 bg-white p-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
             <button type="button" className={item} onClick={() => (setOpen(false), onAdd())}>
               <Plus className="h-4 w-4" /> Add a game
             </button>
             <button type="button" className={item} onClick={() => (setOpen(false), onImport())}>
               <Upload className="h-4 w-4" /> Import the schedule
             </button>
+            {askNext && (
+              <button type="button" className={item} onClick={() => (setOpen(false), onAsk())}>
+                <CalendarPlus className="h-4 w-4" /> Ask who's playing session {askNext.session}
+              </button>
+            )}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Captains ask "Playing session N?" before the league sends the schedule: the
+ * session's start date is enough. Saved on the session's dues row.
+ */
+function AskSessionDialog({ open, onOpenChange, period, existing, onSaved }) {
+  const [date, setDate] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  useEffect(() => {
+    if (open) setDate(existing?.starts_on || '');
+  }, [open, existing]);
+  if (!open || !period) return null;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (existing) await api.entities.SessionDues.update(existing.id, { starts_on: date });
+      else await api.entities.SessionDues.create({ season_year: period.year, session: period.session, starts_on: date });
+      onOpenChange(false);
+      await onSaved();
+      toast({ title: `Asking who's playing session ${period.session}` });
+    } catch (err) {
+      toast(saveFailedToast(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ask who's playing session {period.session}</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-zinc-600">
+          Everyone sees "Playing session {period.session}?" at the top of Schedule now, before the schedule is out. Add
+          the games when the league sends them.
+        </p>
+        <div className="space-y-2">
+          <Label htmlFor="session-starts">First game's date</Label>
+          <Input id="session-starts" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={busy || !date}>
+            Ask the team
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -59,6 +124,13 @@ export function SchedulePage() {
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  // Each session's details (fees, and the start date captains give when asking ahead).
+  const [sessionInfo, setSessionInfo] = useState([]);
+  const loadSessionInfo = useCallback(() => api.entities.SessionDues.list().then(setSessionInfo).catch(() => {}), []);
+  useEffect(() => {
+    loadSessionInfo();
+  }, [loadSessionInfo]);
   const todayIso = today();
 
   const sessions = useMemo(() => {
@@ -100,8 +172,14 @@ export function SchedulePage() {
   const pastSessions = sessions.slice(currentIndex + 2);
   const onRoster = isRosterStatus(data.profile);
   // "Playing session N?" goes inside the Next game card when that game starts the session.
-  const question = sessionQuestion({ profile: data.profile, roster: data.roster, games: data.games });
-  const questionInCard = !!question && question.first?.id === nextGame?.id;
+  const askArgs = { profile: data.profile, roster: data.roster, games: data.games, sessions: sessionInfo };
+  const question = sessionQuestion(askArgs);
+  const questionInCard = !!question && !!nextGame && question.first?.id === nextGame.id;
+  // Between sessions (no game coming up), the next session's question is the top card.
+  const nextSession = !nextGame ? sessionAsk(askArgs) : null;
+  // Captains can ask about the session after the latest one before its schedule is out.
+  const askNext = !nextGame && !nextSession && sessions[0] ? stepSession({ year: sessions[0].year, session: sessions[0].session }, 1) : null;
+  const askNextRow = askNext && sessionInfo.find((r) => r.season_year === askNext.year && r.session === askNext.session);
 
   const sessionBlock = (s) => {
     // The next game is the card at the top; the list carries on from the game after it.
@@ -153,14 +231,24 @@ export function SchedulePage() {
     );
   };
 
-  const defaultSession = sessions[0]
+  // A session asked about ahead is where its first games go.
+  const defaultSession = nextSession
+    ? { year: Number(nextSession.period.year), session: Number(nextSession.period.session) }
+    : sessions[0]
     ? { year: sessions[0].year, session: sessions[0].session }
     : { year: dayjs().year(), session: 1 };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Schedule">
-        {data.isCaptain && <AddGamesMenu onAdd={() => setFormOpen(true)} onImport={() => setImportOpen(true)} />}
+        {data.isCaptain && (
+          <AddGamesMenu
+            onAdd={() => setFormOpen(true)}
+            onImport={() => setImportOpen(true)}
+            askNext={askNext}
+            onAsk={() => setAskOpen(true)}
+          />
+        )}
       </PageHeader>
 
       {nextGame && (
@@ -186,9 +274,18 @@ export function SchedulePage() {
           }
         />
       )}
+      {nextSession && (
+        <NextSessionCard
+          ask={nextSession}
+          profile={data.profile}
+          rows={data.roster.rows}
+          players={data.players || []}
+          onAnswered={data.reload}
+        />
+      )}
       <PotmPrompt data={data} />
-      {!questionInCard && (
-        <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
+      {!questionInCard && !nextSession && (
+        <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} sessions={sessionInfo} onAnswered={data.reload} />
       )}
       <InstallCard onShowHow={showInstallGuide} />
       {/* In the iPhone browser it would only repeat "add to Home Screen", which Get the app already asks. */}
@@ -233,6 +330,16 @@ export function SchedulePage() {
           await api.entities.Game.create(values);
           await data.reload();
           toast({ title: 'Game added' });
+        }}
+      />
+      <AskSessionDialog
+        open={askOpen}
+        onOpenChange={setAskOpen}
+        period={askNext}
+        existing={askNextRow}
+        onSaved={async () => {
+          await loadSessionInfo();
+          await data.reload();
         }}
       />
       <ImportScheduleDialog

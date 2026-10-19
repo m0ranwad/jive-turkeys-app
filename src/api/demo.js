@@ -589,7 +589,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       ...db.team_guests.filter((g) => !g.removed && !g.linked_user_id).map((g) => entry({ guest_id: g.id }, g.status)),
     );
   };
-  const current = () => currentSession(db.games, today());
+  const current = () => currentSession(db.games, today(), db.session_dues);
 
   // Same as the database's roster_follow_profile() and roster_follow_guest(): a
   // status set while a session is current counts for that session, as an answer.

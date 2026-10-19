@@ -428,9 +428,14 @@ export function reminderText({ session, parts, perPlayer, activeCount, unpaid, l
 }
 
 /** The session to open on: the next game's, else the latest game's, else this year's first. */
-export function currentSession(games, today) {
+export function currentSession(games, today, sessions = []) {
   const upcoming = games.filter((g) => g.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const latest = [...games].sort((a, b) => b.date.localeCompare(a.date))[0];
+  // Between sessions, a later session the captains asked about (given a start date) is the
+  // current one, so "Playing session N?" can be answered before its schedule is posted.
+  const later = (s) => !latest || s.season_year > latest.season_year || (s.season_year === latest.season_year && s.session > latest.session);
+  const asked = !upcoming && sessions.filter((s) => s.starts_on && later(s)).sort((a, b) => a.starts_on.localeCompare(b.starts_on))[0];
+  if (asked) return { year: asked.season_year, session: asked.session };
   const game = upcoming || latest;
   return game ? { year: game.season_year, session: game.session } : { year: Number(today.slice(0, 4)), session: 1 };
 }
