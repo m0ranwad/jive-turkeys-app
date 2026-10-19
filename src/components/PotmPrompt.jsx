@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Trophy } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 import { resultOf } from '@/lib/team-logic';
 import { closesLabel, gamesToVoteOn } from '@/lib/potm';
 
@@ -15,22 +15,20 @@ export function PotmPrompt({ data }) {
         <Link
           key={g.id}
           to={`/games/${g.id}`}
-          className="flex items-center gap-3 rounded-3xl border-2 border-lime-400 bg-lime-50 p-4 transition hover:bg-lime-100"
+          className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-lime-400"
         >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
-            <Trophy className="h-5 w-5" />
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
+            <Trophy className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-display text-sm font-extrabold uppercase tracking-tight text-lime-950">
+            <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
               Vote for Player of the Match
             </span>
-            <span className="block text-xs font-semibold text-lime-900">
-              {g.score_us}–{g.score_them} {resultOf(g)} vs {g.opponent} · Voting closes {closesLabel(g.potm_closes_at)}
+            <span className="block truncate text-[11px] font-semibold text-zinc-500">
+              {g.score_us}–{g.score_them} {resultOf(g)} vs {g.opponent} · closes {closesLabel(g.potm_closes_at)}
             </span>
           </span>
-          <span className="shrink-0 rounded-full bg-zinc-950 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white">
-            Vote
-          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />
         </Link>
       ))}
     </div>

@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { isDemo } from '@/api';
-import { InstallCard, InstallGuide, useInstall } from '@/components/InstallApp';
+import { InstallGuide, useInstall } from '@/components/InstallApp';
 import { PageSpinner } from '@/components/PageSpinner';
 import { Walkthrough } from '@/components/Walkthrough';
 import { Dialog, DialogClose, DialogSidePanel, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -209,7 +209,6 @@ export function Layout() {
 
         {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
         <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
-          {pathname === '/' && <InstallCard onShowHow={() => setInstallOpen(true)} />}
           {/* Keeps the header and tabs up while a screen downloads the first time. */}
           <Suspense fallback={<PageSpinner />}>
             <Outlet />

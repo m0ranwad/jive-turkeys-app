@@ -6,16 +6,21 @@ import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
 
 /**
  * The next game, at the top of Schedule: when and where, the headcount, and
- * your answer right there. Most visits are "am I playing Thursday?".
+ * your answer right there. Most visits are "am I playing Thursday?". When the
+ * game starts a session you haven't answered for, `sessionPanel` asks that first.
  */
-export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspended, onSet, busy }) {
+export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspended, onSet, busy, sessionPanel, startsSession }) {
   const status = rsvp?.status;
   return (
     <section className="overflow-hidden rounded-3xl bg-zinc-950 p-4 text-white" aria-label="Next game">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">Next game</span>
-          <div className="mt-1 truncate font-display text-2xl font-extrabold uppercase tracking-tight">vs {game.opponent}</div>
+          <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">
+            Next game{startsSession ? ' · New session' : ''}
+          </span>
+          <Link to={`/games/${game.id}`} className="mt-1 block truncate font-display text-2xl font-extrabold uppercase tracking-tight hover:text-lime-400">
+            vs {game.opponent}
+          </Link>
           <div className="mt-1 text-xs font-semibold text-white/70">
             {fmtDateShort(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'}
           </div>
@@ -43,7 +48,8 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
         </div>
       )}
 
-      {onRoster && (
+      {sessionPanel}
+      {onRoster && !sessionPanel && (
         <div className="mt-4 rounded-2xl bg-white p-3 text-zinc-900">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">

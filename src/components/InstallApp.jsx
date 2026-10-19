@@ -118,7 +118,7 @@ export function InstallCard({ onShowHow }) {
   return (
     <section
       aria-label="Add to Home Screen"
-      className="mb-5 flex items-center gap-3 rounded-3xl bg-zinc-950 p-3.5 pr-2 text-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+      className="flex items-center gap-3 rounded-3xl bg-zinc-950 p-3.5 pr-2 text-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
     >
       <img src="/icon-192.png" alt="" className="h-12 w-12 shrink-0 rounded-2xl" />
       <div className="min-w-0 flex-1">
