@@ -131,7 +131,7 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 |---|---|
 | The **Chat tab** (bottom bar on phones, top bar on computers, and the menu) shows a count: unread messages in Team Chat, your private chats and (for captains) the Captains' Lounge, plus threads you've opened. No badge while you're on the chat page. | `[browser]` `[unit]` |
 | Your own messages never count. History from before you signed up doesn't count. | `[browser]` `[db]` |
-| Opening a room marks it read up to its latest message, shortly after it's shown and while the page is in view. The marker only ever moves forward. | `[browser]` `[db]` `[unit]` |
+| Opening a room marks it read up to its latest message from someone else (yours never count), shortly after it's shown and while the page is in view. The marker only ever moves forward. Sending a message never marks read one that hasn't reached your screen. | `[browser]` `[db]` `[unit]` |
 | Threads you've never opened show **New** in the list instead of a count, and don't add to the Chat tab badge (private chats and the Lounge always show their count). On phones, a dot on a room's ‹ flags ones with activity in the last 3 days. | `[browser]` `[unit]` |
 | A closed room keeps what was unread when it closed. The collapsed **Closed (N)** shows that count (and each closed room its own), so the Chat tab never counts something you can't find. | `[unit]` |
 | **@ count:** next to the unread number, the Chat tab (and the menu) shows a separate "@2": unread messages that mention you, by name or @team, in every room, threads you've never opened included. Each room in the list shows its own. Opening a room clears its mentions. | `[browser]` `[unit]` `[db]` |
@@ -147,6 +147,7 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 | Every table has row level security on, and signed-out visitors have no access to any table. | `[db]` |
 | You post, react and start threads and private chats only as yourself. | `[db]` |
 | Messages, threads, reactions and who's in each private chat update live for everyone on the page who can see them (Supabase Realtime, which follows the same rules). Being added to a private chat makes it show up. | `[db]` (publication), `[unit]` (subscriptions) |
+| Live updates miss whatever is posted while the page is out of view (a phone asleep, the app in the background) or the connection is down. So when the page comes back into view, or the connection comes back, the open room fetches its latest messages (new ones and edits) and the room list its summaries. Until that's in, the room isn't marked read. If more than a page of messages came in, the room starts again from the newest, with **Load earlier messages** for the rest. | `[browser]` `[unit]` |
 
 ## 7. Phone notifications
 
@@ -209,6 +210,8 @@ devices signed in as different players:
    badge goes up when they're on another page.
 2. On the receiving phone, scroll up in Team Chat, then send another message from the first device. The
    "↓ 1 new message" button appears, and tapping it scrolls down.
+   Then lock the receiving phone (or switch to another app) for a minute, post from the first device, and come
+   back to Team Chat: the message shows without leaving the room. The same after turning Airplane Mode on and off.
 3. React on one, and the reaction appears on the other. Delete a message on one, and it disappears on the other.
 4. Start a thread on one; it appears in the other's list. Close it, and the other's message box goes away.
 5. On a phone, open Chat: the room list shows, and it scrolls by itself without moving the page. Tap a room, then ‹:

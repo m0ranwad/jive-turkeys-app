@@ -548,12 +548,23 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     }
     if (offline) throw new TypeError('Failed to fetch');
   };
+  // And this to act out live updates that broke off (a phone asleep): changes still
+  // save, but none arrive live. The browser's online event acts out the reconnect.
+  const liveOff = () => {
+    try {
+      return localStorage.getItem('jt_demo_live_off') === '1';
+    } catch {
+      return false;
+    }
+  };
 
   // Same rules as the Supabase filter: null matches empty columns, an array matches any of its values.
   const matches = (row, where) =>
     Object.entries(where).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : (row[k] ?? null) === v));
-  const notify = (table, event, row) =>
+  const notify = (table, event, row) => {
+    if (liveOff()) return;
     (listeners[table] || []).forEach((l) => l[event] && setTimeout(() => l[event](structuredClone(row)), 0));
+  };
   const sortRows = (rows, sort) => {
     const { column, ascending } = parseSort(sort);
     return [...rows].sort((a, b) => {
@@ -824,12 +835,15 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         notify(table, 'onDelete', { id });
         return delay(null);
       },
-      subscribe(onInsert, { onUpdate, onDelete } = {}) {
+      subscribe(onInsert, { onUpdate, onDelete, onReconnect } = {}) {
         const listener = { onInsert, onUpdate, onDelete };
         listeners[table] = listeners[table] || [];
         listeners[table].push(listener);
+        const reconnect = () => onReconnect?.();
+        globalThis.addEventListener?.('online', reconnect);
         return () => {
           listeners[table] = listeners[table].filter((l) => l !== listener);
+          globalThis.removeEventListener?.('online', reconnect);
         };
       },
     };

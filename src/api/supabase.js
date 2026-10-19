@@ -81,9 +81,11 @@ export function createSupabaseBackend(url, key) {
       },
       /**
        * Calls onInsert(row) for every new row, and onUpdate(row) / onDelete({ id }) when given.
+       * onReconnect() when live updates come back after the connection dropped (a phone asleep,
+       * lost signal): changes made in between never arrive, so it's the cue to fetch them.
        * Returns an unsubscribe function.
        */
-      subscribe(onInsert, { onUpdate, onDelete } = {}) {
+      subscribe(onInsert, { onUpdate, onDelete, onReconnect } = {}) {
         let channel = supabase.channel(`${table}-changes-${++channelCount}`);
         const listen = (event, handler) => {
           channel = channel.on('postgres_changes', { event, schema: 'public', table }, handler);
@@ -92,7 +94,13 @@ export function createSupabaseBackend(url, key) {
         if (onUpdate) listen('UPDATE', (payload) => onUpdate(payload.new));
         // Deletes only carry the primary key.
         if (onDelete) listen('DELETE', (payload) => onDelete(payload.old));
-        channel.subscribe();
+        // The channel joins again by itself after a drop, reporting SUBSCRIBED each time.
+        let joined = false;
+        channel.subscribe((status) => {
+          if (status !== 'SUBSCRIBED') return;
+          if (joined) onReconnect?.();
+          joined = true;
+        });
         return () => supabase.removeChannel(channel);
       },
     };

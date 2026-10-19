@@ -393,6 +393,21 @@ describe('live updates', () => {
     expect(onInsert).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
   });
+
+  it('acts out live updates breaking off for the browser tests: changes save, but none arrive live', async () => {
+    const { api, me } = await signedIn();
+    const onInsert = vi.fn();
+    api.entities.Message.subscribe(onInsert);
+    localStorage.setItem('jt_demo_live_off', '1');
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'Missed live', thread_id: null });
+    await flush();
+    expect(onInsert).not.toHaveBeenCalled();
+    expect((await api.chat.history(null)).at(-1).body).toBe('Missed live');
+    localStorage.removeItem('jt_demo_live_off');
+    await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'Back live', thread_id: null });
+    await flush();
+    expect(onInsert).toHaveBeenCalledWith(expect.objectContaining({ body: 'Back live' }));
+  });
 });
 
 describe('persistence', () => {

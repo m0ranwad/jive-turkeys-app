@@ -9,6 +9,7 @@ import {
   bumpOverview,
   canDeleteAny,
   canManageRoom,
+  catchUpMessages,
   dayLabel,
   directChat,
   insertMessage,
@@ -18,6 +19,7 @@ import {
   mentionTotal,
   organizeRooms,
   privateChatTitle,
+  readUpTo,
   roomOf,
   roomTitle,
   shortWhen,
@@ -216,6 +218,63 @@ describe('message list', () => {
     expect(roomOf({ thread_id: null })).toBeNull();
     expect(roomOf({})).toBeNull();
     expect(roomOf({ thread_id: 't1' })).toBe('t1');
+  });
+});
+
+describe('catching up after live updates broke off', () => {
+  const ids = (list) => list.map((m) => m.id);
+
+  it('adds what was posted meanwhile, in time order, and applies edits', () => {
+    const onScreen = [msg('a', 'ann', 40), msg('b', 'bob', 30), { ...msg('p', 'me', 0), pending: true, body: 'on my way' }];
+    const page = [msg('a', 'ann', 40), { ...msg('b', 'bob', 30), body: 'Field 4 now', edited_date: at(5) }, msg('missed', 'sam', 20)];
+    const { messages, restarted } = catchUpMessages(onScreen, page, 60);
+    expect(ids(messages)).toEqual(['a', 'b', 'missed', 'p']);
+    expect(messages[1]).toMatchObject({ body: 'Field 4 now', edited_date: at(5) });
+    expect(restarted).toBe(false);
+  });
+
+  it('keeps messages that arrived live while it was fetching, and takes nothing away', () => {
+    const onScreen = [msg('a', 'ann', 40), msg('gone', 'bob', 35), msg('live', 'sam', 1)];
+    const { messages } = catchUpMessages(onScreen, [msg('a', 'ann', 40), msg('missed', 'sam', 20)], 60);
+    expect(ids(messages)).toEqual(['a', 'gone', 'missed', 'live']);
+  });
+
+  it('swaps a "sending" copy for the saved message it finds', () => {
+    const onScreen = [msg('a', 'ann', 40), { ...msg('p', 'me', 0), pending: true, body: 'lol' }];
+    const { messages } = catchUpMessages(onScreen, [msg('a', 'ann', 40), { ...msg('real', 'me', 1), body: 'lol' }], 60);
+    expect(ids(messages)).toEqual(['a', 'real']);
+  });
+
+  it('starts again from the latest page when even all of it is newer than what was on screen', () => {
+    const onScreen = [msg('old1', 'ann', 100), msg('old2', 'bob', 90), msg('live', 'sam', 1)];
+    const page = [msg('n1', 'sam', 30), msg('n2', 'sam', 20), msg('n3', 'sam', 10)];
+    const { messages, restarted } = catchUpMessages(onScreen, page, 3);
+    expect(ids(messages)).toEqual(['n1', 'n2', 'n3', 'live']);
+    expect(restarted).toBe(true);
+  });
+
+  it('merges a full page that overlaps what was on screen', () => {
+    const onScreen = [msg('a', 'ann', 40), msg('b', 'bob', 30)];
+    const { messages, restarted } = catchUpMessages(onScreen, [msg('b', 'bob', 30), msg('c', 'sam', 20)], 2);
+    expect(ids(messages)).toEqual(['a', 'b', 'c']);
+    expect(restarted).toBe(false);
+  });
+
+  it('changes nothing when the room is empty', () => {
+    const onScreen = [{ ...msg('p', 'me', 0), pending: true }];
+    expect(catchUpMessages(onScreen, [], 60)).toEqual({ messages: onScreen, restarted: false });
+  });
+});
+
+describe('what a room is marked read up to', () => {
+  it("is the newest message from someone else, so sending yours doesn't mark read what hasn't arrived", () => {
+    const list = [msg('a', 'ann', 40), msg('b', 'bob', 30), msg('mine', 'me', 10), { ...msg('p', 'me', 0), pending: true }];
+    expect(readUpTo(list, 'me').id).toBe('b');
+  });
+
+  it('is the newest of yours when nobody else has posted, and nothing in an empty room', () => {
+    expect(readUpTo([msg('m1', 'me', 20), msg('m2', 'me', 10)], 'me').id).toBe('m2');
+    expect(readUpTo([{ ...msg('p', 'me', 0), pending: true }], 'me')).toBeNull();
   });
 });
 
