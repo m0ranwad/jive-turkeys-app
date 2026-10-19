@@ -14,8 +14,8 @@ const round = (value) => Math.round(value * 100) / 100;
 
 /**
  * The signed-in player's share of one session: amount, paid or not (and how
- * much), and their partner if they pay together. `balance` is what's left to
- * pay after paying part of it (or before the share went up); `changed` says
+ * much), and their partner if they pay together. `balance` is what each still
+ * owes, added together, including any unpaid share; `changed` says
  * what was paid isn't the share, and `short` that it's less.
  */
 function myShare(data, period, userId) {
@@ -28,21 +28,27 @@ function myShare(data, period, userId) {
   const partnerShare = partner ? team.shareOf(partner.user_id) : null;
   const payment = payments.find((p) => p.user_id === userId);
   const paidShares = [share, partnerShare].filter((s) => s?.paid);
+  const amount = share ? round(share.amount + (partnerShare?.amount ?? 0)) : 0;
+  const paidAmount = share ? round(paidShares.reduce((sum, s) => sum + s.paid_amount, 0)) : (team.notPlayingOf(userId)?.paid_amount ?? null);
+  const owing = share ? team.owingTogether(userId).filter((p) => p.due > 0) : [];
+  const balance = round(owing.reduce((sum, p) => sum + p.due, 0));
+  const hasPayment = paidShares.length > 0;
   return {
     row,
     team,
     share,
     partner,
     partnerShare,
-    amount: share ? round(share.amount + (partnerShare?.amount ?? 0)) : 0,
+    amount,
     paid: !!payment?.paid,
+    hasPayment,
     // What was paid: for you and your partner, or (not on the roster) what you paid, if it was recorded.
-    paidAmount: share ? round(paidShares.reduce((sum, s) => sum + s.paid_amount, 0)) : (team.notPlayingOf(userId)?.paid_amount ?? null),
-    changed: paidShares.some((s) => s.paid_amount !== s.amount),
-    short: paidShares.some((s) => s.paid_amount < s.amount),
+    paidAmount,
+    changed: hasPayment && (balance > 0 || paidAmount !== amount),
+    short: balance > 0,
     // What you (and your partner) still owe, each, for "Paid part of it?".
-    owing: share ? team.owingTogether(userId).filter((p) => p.due > 0) : [],
-    balance: share?.paid && (!partnerShare || partnerShare.paid) ? team.balanceOf(userId) : 0,
+    owing,
+    balance,
     paidDate: payment?.paid_date ?? null,
     paidBy: payment?.paid_by ?? null,
     history: history.filter((e) => e.user_id === userId),
@@ -53,7 +59,8 @@ function myShare(data, period, userId) {
 
 /** Big dark card: what you owe and how the session total adds up. */
 function ShareCard({ mine }) {
-  const { row, team, share, partner, partnerShare, amount, paid, paidDate, paidAmount, changed, short, balance } = mine;
+  const { row, team, share, partner, partnerShare, amount, paid, hasPayment, paidDate, paidAmount, changed, short, balance } = mine;
+  const statusPaid = partner ? hasPayment && balance === 0 : paid;
   const parts = feeParts(row);
   const refs = parts.ref_fee && parts.game_count ? feeTotal(parts) - parts.league_fee : 0;
   const line = (label, value, strong) => (
@@ -69,13 +76,13 @@ function ShareCard({ mine }) {
           {!share ? 'Not on the roster' : partner ? `You + ${partner.display_name.split(' ')[0]}` : 'Your share'}
         </span>
         {(share || paid) && (
-          <StatusChip paid={paid} date={paidDate} className={paid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'} />
+          <StatusChip paid={statusPaid} date={paidDate} className={statusPaid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'} />
         )}
       </div>
       {share ? (
         <>
           <p className="mt-2 font-display text-6xl font-extrabold leading-none tracking-tight">{dollars(amount)}</p>
-          {paid && changed && (
+          {hasPayment && changed && (
             <p className="mt-2 text-sm font-semibold text-amber-300" data-testid="share-changed">
               {short
                 ? `You've paid ${dollars(paidAmount)} of your ${dollars(amount)} share${balance > 0 ? `, so there's ${dollars(balance)} more to pay` : ''}.`
@@ -155,17 +162,19 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
     .filter((s) => s.share || s.paid);
 
   const mark = async (paid) => {
-    const ids = [user.id, mine.partner?.user_id].filter(Boolean);
+    // Settle only what's still owed: a partner's earlier payment stays as it was.
+    const { userIds, amounts } = paid
+      ? partPayment(mine.team, user.id, mine.balance)
+      : { userIds: [user.id, mine.partner?.user_id].filter(Boolean) };
     setBusy(true);
     try {
       await api.dues.markPaid({
         year: period.year,
         session: period.session,
-        userIds: ids,
+        userIds,
         paid,
         paidDate: today(),
-        // Your share right now (and your partner's): for someone already paid, that pays the difference.
-        amounts: ids.map((id) => mine.team.shareOf(id)?.amount ?? null),
+        amounts,
       });
       await onChanged();
       toast({ title: paid ? 'Marked paid. Thanks!' : 'Marked not paid' });
@@ -177,7 +186,6 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
   };
 
   // Part of what you (and your partner) owe: anyone can record it, for themselves too.
-  const stillOwed = Math.round(mine.owing?.reduce((sum, p) => sum + p.due, 0) * 100) / 100 || 0;
   const payPart = async (amount) => {
     const { userIds, amounts } = partPayment(mine.team, user.id, amount);
     setBusy(true);
@@ -193,9 +201,10 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
       setBusy(false);
     }
   };
-  const partPaymentLink = stillOwed > 0 && (
-    <PartPayment max={stillOwed} both={mine.owing.length > 1} busy={busy} onSave={payPart} />
+  const partPaymentLink = mine.balance > 0 && (
+    <PartPayment max={mine.balance} both={mine.owing.length > 1} busy={busy} onSave={payPart} />
   );
+  const otherAmount = (s) => s.partner && s.balance > 0 ? s.balance : s.paid ? s.paidAmount : s.share ? s.amount : null;
 
   const otherSessions = others.length > 0 && (
     <section className={CARD}>
@@ -211,10 +220,10 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
             <span className="flex-1 text-sm font-semibold">
               Session {s.period.session} · {s.period.year}
             </span>
-            {(s.paid ? s.paidAmount : s.share ? s.amount : null) != null && (
-              <span className="text-sm font-bold tabular-nums">{dollars(s.paid ? s.paidAmount : s.amount)}</span>
+            {otherAmount(s) != null && (
+              <span className="text-sm font-bold tabular-nums">{dollars(otherAmount(s))}</span>
             )}
-            <StatusChip paid={s.paid} date={s.paidDate} />
+            <StatusChip paid={s.partner ? s.hasPayment && s.balance === 0 : s.paid} date={s.paidDate} />
             <ChevronRight className="h-4 w-4 text-zinc-300" />
           </button>
         ))}
@@ -249,10 +258,10 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
         </section>
       )}
 
-      {mine.share && !mine.paid && mine.amount > 0 && (
+      {mine.share && !mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')}>
           <h3 className={HEADING}>Pay</h3>
-          <PayButtons amount={mine.amount} note={payNote(period.year, period.session, names)} settings={settings} />
+          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
             <span className="text-sm font-semibold text-zinc-500">Already paid?</span>
             <Button onClick={() => mark(true)} disabled={busy} className="h-11 rounded-xl bg-lime-400 px-5 font-bold text-black hover:bg-lime-300">
@@ -263,7 +272,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
         </section>
       )}
 
-      {mine.share && mine.paid && mine.balance > 0 && (
+      {mine.share && mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')} data-testid="pay-difference">
           <h3 className={HEADING}>Pay the rest</h3>
           <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
@@ -284,7 +293,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
         </section>
       )}
 
-      {mine.share && mine.paid && mine.balance === 0 && (
+      {mine.share && mine.hasPayment && mine.balance === 0 && (
         <section className={cn(CARD, 'space-y-3')}>
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-lime-400">
