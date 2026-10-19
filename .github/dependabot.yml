@@ -1,0 +1,26 @@
+# Dependabot (issue #32). Security fixes come as one grouped pull request when an
+# advisory affects a package we use; turn on Dependabot alerts and security
+# updates in the repo's settings for those. Once a month, minor and patch
+# updates come as one more grouped pull request. New major versions (React,
+# Vite, React Router, Tailwind) need code changes, so they're done on purpose.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      security-fixes:
+        applies-to: security-updates
+        patterns: ['*']
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # Pinned to the Chromium in Claude's cloud sessions (/opt/pw-browsers); see CLAUDE.md.
+      - dependency-name: '@playwright/test'
+      # Vendored (vendor/xlsx-*.tgz): cloud sessions can't reach cdn.sheetjs.com.
+      - dependency-name: xlsx
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

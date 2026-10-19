@@ -74,9 +74,11 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/db-rehearsal.sh "$BEFORE"
 
+      # Pinned so a new Supabase CLI release can't break a publish. Bump it on purpose,
+      # in functions.yml too.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.121.0
 
       - name: Apply new database changes
         env:

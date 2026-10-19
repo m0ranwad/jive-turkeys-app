@@ -53,6 +53,8 @@ The other co-owner can work the same way, or locally with Claude Code.
 | Google sign-in | Google Auth Platform project "Jive Turkeys" | Free. Needs the [/privacy](src/pages/LegalPages.jsx) and /terms pages |
 | Database updates | GitHub Actions secret `SUPABASE_DB_URL` | Supabase **Session pooler** string; GitHub's runners are IPv4-only |
 | Phone notifications | Supabase Edge Function `notify-chat`, deployed by [functions.yml](.github/workflows/functions.yml) | GitHub secret `SUPABASE_ACCESS_TOKEN`: a Supabase token for this project only, with Project Settings read, Edge Functions read-write and Edge Function Secrets read-write. The sending keys (`VAPID_*`) are created once by the workflow and kept as function secrets; never replace them |
+| Security headers | [public/_headers](public/_headers) | Served by Cloudflare. The Content-Security-Policy is report-only until it's checked on the live site ([issue #32](https://github.com/m0ranwad/jive-turkeys-app/issues/32)) |
+| Dependency updates | [Dependabot](.github/dependabot.yml) | Grouped security fixes, and one monthly pull request for minor and patch updates. Security updates are turned on in Settings → Advanced Security |
 | Domain | `jiveturkeys.app` on Cloudflare | The only running cost |
 
 Local-only reference copies of keys live in `.env.local`, which git ignores. Never commit keys.
@@ -131,7 +133,8 @@ For reference, in case this ever needs rebuilding:
      `wrangler.jsonc`.
    - Leave the build and deploy commands at their defaults.
    - Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as **build** variables, under
-     Settings → Build → Variables and secrets.
+     Settings → Build → Variables and secrets. Without them the `main` build stops
+     ([vite.config.js](vite.config.js)) instead of putting the sample-data site live.
    - The domain and URL settings come from `wrangler.jsonc`. Each deploy re-applies them and overrides
      the dashboard toggles.
 5. **Database updates:** add the GitHub secret `SUPABASE_DB_URL` (Supabase → Connect → Session pooler,
@@ -179,7 +182,8 @@ run for 90 days. The repo is public, so only the encrypted file is stored.
    ```
    The last line loads rows exactly as they were, with the database's own triggers (new accounts, session
    lists) paused, so nothing is added twice.
-4. Point the site at it if it's a new project (Cloudflare build variables) and publish.
+4. Point the site at it if it's a new project (Cloudflare build variables, and the Supabase address in
+   [public/_headers](public/_headers)) and publish.
 
 GitHub turns scheduled runs off in a public repo after 60 days without a change pushed to it, and emails a
 warning first. A long off-season can hit that: turn it back on from the Actions tab.
@@ -220,12 +224,13 @@ src/api/               Data layer: supabase.js (real) and demo.js (sample data),
 src/lib/               Team logic (headcount, records, leaderboards), formatting, schedule import
 src/pages/             One file per screen, incl. LegalPages.jsx (/privacy, /terms)
 src/components/        Shared pieces and shadcn-style UI primitives
-public/                Icons, manifest and the service worker (icons made by scripts/make-icons.mjs)
+public/                Icons, manifest, the service worker (icons made by scripts/make-icons.mjs), _headers (security headers)
 docs/                  chat.md (how the chat should work), design/ (logo and icon concepts)
 supabase/migrations/   Database schema + security rules; new changes go in new files
 supabase/functions/    notify-chat (chat notifications) and invite-user (not deployed yet, issue #1)
 supabase/templates/    Sign-up code email
 .github/workflows/     Tests; Database update (applies new migrations on main); Functions (deploys notify-chat)
+.github/dependabot.yml Dependency updates (grouped security fixes, monthly minor and patch)
 vendor/                SheetJS tarball (cloud sessions can't reach cdn.sheetjs.com)
 wrangler.jsonc         Cloudflare Worker settings (domain, preview URLs, page routing)
 CLAUDE.md              How Claude works in this repo (preview/publish workflow, rules)
