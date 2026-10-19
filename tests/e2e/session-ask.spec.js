@@ -15,6 +15,8 @@ async function openTab(page, path, heading) {
 }
 
 const ahead = (page) => page.getByTestId('session-ahead');
+const playerCard = (page, name) =>
+  page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
 const rosterStatus = (page) => page.locator('section').filter({ has: page.getByRole('heading', { name: 'Roster status' }) });
 
 /** Session 2's games are all played: between sessions, before session 3's schedule is out. */
@@ -116,4 +118,19 @@ test('between sessions, the question is at the top of Schedule and status change
   await openTab(page, '/profile', 'Casey Captain');
   await expect(page.getByText('It counts for session 3')).toBeVisible();
   await expect(rosterStatus(page).getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test("between sessions, a captain's answer for someone is their status right now", async ({ page }) => {
+  await signIn(page);
+  await endSession2(page);
+  await openTab(page, '/team', 'Team');
+  await page.getByTestId('session-ask').getByRole('button', { name: 'Answer for someone' }).click();
+  const answers = page.getByRole('dialog', { name: 'Answers for session 3' });
+  await expect(answers).toContainText("It's their status for session 3");
+  await answers.getByLabel('Mike Russo in session 3').selectOption('sub_pool');
+  await answers.getByLabel('Sam Okafor in session 3').selectOption('on_break');
+  await answers.getByRole('button', { name: 'Save 2 changes' }).click();
+  await expect(page.getByText('Session 3 updated')).toBeVisible();
+  await expect(playerCard(page, 'Mike Russo').getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(playerCard(page, 'Sam Okafor').getByRole('button', { name: 'On Break' })).toHaveAttribute('aria-pressed', 'true');
 });

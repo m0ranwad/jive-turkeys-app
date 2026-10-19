@@ -19,8 +19,10 @@ const CHOICES = [
  * was left Active. Only that session's list changes (and so its split). Also
  * used to answer "Playing session N?" for teammates in a session asked about
  * ahead (`ahead`): there, anyone not on its list yet shows their status right now.
+ * Between sessions that session is already the current one (`current`), so an
+ * answer is their status right now, as when tapping a status on the Team page.
  */
-export function SessionRosterDialog({ open, onOpenChange, period, members, rows, meId, onSaved, ahead = false }) {
+export function SessionRosterDialog({ open, onOpenChange, period, members, rows, meId, onSaved, ahead = false, current = false }) {
   const { toast } = useToast();
   const [picked, setPicked] = useState({});
   const [busy, setBusy] = useState(false);
@@ -43,6 +45,14 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
     setBusy(true);
     try {
       for (const m of changed) {
+        // The current session's list follows everyone's status (the database's follow triggers).
+        // "Not on the team" is for this session only, so it goes on the list.
+        if (current && picked[m.user_id] !== 'off') {
+          const status = picked[m.user_id];
+          if (m.guest) await api.entities.TeamGuest.update(m.id, { status });
+          else await api.entities.PlayerProfile.update(m.id, { status });
+          continue;
+        }
         const fields = { status: picked[m.user_id], answered_at: new Date().toISOString(), changed_by: meId };
         const entry = entryFor(rows, period, m.user_id);
         if (entry) await api.entities.SessionRoster.update(entry.id, fields);
@@ -75,7 +85,9 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
           </DialogTitle>
         </DialogHeader>
         <p className="-mt-2 rounded-2xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900">
-          {ahead
+          {ahead && current
+            ? `Answer for anyone, including roster names who haven't joined. It's their status for session ${period.session}, as on the Team page.`
+            : ahead
             ? `Answer for anyone, including roster names who haven't joined. Only session ${period.session} changes, not the session being played.`
             : `This changes how session ${period.session}'s fee is split. Payments already marked stay marked. Other sessions don't change.`}
         </p>

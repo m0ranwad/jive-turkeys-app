@@ -113,8 +113,8 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Kim is a captain; Pat, Lee and Rex play; Gus is on the roster but hasn't
--- joined the app. Session 1 is under way: a game three weeks ago and its last
+-- Kim is a captain; Pat, Lee, Rex and Ada play; Gus and Sam are on the roster
+-- but haven't joined the app (Neo and Zed join later). Session 1 is under way: a game three weeks ago and its last
 -- one in three days. Session 2's schedule isn't out.
 -- ---------------------------------------------------------------------------
 
@@ -124,10 +124,13 @@ insert into ask_test.people values
   ('lee', '00000000-0000-4000-8000-0000000000f3'),
   ('rex', '00000000-0000-4000-8000-0000000000f4'),
   ('neo', '00000000-0000-4000-8000-0000000000f5'),
-  ('gus', '00000000-0000-4000-8000-0000000000f6');
+  ('gus', '00000000-0000-4000-8000-0000000000f6'),
+  ('ada', '00000000-0000-4000-8000-0000000000f7'),
+  ('zed', '00000000-0000-4000-8000-0000000000f8'),
+  ('sam', '00000000-0000-4000-8000-0000000000f9');
 
 insert into auth.users (id, email)
-  select id, name || '@ask.test' from ask_test.people where name in ('kim', 'pat', 'lee', 'rex', 'neo');
+  select id, name || '@ask.test' from ask_test.people where name in ('kim', 'pat', 'lee', 'rex', 'neo', 'ada', 'zed');
 update public.users set role = case when id = ask_test.id('kim') then 'admin' else 'user' end
   where id in (select id from ask_test.people);
 update public.users set joined_team_at = now();
@@ -140,9 +143,11 @@ insert into public.player_profiles (user_id, display_name, gender, status) value
   (ask_test.id('kim'), 'Kim Captain', 'F', 'active'),
   (ask_test.id('pat'), 'Pat Player', 'M', 'active'),
   (ask_test.id('lee'), 'Lee Player', 'M', 'active'),
-  (ask_test.id('rex'), 'Rex Player', 'M', 'active');
+  (ask_test.id('rex'), 'Rex Player', 'M', 'active'),
+  (ask_test.id('ada'), 'Ada Player', 'F', 'active');
 insert into public.team_guests (id, display_name, gender, status) values
-  (ask_test.id('gus'), 'Gus Guest', 'M', 'active');
+  (ask_test.id('gus'), 'Gus Guest', 'M', 'active'),
+  (ask_test.id('sam'), 'Sam Guest', 'F', 'active');
 
 select ask_test.ok(ask_test.current() = ask_test.session(1), 'session 1 is the current session while it has games left');
 
@@ -237,6 +242,66 @@ select ask_test.ok(ask_test.status('rex', 1) = 'off' and ask_test.status('rex', 
 -- Pat's three answers and Lee's one.
 select ask_test.ok(ask_test.since(2) = 4,
   'session 2''s list keeping up isn''t recorded as anyone changing their status, only answers are');
+
+-- Ada answers, is taken off the team, and is added back: she's on session 2
+-- again, following her status and asked again (her answer went with her).
+select ask_test.sign_in('ada');
+select public.roster_answer(ask_test.year(), 2, 'sub_pool');
+reset role;
+select ask_test.sign_in('kim');
+select public.set_team_member_removed(ask_test.id('ada'), true);
+select public.set_team_member_removed(ask_test.id('ada'), false);
+reset role;
+select ask_test.ok(ask_test.status('ada', 2) = 'active' and not ask_test.answered('ada', 2),
+  'a player added back is on session 2 again as Active, still to answer');
+select ask_test.ok(ask_test.status('ada', 1) = 'active', 'and on session 1');
+
+-- A captain answers for Sam, a roster name, then a new player picks that name.
+select ask_test.sign_in('kim');
+select ask_test.touches(
+  $$update public.session_roster set status = 'on_break', answered_at = now(), changed_by = auth.uid()
+    where season_year = ask_test.year() and session = 2 and guest_id = ask_test.id('sam')$$, 1,
+  'a captain answers for a roster name: sitting out session 2');
+reset role;
+select ask_test.sign_in('zed');
+insert into public.player_profiles (user_id, display_name, gender, status) values (auth.uid(), 'Zed New', 'F', 'active');
+select public.claim_team_guest(ask_test.id('sam'));
+reset role;
+select ask_test.ok(ask_test.status('zed', 2) = 'on_break' and ask_test.answered('zed', 2),
+  'the player who picks that name keeps the answer given for it');
+select ask_test.ok(ask_test.status('zed', 1) = 'active' and ask_test.profile('zed') = 'active',
+  'session 1 and their status right now are the name''s, as before');
+select ask_test.sign_in('kim');
+select public.unlink_team_guest(ask_test.id('sam'));
+reset role;
+select ask_test.ok(ask_test.status('sam', 2) = 'on_break' and ask_test.answered('sam', 2),
+  'undoing the pick gives the name its answer back');
+select ask_test.ok(ask_test.status('zed', 2) = 'active' and not ask_test.answered('zed', 2),
+  'and the account is back on session 2, still to answer');
+select ask_test.sign_in('zed');
+select public.claim_team_guest(ask_test.id('sam'));
+reset role;
+select ask_test.ok(ask_test.status('zed', 2) = 'on_break' and ask_test.answered('zed', 2),
+  'picking the name again brings the answer over again');
+
+-- Captains stop asking, Ada (still to answer) sits out session 1's last game,
+-- and captains ask again.
+select ask_test.sign_in('kim');
+select public.roster_ask(ask_test.year(), 2, null);
+reset role;
+select ask_test.sign_in('ada');
+select ask_test.touches($$update public.player_profiles set status = 'on_break' where user_id = auth.uid()$$, 1,
+  'a player still to answer sits out while captains aren''t asking');
+reset role;
+select ask_test.sign_in('kim');
+select public.roster_ask(ask_test.year(), 2, ask_test.today() + 30);
+reset role;
+select ask_test.ok(ask_test.status('ada', 2) = 'on_break' and not ask_test.answered('ada', 2),
+  'asking again brings session 2 up to date for anyone still to answer');
+select ask_test.ok(
+  ask_test.status('pat', 2) = 'on_break' and ask_test.answered('pat', 2) and ask_test.status('lee', 2) = 'active'
+    and ask_test.status('rex', 2) = 'off',
+  'and keeps the answers given');
 
 -- ---------------------------------------------------------------------------
 -- Session 1's last game is played: session 2 is the current session, before

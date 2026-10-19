@@ -626,7 +626,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   };
   // Same as the database's roster_follow_ahead(): until they start, sessions asked about
   // ahead keep up with today's status for anyone who hasn't answered them, anyone taken
-  // off the team, and anyone new. Not recorded as a dues change.
+  // off the team (no longer their answer, so added back they're asked again), and anyone
+  // new. Not recorded as a dues change.
   const followAhead = (who, status) => {
     const cur = current();
     for (const ask of db.session_asks.filter((a) => a.starts_on && isEarlier(cur, { year: a.season_year, session: a.session }))) {
@@ -634,7 +635,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (!list.length) continue;
       const row = list.find((r) => (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id));
       if (row) {
-        if ((!row.answered_at || status === 'off') && row.status !== status) Object.assign(row, { status, updated_date: now() });
+        if ((!row.answered_at || status === 'off') && (row.status !== status || row.answered_at)) {
+          Object.assign(row, { status, answered_at: status === 'off' ? null : row.answered_at, updated_date: now() });
+        }
       } else if (status !== 'off') {
         db.session_roster.push({
           id: uid(), season_year: ask.season_year, session: ask.session, user_id: null, guest_id: null, ...who, status,
@@ -1004,6 +1007,15 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         Object.assign(v, { voted_for_id: userId, voted_for_guest_id: null });
         link.moved_votes.push(v.id);
       });
+    // Sessions asked about ahead: an answer given for the name counts over an account entry
+    // that's only been following its status (a new player is put on those lists when they
+    // make their profile). That entry makes way; an undo puts the account back on.
+    const cur = current();
+    const answeredForName = (r) =>
+      db.session_roster.some((n) => n.guest_id === guestId && n.answered_at && sessionOf(n) === sessionOf(r));
+    db.session_roster = db.session_roster.filter(
+      (r) => !(r.user_id === userId && !r.answered_at && isEarlier(cur, { year: r.season_year, session: r.session }) && answeredForName(r)),
+    );
     // Sessions the roster name was on and the account wasn't move over; where both were, the account's entry counts.
     for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
       if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) move('moved_roster', row);
@@ -1129,6 +1141,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const period = current();
       const started = db.session_roster.some((r) => sessionOf(r) === `${period.year}-${period.session}`);
       if (started && !nameHas('session_roster', (r) => sessionOf(r) === `${period.year}-${period.session}`)) followStatus('team_guests', guest);
+      // And on the lists of sessions asked about ahead, where they aren't on them.
+      followAhead({ guest_id: guestId }, guest.removed ? 'off' : guest.status);
+      if (profile) followAhead({ user_id: userId }, profile.removed ? 'off' : profile.status);
 
       Object.assign(link, { unlinked_at: now(), unlinked_by: currentUser().id });
       save(db);
@@ -1401,15 +1416,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
   };
 
-  // Same as the database's roster_apply_asked(): an asked session that has just
-  // become the current one is brought up to date the way it would have started
-  // today (players who joined since added, anyone not answered on their status
-  // right now, anyone taken off the team off), and the answers given ahead
-  // become everyone's status. None of it is recorded as a dues change.
-  const applyAsked = (period) => {
-    const ask = db.session_asks.find((a) => samePeriod({ year: a.season_year, session: a.session }, period) && a.starts_on && !a.applied_at);
-    if (!ask) return;
-    Object.assign(ask, { applied_at: now(), updated_date: now() });
+  // Same as the database's roster_refresh_asked(): an asked session's list brought up
+  // to date the way it would start today (players who joined since added, anyone not
+  // answered on their status right now, anyone taken off the team off and no longer
+  // answered). Not recorded as a dues change.
+  const refreshAsked = (period) => {
     const rows = db.session_roster.filter((r) => sessionOf(r) === `${period.year}-${period.session}`);
     const bringUp = (who, row, record) => {
       const nowStatus = record.removed ? 'off' : record.status;
@@ -1420,16 +1431,31 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
             status: record.status, answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
           });
         }
-      } else if (!row.answered_at || record.removed) {
-        if (row.status !== nowStatus) Object.assign(row, { status: nowStatus, updated_date: now() });
-      } else if (row.status !== 'off' && record.status !== row.status) {
-        Object.assign(record, { status: row.status, updated_date: now() });
+      } else if ((!row.answered_at || record.removed) && (row.status !== nowStatus || row.answered_at)) {
+        Object.assign(row, { status: nowStatus, answered_at: record.removed ? null : row.answered_at, updated_date: now() });
       }
     };
     db.player_profiles.forEach((p) => bringUp({ user_id: p.user_id }, rows.find((r) => r.user_id === p.user_id), p));
     db.team_guests
       .filter((g) => !g.linked_user_id)
       .forEach((g) => bringUp({ guest_id: g.id }, rows.find((r) => r.guest_id === g.id), g));
+  };
+
+  // Same as the database's roster_apply_asked(): an asked session that has just become
+  // the current one is checked once more (above), and the answers given ahead become
+  // everyone's status. None of it is recorded as a dues change.
+  const applyAsked = (period) => {
+    const ask = db.session_asks.find((a) => samePeriod({ year: a.season_year, session: a.session }, period) && a.starts_on && !a.applied_at);
+    if (!ask) return;
+    Object.assign(ask, { applied_at: now(), updated_date: now() });
+    refreshAsked(period);
+    const rows = db.session_roster.filter((r) => sessionOf(r) === `${period.year}-${period.session}` && r.answered_at && r.status !== 'off');
+    for (const row of rows) {
+      const record = row.user_id
+        ? db.player_profiles.find((p) => p.user_id === row.user_id)
+        : db.team_guests.find((g) => g.id === row.guest_id && !g.linked_user_id);
+      if (record && !record.removed && record.status !== row.status) Object.assign(record, { status: row.status, updated_date: now() });
+    }
   };
 
   // Same as the database's roster_start_current(), roster_ask() and roster_answer().
@@ -1443,7 +1469,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       return delay({ season_year: Number(period.year), session: Number(period.session) });
     },
     // Captains ask "Playing session N?" about a session that hasn't started, with its
-    // first game's date (again: a new date; none: stop asking). Its list starts now.
+    // first game's date (again: a new date; none: stop asking). Its list starts now;
+    // asked again after they stopped, it catches up with what changed in between.
     async ask({ year, session, startsOn }) {
       requireUser();
       failIfOffline();
@@ -1460,7 +1487,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           applied_at: null, created_date: now(), updated_date: now(),
         });
       }
-      if (startsOn) startSession(period);
+      if (startsOn) {
+        startSession(period);
+        refreshAsked(period);
+      }
       save(db);
       return delay(null);
     },

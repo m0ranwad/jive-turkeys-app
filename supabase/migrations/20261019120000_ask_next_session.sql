@@ -17,6 +17,10 @@
 -- then count for it instead of the session that just ended. When an asked
 -- session becomes the current one, the answers given ahead become everyone's
 -- status right now (roster_apply_asked()).
+--
+-- Also: a new player who picks their roster name brings over an answer given
+-- for that name ahead (move_team_guest()), and an undo puts both back on the
+-- lists (unlink_team_guest()).
 
 create table public.session_asks (
   id uuid primary key default gen_random_uuid(),
@@ -84,7 +88,9 @@ $$;
 -- Sessions asked about ahead follow today's status, until they start: for
 -- anyone who hasn't answered them, anyone taken off the team (off), and anyone
 -- new (added). That's their list keeping up, not anyone answering, so it isn't
--- recorded as a dues change.
+-- recorded as a dues change. Someone taken off the team is off even if they'd
+-- answered, and it's no longer their answer: added back, they follow their
+-- status again and are asked again.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.roster_follow_ahead(p_user_id uuid, p_guest_id uuid, p_status text)
@@ -99,13 +105,13 @@ begin
   select * into cur from public.roster_current_session();
   perform set_config('jive.roster_applying', 'on', true);
   update public.session_roster r
-    set status = p_status
+    set status = p_status, answered_at = case when p_status = 'off' then null else r.answered_at end
     from public.session_asks a
     where a.starts_on is not null and (a.season_year, a.session) > (cur.cur_year, cur.cur_session)
       and r.season_year = a.season_year and r.session = a.session
       and (r.user_id = p_user_id or r.guest_id = p_guest_id)
       and (r.answered_at is null or p_status = 'off')
-      and r.status is distinct from p_status;
+      and (r.status is distinct from p_status or r.answered_at is not null);
   insert into public.session_roster (season_year, session, user_id, guest_id, status)
     select a.season_year, a.session, p_user_id, p_guest_id, p_status
     from public.session_asks a
@@ -215,12 +221,58 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- An asked session's list brought up to date the way it would start today:
+-- anyone missing is added, anyone still to answer gets their status right now,
+-- anyone taken off the team is off (and no longer answered). Its list follows
+-- today's statuses only while captains are asking (roster_follow_ahead()), so
+-- this runs when they ask again after stopping, and once more when it becomes
+-- the current session, in case anything slipped by. That's not anyone
+-- answering, so it isn't recorded as a dues change.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.roster_refresh_asked(p_year integer, p_session integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  was text := current_setting('jive.roster_applying', true);
+begin
+  perform set_config('jive.roster_applying', 'on', true);
+
+  insert into public.session_roster (season_year, session, user_id, status)
+    select p_year, p_session, p.user_id, p.status from public.player_profiles p
+    where not p.removed
+    on conflict do nothing;
+  insert into public.session_roster (season_year, session, guest_id, status)
+    select p_year, p_session, g.id, g.status from public.team_guests g
+    where not g.removed and g.linked_user_id is null
+    on conflict do nothing;
+
+  update public.session_roster r
+    set status = case when p.removed then 'off' else p.status end,
+      answered_at = case when p.removed then null else r.answered_at end
+    from public.player_profiles p
+    where r.season_year = p_year and r.session = p_session and r.user_id = p.user_id
+      and (r.answered_at is null or p.removed)
+      and (r.status is distinct from (case when p.removed then 'off' else p.status end) or r.answered_at is not null);
+  update public.session_roster r
+    set status = case when g.removed then 'off' else g.status end,
+      answered_at = case when g.removed then null else r.answered_at end
+    from public.team_guests g
+    where r.season_year = p_year and r.session = p_session and r.guest_id = g.id and g.linked_user_id is null
+      and (r.answered_at is null or g.removed)
+      and (r.status is distinct from (case when g.removed then 'off' else g.status end) or r.answered_at is not null);
+
+  perform set_config('jive.roster_applying', coalesce(was, 'off'), true);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- An asked session that has just become the current one: the answers given
--- ahead become everyone's status right now (Team page, My Profile). Its list
--- has been following today's statuses (roster_follow_ahead()); it's checked
--- once more the way it would have started today, in case anything slipped by:
--- anyone missing is added, anyone not answered gets their status right now,
--- anyone taken off the team is off. Once per asked session; two players
+-- ahead become everyone's status right now (Team page, My Profile), after its
+-- list is checked once more (above). Once per asked session; two players
 -- opening the site at once apply it once.
 -- ---------------------------------------------------------------------------
 
@@ -236,29 +288,8 @@ begin
   if not found then
     return;
   end if;
+  perform public.roster_refresh_asked(p_year, p_session);
   perform set_config('jive.roster_applying', 'on', true);
-
-  insert into public.session_roster (season_year, session, user_id, status)
-    select p_year, p_session, p.user_id, p.status from public.player_profiles p
-    where not p.removed
-    on conflict do nothing;
-  insert into public.session_roster (season_year, session, guest_id, status)
-    select p_year, p_session, g.id, g.status from public.team_guests g
-    where not g.removed and g.linked_user_id is null
-    on conflict do nothing;
-
-  update public.session_roster r
-    set status = case when p.removed then 'off' else p.status end
-    from public.player_profiles p
-    where r.season_year = p_year and r.session = p_session and r.user_id = p.user_id
-      and (r.answered_at is null or p.removed)
-      and r.status is distinct from (case when p.removed then 'off' else p.status end);
-  update public.session_roster r
-    set status = case when g.removed then 'off' else g.status end
-    from public.team_guests g
-    where r.season_year = p_year and r.session = p_session and r.guest_id = g.id and g.linked_user_id is null
-      and (r.answered_at is null or g.removed)
-      and r.status is distinct from (case when g.removed then 'off' else g.status end);
 
   update public.player_profiles p
     set status = r.status
@@ -304,6 +335,8 @@ $$;
 -- Captains ask "Playing session N?" about a session that hasn't started,
 -- giving its first game's date (asking again changes the date; no date stops
 -- asking). Its list starts now, a copy of everyone's status, nobody answered.
+-- Asked again after they stopped, its list catches up with what changed in
+-- between, keeping the answers given.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.roster_ask(p_year integer, p_session integer, p_starts_on date)
@@ -341,6 +374,7 @@ begin
       applied_at = case when excluded.starts_on is null then null else public.session_asks.applied_at end;
   if p_starts_on is not null then
     perform public.roster_start_session(p_year, p_session);
+    perform public.roster_refresh_asked(p_year, p_session);
   end if;
 end;
 $$;
@@ -397,11 +431,291 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Same as 20261018150000_unlink_team_guest.sql, plus: in a session asked about
+-- ahead, an answer given for the name moves to the account that picks it, and
+-- an undo puts the name and the account back on those lists.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.move_team_guest(p_guest_id uuid, p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g public.team_guests;
+  p public.player_profiles;
+  partner uuid;
+  rec public.team_guest_links;
+  cur record;
+begin
+  -- One pick at a time for a name (two sign-ups at once could otherwise both
+  -- get it) and for an account (which can only have one name).
+  select * into g from public.team_guests where id = p_guest_id for update;
+  if g.id is null or g.linked_user_id is not null then
+    raise exception 'That name has already been picked';
+  end if;
+  perform 1 from public.users where id = p_user_id for update;
+  if not found then
+    raise exception 'No such player on the app';
+  end if;
+  if exists (select 1 from public.team_guests where linked_user_id = p_user_id) then
+    raise exception 'That player already has a name on the roster';
+  end if;
+  select * into p from public.player_profiles where user_id = p_user_id;
+
+  -- Sessions the app player has nothing for yet move over as they are.
+  with moved as (
+    update public.dues_payments d set user_id = p_user_id, guest_id = null
+    where d.guest_id = p_guest_id
+      and not exists (
+        select 1 from public.dues_payments u
+        where u.user_id = p_user_id and u.season_year = d.season_year and u.session = d.session
+      )
+    returning d.id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_payments from moved;
+  -- Where both have one, a payment the guest made counts (with what they
+  -- paid), and so does a custom amount the app player doesn't have. The app
+  -- player's payment as it was is kept ("was" is the same row before this).
+  with merged as (
+    update public.dues_payments u set
+        paid = u.paid or d.paid,
+        paid_date = case when u.paid then u.paid_date else d.paid_date end,
+        paid_by = case when u.paid then u.paid_by else d.paid_by end,
+        paid_amount = case when u.paid then u.paid_amount else d.paid_amount end,
+        override_amount = coalesce(u.override_amount, d.override_amount)
+      from public.dues_payments d, public.dues_payments was
+      where d.guest_id = p_guest_id and u.user_id = p_user_id
+        and u.season_year = d.season_year and u.session = d.session and was.id = u.id
+        and ((d.paid and not u.paid) or (u.override_amount is null and d.override_amount is not null))
+      returning u.id,
+        jsonb_build_object('paid', was.paid, 'paid_date', was.paid_date, 'paid_by', was.paid_by,
+          'paid_amount', was.paid_amount, 'override_amount', was.override_amount) as before,
+        jsonb_build_object('paid', u.paid, 'paid_date', u.paid_date, 'paid_by', u.paid_by,
+          'paid_amount', u.paid_amount, 'override_amount', u.override_amount) as after
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'before', before, 'after', after)), '[]')
+    into rec.merged_payments from merged;
+  with moved as (
+    update public.dues_history set user_id = p_user_id, guest_id = null where guest_id = p_guest_id returning id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_history from moved;
+  -- What moved the split for the name (team_guests_dues_changes would move
+  -- these too, as the name is linked below).
+  with moved as (
+    update public.dues_changes set user_id = p_user_id, guest_id = null where guest_id = p_guest_id returning id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_changes from moved;
+
+  -- Sessions asked about ahead: an answer given for the name (by a captain,
+  -- say) counts over an account entry that's only been following its status.
+  -- A new player is put on those lists when they make their profile, just
+  -- before they pick their name. That entry makes way and the name's moves
+  -- over (below); an undo moves it back and puts the account back on.
+  select * into cur from public.roster_current_session();
+  delete from public.session_roster u
+    using public.session_roster r
+    where u.user_id = p_user_id and u.answered_at is null
+      and r.guest_id = p_guest_id and r.answered_at is not null
+      and r.season_year = u.season_year and r.session = u.session
+      and (u.season_year, u.session) > (cur.cur_year, cur.cur_session);
+
+  -- Sessions the roster name was on and the app player wasn't. Where both
+  -- were, the app player's own entry counts (the roster name's is kept).
+  with moved as (
+    update public.session_roster r set user_id = p_user_id, guest_id = null
+    where r.guest_id = p_guest_id
+      and not exists (
+        select 1 from public.session_roster u
+        where u.user_id = p_user_id and u.season_year = r.season_year and u.session = r.session
+      )
+    returning r.id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_roster from moved;
+
+  -- Game sign-ups and stat lines. Where both have one for a game, the app
+  -- player's own counts (the roster name's is kept).
+  with moved as (
+    update public.rsvps r set user_id = p_user_id, guest_id = null
+    where r.guest_id = p_guest_id
+      and not exists (select 1 from public.rsvps u where u.user_id = p_user_id and u.game_id = r.game_id)
+    returning r.id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_rsvps from moved;
+  with moved as (
+    update public.game_stats s set user_id = p_user_id, guest_id = null
+    where s.guest_id = p_guest_id
+      and not exists (select 1 from public.game_stats u where u.user_id = p_user_id and u.game_id = s.game_id)
+    returning s.id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_stats from moved;
+  -- Player of the Match votes for the roster name (except any the player cast
+  -- for that name themselves, which would be a vote for themselves).
+  with moved as (
+    update public.potm_votes v set voted_for_id = p_user_id, voted_for_guest_id = null
+    where v.voted_for_guest_id = p_guest_id and v.voter_id <> p_user_id
+    returning v.id
+  )
+  select coalesce(array_agg(id), '{}') into rec.moved_votes from moved;
+
+  -- Details the player hasn't filled in come from the roster.
+  rec.filled := case when p.id is null then '{}' else jsonb_strip_nulls(jsonb_build_object(
+    'gender', case when p.gender is null then g.gender end,
+    'position', case when p.position is null then g.position end
+  )) end;
+  update public.player_profiles
+    set gender = coalesce(gender, g.gender), position = coalesce(position, g.position)
+    where user_id = p_user_id;
+
+  partner := coalesce(g.pays_with_user, g.pays_with_guest);
+  rec.guest_partner := partner;
+  if partner is not null then
+    rec.user_partner := coalesce(p.pays_with, p.pays_with_guest);
+  end if;
+  update public.team_guests
+    set linked_user_id = p_user_id, pays_with_user = null, pays_with_guest = null
+    where id = p_guest_id;
+  if partner is not null then
+    perform public.set_dues_partner(p_user_id, partner);
+  end if;
+
+  rec.id := gen_random_uuid();
+  rec.guest_id := p_guest_id;
+  rec.user_id := p_user_id;
+  rec.status_before := p.status;
+  rec.rebuilt := false;
+  rec.linked_by := (select auth.uid());
+  rec.created_date := now();
+  insert into public.team_guest_links select rec.*;
+end;
+$$;
+
+create or replace function public.unlink_team_guest(p_guest_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := (select auth.uid());
+  g public.team_guests;
+  l public.team_guest_links;
+  u uuid;
+  cur record;
+  back text;
+begin
+  if me is null then
+    raise exception 'Not signed in';
+  end if;
+  if not public.is_captain() then
+    raise exception 'Only captains can unlink a player';
+  end if;
+  select * into g from public.team_guests where id = p_guest_id for update;
+  if g.linked_user_id is null then
+    raise exception 'That name isn''t linked to anyone';
+  end if;
+  u := g.linked_user_id;
+  select * into l from public.team_guest_links
+    where guest_id = p_guest_id and user_id = u and unlinked_at is null
+    order by created_date desc limit 1
+    for update;
+  if l.id is null then
+    raise exception 'That name was picked before undo was added, so it can''t be undone here';
+  end if;
+
+  -- Dues: the name's payments, and the account's own payments it was merged into.
+  update public.dues_payments d set user_id = null, guest_id = p_guest_id
+  where d.id = any (l.moved_payments) and d.user_id = u
+    and not exists (
+      select 1 from public.dues_payments x
+      where x.guest_id = p_guest_id and x.season_year = d.season_year and x.session = d.session
+    );
+  update public.dues_payments d set
+      paid = (was.before ->> 'paid')::boolean,
+      paid_date = (was.before ->> 'paid_date')::date,
+      paid_by = (was.before ->> 'paid_by')::uuid,
+      paid_amount = (was.before ->> 'paid_amount')::numeric,
+      override_amount = (was.before ->> 'override_amount')::numeric
+    from jsonb_to_recordset(l.merged_payments) as was (id uuid, before jsonb, after jsonb)
+    where d.id = was.id and d.user_id = u
+      and jsonb_build_object('paid', d.paid, 'paid_date', d.paid_date, 'paid_by', d.paid_by,
+        'paid_amount', d.paid_amount, 'override_amount', d.override_amount) = was.after;
+  update public.dues_history set user_id = null, guest_id = p_guest_id
+    where id = any (l.moved_history) and user_id = u;
+  update public.dues_changes set user_id = null, guest_id = p_guest_id
+    where id = any (l.moved_changes) and user_id = u;
+
+  -- Session lists, sign-ups, stat lines and votes.
+  update public.session_roster r set user_id = null, guest_id = p_guest_id
+  where r.id = any (l.moved_roster) and r.user_id = u
+    and not exists (
+      select 1 from public.session_roster x
+      where x.guest_id = p_guest_id and x.season_year = r.season_year and x.session = r.session
+    );
+  update public.rsvps r set user_id = null, guest_id = p_guest_id
+  where r.id = any (l.moved_rsvps) and r.user_id = u
+    and not exists (select 1 from public.rsvps x where x.guest_id = p_guest_id and x.game_id = r.game_id);
+  update public.game_stats s set user_id = null, guest_id = p_guest_id
+  where s.id = any (l.moved_stats) and s.user_id = u
+    and not exists (select 1 from public.game_stats x where x.guest_id = p_guest_id and x.game_id = s.game_id);
+  update public.potm_votes set voted_for_id = null, voted_for_guest_id = p_guest_id
+    where id = any (l.moved_votes) and voted_for_id = u;
+
+  -- The account's details and status, unless they've been changed since.
+  update public.player_profiles set
+      gender = case when l.filled ? 'gender' and gender = l.filled ->> 'gender' then null else gender end,
+      position = case when l.filled ? 'position' and position = l.filled ->> 'position' then null else position end
+    where user_id = u and (l.filled ? 'gender' or l.filled ? 'position');
+  if l.status_after is not null and l.status_before is not null and l.status_before <> l.status_after then
+    update public.player_profiles set status = l.status_before where user_id = u and status = l.status_after;
+  end if;
+
+  update public.team_guests set linked_user_id = null where id = p_guest_id;
+
+  -- Who paid with whom: the name's partner goes back to it, and the account's
+  -- partner from before to the account, if nobody has paired them up since.
+  if l.guest_partner is not null then
+    if l.guest_partner <> u and public.dues_partner_of(u) = l.guest_partner then
+      perform public.set_dues_partner(u, null);
+    end if;
+    if public.dues_partner_of(p_guest_id) is null and public.dues_partner_of(l.guest_partner) is null
+      and not exists (select 1 from public.team_guests where id = l.guest_partner and linked_user_id is not null) then
+      perform public.set_dues_partner(p_guest_id, l.guest_partner);
+    end if;
+  end if;
+  if l.user_partner is not null and public.dues_partner_of(u) is null and public.dues_partner_of(l.user_partner) is null
+    and not exists (select 1 from public.team_guests where id = l.user_partner and linked_user_id is not null) then
+    perform public.set_dues_partner(u, l.user_partner);
+  end if;
+
+  -- Back on the current session's list, if it started while the name was linked.
+  select * into cur from public.roster_current_session();
+  if exists (select 1 from public.session_roster where season_year = cur.cur_year and session = cur.cur_session) then
+    insert into public.session_roster (season_year, session, guest_id, status, answered_at, changed_by)
+    values (cur.cur_year, cur.cur_session, p_guest_id, case when g.removed then 'off' else g.status end, now(), me)
+    on conflict do nothing;
+  end if;
+  -- And on the lists of sessions asked about ahead, following their status,
+  -- where they aren't on them (the account's entry made way for the name's).
+  perform public.roster_follow_ahead(null, p_guest_id, case when g.removed then 'off' else g.status end);
+  select case when removed then 'off' else status end into back from public.player_profiles where user_id = u;
+  if back is not null then
+    perform public.roster_follow_ahead(u, null, back);
+  end if;
+
+  update public.team_guest_links set unlinked_at = now(), unlinked_by = me where id = l.id;
+end;
+$$;
+
 revoke execute on function public.roster_follow_ahead(uuid, uuid, text) from public, anon, authenticated;
+revoke execute on function public.roster_refresh_asked(integer, integer) from public, anon, authenticated;
 revoke execute on function public.roster_apply_asked(integer, integer) from public, anon, authenticated;
 revoke execute on function public.roster_ask(integer, integer, date) from public, anon;
 revoke execute on function public.roster_answer(integer, integer, text) from public, anon;
 grant execute on function public.roster_follow_ahead(uuid, uuid, text) to service_role;
+grant execute on function public.roster_refresh_asked(integer, integer) to service_role;
 grant execute on function public.roster_apply_asked(integer, integer) to service_role;
 grant execute on function public.roster_ask(integer, integer, date) to authenticated, service_role;
 grant execute on function public.roster_answer(integer, integer, text) to authenticated, service_role;

@@ -592,8 +592,12 @@ export function TeamPage() {
           members={roster}
           rows={data.roster.rows}
           meId={data.user?.id}
-          onSaved={data.reload}
+          onSaved={async () => {
+            await loadGuests();
+            await data.reload();
+          }}
           ahead
+          current={!isEarlier(current, askedPeriod)}
         />
       )}
     </div>

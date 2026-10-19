@@ -312,6 +312,53 @@ describe('"Playing session N?" asked ahead', () => {
       expect(await rosterOf(api, 2, sam.user_id)).toMatchObject({ status: 'active' });
     });
 
+    it('brings the list up to date when captains ask again after they stopped, keeping the answers', async () => {
+      const api = await signedIn();
+      const year = (await api.entities.SessionDues.list())[0].season_year;
+      const sam = await profileOf(api, 'Sam Okafor');
+      const riley = await profileOf(api, 'Riley Novak');
+      await api.roster.ask({ year, session: 3, startsOn: null });
+      // Sam hasn't answered session 3, and sits out session 2 while captains aren't asking.
+      await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'active', answered_at: null });
+      const changes = (await api.entities.DuesChange.list()).length;
+      await api.roster.ask({ year, session: 3, startsOn: '2099-01-02' });
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+      expect(await rosterOf(api, 3, riley.user_id)).toMatchObject({ status: 'sub_pool' });
+      expect(await api.entities.DuesChange.list()).toHaveLength(changes);
+    });
+
+    it('puts a player added back on the session asked about ahead again, to be asked again', async () => {
+      const api = await signedIn();
+      // Riley said sub only for session 3.
+      const riley = await profileOf(api, 'Riley Novak');
+      expect(await rosterOf(api, 3, riley.user_id)).toMatchObject({ status: 'sub_pool' });
+      await api.users.setRemoved(riley.user_id, true);
+      expect(await rosterOf(api, 3, riley.user_id)).toMatchObject({ status: 'off', answered_at: null });
+      await api.users.setRemoved(riley.user_id, false);
+      expect(await rosterOf(api, 3, riley.user_id)).toMatchObject({ status: 'active', answered_at: null });
+    });
+
+    it('gives a player who picks their roster name the answer given for it ahead, and an undo gives it back', async () => {
+      const api = await signedIn();
+      const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+      // A captain says Mike is sitting out session 3.
+      await api.entities.SessionRoster.update((await rosterOf(api, 3, mike.id)).id, { status: 'on_break', answered_at: new Date().toISOString() });
+      await api.auth.signUp('mike@demo.test', 'demo1234');
+      const account = await api.auth.me();
+      await api.entities.PlayerProfile.create({ user_id: account.id, display_name: 'Mike Russo', gender: 'M', status: 'active' });
+      expect(await rosterOf(api, 3, account.id)).toMatchObject({ status: 'active', answered_at: null });
+      await api.users.claimGuest(mike.id);
+      expect(await rosterOf(api, 3, account.id)).toMatchObject({ status: 'on_break' });
+      expect((await rosterOf(api, 3, account.id)).answered_at).not.toBeNull();
+      expect(await rosterOf(api, 3, mike.id)).toBeUndefined();
+
+      await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+      await api.users.unlinkGuest(mike.id);
+      expect(await rosterOf(api, 3, mike.id)).toMatchObject({ status: 'on_break' });
+      expect(await rosterOf(api, 3, account.id)).toMatchObject({ status: 'active', answered_at: null });
+    });
+
     it('lets captains change the date or stop asking, before the session starts', async () => {
       const api = await signedIn();
       const year = (await api.entities.SessionDues.list())[0].season_year;
