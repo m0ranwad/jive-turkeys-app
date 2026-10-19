@@ -20,13 +20,13 @@ async function openDues(page) {
 const paidHeading = (page, text) => page.getByRole('heading', { name: text });
 
 /** Changes players through the normal sign-in flow, keeping this session's sample payments. */
-async function switchPlayer(page, email) {
+async function switchPlayer(page, email, { returning = false } = {}) {
   await page.getByRole('link', { name: 'My profile' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.locator('#email').fill(email);
   await page.locator('#password').fill('demo1234');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
+  if (!returning) await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
   await openDues(page);
 }
@@ -205,7 +205,7 @@ test('linking an unpaid partner shows the remaining payment to both players and 
   await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toContainText('Marked paid Oct 6.');
   await page.keyboard.press('Escape');
 
-  await switchPlayer(page, JORDAN);
+  await switchPlayer(page, JORDAN, { returning: true });
   await expect(page.getByText("You're both paid up")).toBeVisible();
   await expect(page.getByTestId('my-dues')).toContainText('Paid Oct 6');
   await expect(page.getByRole('link', { name: /with Venmo|with PayPal/ })).toHaveCount(0);
@@ -229,7 +229,7 @@ for (const pair of [
     await page.getByLabel('Amount paid for both').fill(String(half));
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expectRemaining(page, half);
-    await switchPlayer(page, pair.firstEmail);
+    await switchPlayer(page, pair.firstEmail, { returning: true });
     await expectRemaining(page, half);
     await page.getByRole('button', { name: `Mark $${half} paid`, exact: true }).click();
     await expect(page.getByText("You're both paid up")).toBeVisible();
