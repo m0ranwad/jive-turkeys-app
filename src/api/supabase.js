@@ -359,6 +359,15 @@ export function createSupabaseBackend(url, key) {
       if (error) fail(error);
       return data;
     },
+    // Prototype: these database functions don't exist yet (see the Schedule review issue).
+    async ask({ year, session, startsOn }) {
+      const { error } = await supabase.rpc('roster_ask', { p_year: year, p_session: session, p_starts_on: startsOn });
+      if (error) fail(error);
+    },
+    async answer({ year, session, status }) {
+      const { error } = await supabase.rpc('roster_answer', { p_year: year, p_session: session, p_status: status });
+      if (error) fail(error);
+    },
   };
 
   const notifyChat = async (action) => {

@@ -6,7 +6,7 @@ import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { InstallCard, useInstall } from '@/components/InstallApp';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
-import { NextSessionCard, SessionPrompt, SessionQuestionPanel, sessionAsk, sessionQuestion } from '@/components/SessionPrompt';
+import { NextSessionCard, SessionAheadCard, SessionPrompt, SessionQuestionPanel, sessionAsk } from '@/components/SessionPrompt';
 import { GameCard, LaterGameCard, PlayedList } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
 import { NextGameCard } from '@/components/schedule/NextGame';
@@ -21,7 +21,7 @@ import { useSeasonData } from '@/hooks/useSeasonData';
 import { stepSession } from '@/lib/dues';
 import { saveFailedToast } from '@/lib/errors';
 import { seasonLabel, today } from '@/lib/format';
-import { membersForSession } from '@/lib/roster';
+import { isEarlier, membersForSession } from '@/lib/roster';
 import { headcount, isRosterStatus, suspendedIds } from '@/lib/team-logic';
 
 /** Captains only: one small button for adding games, so the top of Schedule stays for everyone's next game. */
@@ -76,8 +76,7 @@ function AskSessionDialog({ open, onOpenChange, period, existing, onSaved }) {
   const save = async () => {
     setBusy(true);
     try {
-      if (existing) await api.entities.SessionDues.update(existing.id, { starts_on: date });
-      else await api.entities.SessionDues.create({ season_year: period.year, session: period.session, starts_on: date });
+      await api.roster.ask({ year: period.year, session: period.session, startsOn: date });
       onOpenChange(false);
       await onSaved();
       toast({ title: `Asking who's playing session ${period.session}` });
@@ -95,8 +94,9 @@ function AskSessionDialog({ open, onOpenChange, period, existing, onSaved }) {
           <DialogTitle>Ask who's playing session {period.session}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-zinc-600">
-          Everyone sees "Playing session {period.session}?" at the top of Schedule now, before the schedule is out. Add
-          the games when the league sends them.
+          Everyone sees "Playing session {period.session}?" on Schedule now, even before the schedule is out or while
+          this session still has games left. Their answers only count for session {period.session}. Add its games when
+          the league sends them.
         </p>
         <div className="space-y-2">
           <Label htmlFor="session-starts">First game's date</Label>
@@ -173,13 +173,19 @@ export function SchedulePage() {
   const onRoster = isRosterStatus(data.profile);
   // "Playing session N?" goes inside the Next game card when that game starts the session.
   const askArgs = { profile: data.profile, roster: data.roster, games: data.games, sessions: sessionInfo };
-  const question = sessionQuestion(askArgs);
+  const ask = sessionAsk(askArgs);
+  const question = ask && !ask.answered ? ask : null;
   const questionInCard = !!question && !!nextGame && question.first?.id === nextGame.id;
+  // Asked ahead while this session still has games: its own card under the Next game card.
+  const askedAhead =
+    !!ask && !!nextGame && isEarlier({ year: nextGame.season_year, session: nextGame.session }, ask.period) ? ask : null;
   // Between sessions (no game coming up), the next session's question is the top card.
-  const nextSession = !nextGame ? sessionAsk(askArgs) : null;
+  const nextSession = !nextGame ? ask : null;
   // Captains can ask about the session after the latest one before its schedule is out.
-  const askNext = !nextGame && !nextSession && sessions[0] ? stepSession({ year: sessions[0].year, session: sessions[0].session }, 1) : null;
-  const askNextRow = askNext && sessionInfo.find((r) => r.season_year === askNext.year && r.session === askNext.session);
+  // Captains can ask about the session after the latest one on the schedule, any time: between sessions or with games left.
+  const following = sessions[0] && stepSession({ year: sessions[0].year, session: sessions[0].session }, 1);
+  const askNextRow = following && sessionInfo.find((r) => r.season_year === following.year && r.session === following.session);
+  const askNext = following && !askNextRow?.starts_on ? following : null;
 
   const sessionBlock = (s) => {
     // The next game is the card at the top; the list carries on from the game after it.
@@ -283,8 +289,17 @@ export function SchedulePage() {
           onAnswered={data.reload}
         />
       )}
+      {askedAhead && (
+        <SessionAheadCard
+          ask={askedAhead}
+          profile={data.profile}
+          rows={data.roster.rows}
+          players={data.players || []}
+          onAnswered={data.reload}
+        />
+      )}
       <PotmPrompt data={data} />
-      {!questionInCard && !nextSession && (
+      {question && !questionInCard && !nextSession && !askedAhead && (
         <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} sessions={sessionInfo} onAnswered={data.reload} />
       )}
       <InstallCard onShowHow={showInstallGuide} />

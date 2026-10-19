@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { CalendarCheck } from 'lucide-react';
 import { api } from '@/api';
 import { useToast } from '@/components/ui/toast';
 import { STATUS_LABEL } from '@/lib/constants';
 import { fmtDateShort, today } from '@/lib/format';
-import { entryFor, sessionGames, sessionRows, stillAsking } from '@/lib/roster';
+import { entryFor, isEarlier, sessionGames, sessionRows, stillAsking } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 
 const ANSWERS = [
@@ -14,20 +15,33 @@ const ANSWERS = [
 
 /**
  * "Playing session 2?" A new session starts with everyone's status carried
- * over. It's asked from when the session becomes the current one (its first
- * game is next, or captains asked ahead with a start date) until its first game.
+ * over. It's asked of the current session until its first game (its first game
+ * is next, or captains asked ahead and its schedule isn't out), or of a later
+ * session captains asked about while this one still has games left.
  * Null when it isn't being asked of you; otherwise the session, your entry,
- * its first game (if the schedule is up), its start date and whether you answered.
+ * its first game (if the schedule is up), its start date, whether you answered,
+ * and whether it's the current session.
  */
 export function sessionAsk({ profile, roster, games, sessions = [] }) {
   if (!profile || !roster?.current) return null;
-  const period = roster.current;
+  const startsOn = (period) => sessions.find((s) => s.season_year === Number(period.year) && s.session === Number(period.session))?.starts_on;
+  const ahead = sessions
+    .filter((s) => s.starts_on && isEarlier(roster.current, { year: s.season_year, session: s.session }))
+    .sort((a, b) => a.starts_on.localeCompare(b.starts_on))
+    .map((s) => ({ year: s.season_year, session: s.session }))[0];
+  const period = [roster.current, ahead].find((p) => p && stillAsking(games, p, today(), startsOn(p)));
+  if (!period) return null;
   const entry = entryFor(roster.rows, period, profile.user_id);
-  const asked = sessions.find((s) => s.season_year === Number(period.year) && s.session === Number(period.session));
+  if (!entry || entry.status === 'off') return null;
   const first = sessionGames(games, period)[0] || null;
-  const startsOn = first?.date || asked?.starts_on || null;
-  if (!entry || entry.status === 'off' || !stillAsking(games, period, today(), asked?.starts_on)) return null;
-  return { period, entry, first, startsOn, answered: !!entry.answered_at };
+  return {
+    period,
+    entry,
+    first,
+    startsOn: first?.date || startsOn(period) || null,
+    answered: !!entry.answered_at,
+    isCurrent: period === roster.current,
+  };
 }
 
 /** The same, only while you haven't answered. */
@@ -36,7 +50,11 @@ export function sessionQuestion(args) {
   return ask && !ask.answered ? ask : null;
 }
 
-/** I'm in / Sub only / Sitting out, saved to your profile (the session's list follows it). */
+/**
+ * I'm in / Sub only / Sitting out. For the current session it's your status (the
+ * session's list follows it); for a session asked about ahead it goes in that
+ * session's list only, so the session still being played doesn't change.
+ */
 function SessionAnswers({ profile, question, onAnswered, compact = false, selected }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -45,7 +63,8 @@ function SessionAnswers({ profile, question, onAnswered, compact = false, select
   const answer = async (choice) => {
     setBusy(true);
     try {
-      await api.entities.PlayerProfile.update(profile.id, { status: choice.status });
+      if (question.isCurrent) await api.entities.PlayerProfile.update(profile.id, { status: choice.status });
+      else await api.roster.answer({ year: period.year, session: period.session, status: choice.status });
       toast({ title: choice.done(period.session) });
       await onAnswered();
     } catch (err) {
@@ -156,6 +175,71 @@ export function NextSessionCard({ ask, profile, rows, players, onAnswered }) {
           selected={answered ? entry.status : undefined}
         />
       </div>
+    </section>
+  );
+}
+
+const ANSWER_LABEL = Object.fromEntries(ANSWERS.map((a) => [a.status, a.label]));
+
+/**
+ * Asked ahead, while the current session still has games: under the Next game
+ * card. Once you've answered it shrinks to one line you can open to change.
+ */
+export function SessionAheadCard({ ask, profile, rows, players, onAnswered }) {
+  const [open, setOpen] = useState(false);
+  const { period, entry, startsOn, answered } = ask;
+  const tally = sessionTally(rows, period, players);
+  const when = startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Start date to come';
+
+  if (answered && !open) {
+    return (
+      <section
+        aria-label={`Session ${period.session}`}
+        data-testid="session-prompt"
+        className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
+          <CalendarCheck className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
+            Session {period.session}: {ANSWER_LABEL[entry.status]}
+          </span>
+          <span className="block truncate text-[11px] font-semibold text-zinc-500">
+            {when} · {tally.in} in so far
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
+        >
+          Change
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-3xl border-2 border-lime-400 bg-white p-4" aria-label={`Session ${period.session}`} data-testid="session-prompt">
+      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">Asking ahead</span>
+      <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
+      <p className="mt-0.5 text-xs font-bold text-zinc-700">
+        {when} · {tally.in} in so far
+      </p>
+      <p className="mb-3 mt-1 text-xs font-medium text-zinc-600">
+        Your answer only counts for session {period.session}. Active players split the dues; sitting out still gets sub
+        call-ups.
+      </p>
+      <SessionAnswers
+        profile={profile}
+        question={ask}
+        selected={answered ? entry.status : undefined}
+        onAnswered={async () => {
+          setOpen(false);
+          await onAnswered();
+        }}
+      />
     </section>
   );
 }

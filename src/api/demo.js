@@ -598,7 +598,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     const period = current();
     startSession(period);
     const who = table === 'player_profiles' ? { user_id: record.user_id } : { guest_id: record.id };
-    const status = record.removed ? 'off' : record.status;
+    setEntry(period, who, record.removed ? 'off' : record.status);
+  };
+  // One player's (or roster name's) entry in a session's list, set as their answer.
+  const setEntry = (period, who, status) => {
     const mine = (r) =>
       sessionOf(r) === `${period.year}-${period.session}` && (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id);
     const patch = { status, answered_at: now(), changed_by: currentUser()?.id ?? null, updated_date: now() };
@@ -1360,6 +1363,32 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       startSession(period);
       save(db);
       return delay({ season_year: Number(period.year), session: Number(period.session) });
+    },
+    // Prototype: same as a roster_ask() the database would need. Captains ask
+    // "Playing session N?" before its schedule is out: its start date, and its list starts.
+    async ask({ year, session, startsOn }) {
+      requireUser();
+      failIfOffline();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can do that.');
+      const row = db.session_dues.find((r) => r.season_year === Number(year) && r.session === Number(session));
+      if (row) Object.assign(row, { starts_on: startsOn, updated_date: now() });
+      else db.session_dues.push({ id: uid(), season_year: Number(year), session: Number(session), total_fee: 0, starts_on: startsOn, created_date: now(), updated_date: now() });
+      startSession({ year, session });
+      save(db);
+      return delay(null);
+    },
+    // Prototype: same as a roster_answer() the database would need. Your answer to
+    // "Playing session N?" goes in that session's list, and only there, so asking
+    // ahead never changes the session still being played.
+    async answer({ year, session, status }) {
+      requireUser();
+      failIfOffline();
+      const first = db.games.filter((g) => g.season_year === Number(year) && g.session === Number(session)).sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (first && first.date < today()) throw new Error('That session has started.');
+      startSession({ year, session });
+      setEntry({ year, session }, { user_id: currentUser().id }, status);
+      save(db);
+      return delay(null);
     },
   };
 
