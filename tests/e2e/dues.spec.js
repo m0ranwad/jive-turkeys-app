@@ -19,6 +19,37 @@ async function openDues(page) {
 
 const paidHeading = (page, text) => page.getByRole('heading', { name: text });
 
+/** Changes players through the normal sign-in flow, keeping this session's sample payments. */
+async function switchPlayer(page, email, { returning = false } = {}) {
+  await page.getByRole('link', { name: 'My profile' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.locator('#email').fill(email);
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  if (!returning) await page.getByRole('button', { name: 'Skip' }).click();
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+  await openDues(page);
+}
+
+async function linkPartners(page, player, partner) {
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: `Details for ${player}` }).click();
+  await page.getByRole('dialog', { name: player }).getByLabel('Pays together with').selectOption({ label: partner });
+  await expect(page.getByText('Linked as paying together')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'My dues' }).click();
+}
+
+async function expectRemaining(page, amount) {
+  await expect(page.getByRole('link', { name: `Pay $${amount} with Venmo` })).toHaveAttribute('href', new RegExp(`amount=${amount}&`));
+  await expect(page.getByTestId('my-dues')).toContainText('Unpaid');
+  await expect(page.getByText("You're both paid up")).toHaveCount(0);
+  await expect(page.getByTestId('pay-difference')).toContainText('Pay the rest');
+  const paypal = page.getByRole('link', { name: `Pay $${amount} with PayPal` });
+  await expect(paypal).toHaveAttribute('href', PAYPAL_QR);
+  await expect(paypal).toContainText(`Enter $${amount}`);
+}
+
 test('Dues has its own tab, where Profile used to be', async ({ page }) => {
   await signIn(page, JORDAN);
   const tabs = page.locator('nav:visible a');
@@ -152,6 +183,75 @@ test('a couple are marked paid together, and anyone can link a couple', async ({
   await expect(sheet.getByRole('button', { name: 'Mark both paid' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('dues-unpaid')).toContainText('with Kelly M.');
+});
+
+test('linking an unpaid partner shows the remaining payment to both players and keeps the earlier payment', async ({ page }) => {
+  await signIn(page, JORDAN);
+  await openDues(page);
+  await linkPartners(page, 'Jordan Rivera', 'Kelly Moss');
+
+  // Jordan already paid $61; linking Kelly must not mark Kelly paid or ask for Jordan's share again.
+  await expectRemaining(page, 61);
+  await switchPlayer(page, 'kelly@demo.test');
+  await expectRemaining(page, 61);
+  await page.getByRole('button', { name: 'Mark $61 paid', exact: true }).click();
+  await expect(page.getByText("You're both paid up")).toBeVisible();
+  await expect(page.getByRole('link', { name: /with Venmo|with PayPal/ })).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(page.getByLabel('Amount for Jordan Rivera')).toHaveText('$61');
+  await expect(page.getByLabel('Amount for Kelly Moss')).toHaveText('$61');
+  await page.getByRole('button', { name: 'Details for Jordan Rivera' }).click();
+  await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toContainText('Marked paid Oct 6.');
+  await page.keyboard.press('Escape');
+
+  await switchPlayer(page, JORDAN, { returning: true });
+  await expect(page.getByText("You're both paid up")).toBeVisible();
+  await expect(page.getByTestId('my-dues')).toContainText('Paid Oct 6');
+  await expect(page.getByRole('link', { name: /with Venmo|with PayPal/ })).toHaveCount(0);
+});
+
+for (const pair of [
+  { first: 'Morgan Lee', firstEmail: 'morgan@demo.test', second: 'Kelly Moss', secondEmail: 'kelly@demo.test', remaining: 92 },
+  { first: 'Sam Okafor', firstEmail: SAM, second: 'Morgan Lee', secondEmail: 'morgan@demo.test', remaining: 42 },
+]) {
+  test(`${pair.first} and ${pair.second} both see the balance after their existing partial payments`, async ({ page }) => {
+    await signIn(page, pair.firstEmail);
+    await openDues(page);
+    await linkPartners(page, pair.first, pair.second);
+    await expectRemaining(page, pair.remaining);
+    await switchPlayer(page, pair.secondEmail);
+    await expectRemaining(page, pair.remaining);
+
+    // Another partial payment must subtract from the combined balance for either player.
+    const half = pair.remaining / 2;
+    await page.getByRole('button', { name: 'Paid part of it?' }).click();
+    await page.getByLabel('Amount paid for both').fill(String(half));
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expectRemaining(page, half);
+    await switchPlayer(page, pair.firstEmail, { returning: true });
+    await expectRemaining(page, half);
+    await page.getByRole('button', { name: `Mark $${half} paid`, exact: true }).click();
+    await expect(page.getByText("You're both paid up")).toBeVisible();
+    await expect(page.getByRole('link', { name: /with Venmo|with PayPal/ })).toHaveCount(0);
+  });
+}
+
+test('partners include both outstanding differences after the session fee increases', async ({ page }) => {
+  await signIn(page);
+  await openDues(page);
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  const fee = page.getByRole('dialog', { name: 'Session 2 fee' });
+  await fee.getByLabel('Ref fee / game').fill('20');
+  await fee.getByRole('button', { name: 'Save fee' }).click();
+  await expect(page.getByText('$62 each')).toBeVisible();
+  await linkPartners(page, 'Sam Okafor', 'Morgan Lee');
+
+  // Sam's $50 and Morgan's $30 stay recorded against two new $62 shares.
+  await switchPlayer(page, SAM);
+  await expectRemaining(page, 44);
+  await switchPlayer(page, 'morgan@demo.test');
+  await expectRemaining(page, 44);
 });
 
 test('a captain edits the fee and copies a reminder', async ({ page, context }) => {
