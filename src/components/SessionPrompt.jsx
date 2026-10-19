@@ -29,19 +29,24 @@ export function sessionAsk({ profile, roster, games, sessions = [] }) {
     .filter((s) => s.starts_on && isEarlier(roster.current, { year: s.season_year, session: s.session }))
     .sort((a, b) => a.starts_on.localeCompare(b.starts_on))
     .map((s) => ({ year: s.season_year, session: s.session }))[0];
-  const period = [roster.current, ahead].find((p) => p && stillAsking(games, p, today(), startsOn(p)));
-  if (!period) return null;
-  const entry = entryFor(roster.rows, period, profile.user_id);
-  if (!entry || entry.status === 'off') return null;
-  const first = sessionGames(games, period)[0] || null;
-  return {
-    period,
-    entry,
-    first,
-    startsOn: first?.date || startsOn(period) || null,
-    answered: !!entry.answered_at,
-    isCurrent: period === roster.current,
-  };
+  const asks = [roster.current, ahead]
+    .filter((period) => period && stillAsking(games, period, today(), startsOn(period)))
+    .map((period) => {
+      const entry = entryFor(roster.rows, period, profile.user_id);
+      if (!entry || entry.status === 'off') return null;
+      const first = sessionGames(games, period)[0] || null;
+      return {
+        period,
+        entry,
+        first,
+        startsOn: first?.date || startsOn(period) || null,
+        answered: !!entry.answered_at,
+        isCurrent: period === roster.current,
+      };
+    })
+    .filter(Boolean);
+  // One question at a time: the first you haven't answered, else the latest one asked.
+  return asks.find((a) => !a.answered) || asks.at(-1) || null;
 }
 
 /** The same, only while you haven't answered. */
