@@ -166,7 +166,11 @@ const CHOICES = [
     label: '@mentions',
     hint: 'When someone @mentions you, or a captain uses @team: anywhere in the chat, even with Chat messages off.',
   },
-  { key: 'notify_games', label: 'Game alerts', hint: 'When Player of the Match voting opens, and a reminder before it closes.' },
+  {
+    key: 'notify_games',
+    label: 'Game alerts',
+    hint: 'Game reminders, "Playing session N?", and Player of the Match voting.',
+  },
 ];
 
 /** Which notifications you get: chat messages, @mentions, game alerts. Saved to your profile, so it covers every device. */

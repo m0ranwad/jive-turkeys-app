@@ -48,6 +48,22 @@ export function gameReminderNotification({ title, body, url }, gameId, kind) {
 
 const REMINDER_KINDS = ['rsvp', 'subs'];
 
+/** "Playing session N?" (captains asked, or the reminder): the database writes the words. The reminder replaces the first on screen. */
+export function sessionAskNotification({ title, body, url }, { year, session }) {
+  return { title, body: clip(String(body), 160), url, tag: `session-${year}-${session}` };
+}
+
+const SESSION_ASK_KINDS = ['asked', 'reminder'];
+
+/** { year, session } from a request, or null if it isn't one. */
+function sessionOf(ask) {
+  const year = Number(ask?.year);
+  const session = Number(ask?.session);
+  return Number.isInteger(year) && year >= 2000 && year <= 2999 && Number.isInteger(session) && session >= 1 && session <= 9
+    ? { year, session }
+    : null;
+}
+
 /**
  * Each phone's unread chat count, for the number on the app icon. If the database
  * can't say (say, the function went live before the database update), the
@@ -99,7 +115,10 @@ async function deliver(targets, messageFor, { vapid, db, fetch }) {
  *   decides who, what it says, and that it goes out once.
  * - { reminder_game_id, kind }: sent by the database's timer before a game: 'rsvp'
  *   ("Are you in?") or 'subs' ("We need subs"). Same rules again.
- * deps: { vapid, db: { pushTargets, unreadCounts, potmTargets, reminderTargets, subscriptionsOf, forget }, userOf(token), fetch }
+ * - { session_ask: { year, session }, kind }: "Playing session N?", sent by the
+ *   database when captains ask ('asked') and by its timer a week before the
+ *   session starts ('reminder'). Same rules again.
+ * deps: { vapid, db: { pushTargets, unreadCounts, potmTargets, reminderTargets, sessionAskTargets, subscriptionsOf, forget }, userOf(token), fetch }
  */
 export async function handleNotify(body, token, deps) {
   if (!deps.vapid?.publicKey || !deps.vapid?.privateKey) return [503, { error: "Notifications aren't set up yet." }];
@@ -129,6 +148,12 @@ export async function handleNotify(body, token, deps) {
     if (!UUID.test(body.reminder_game_id) || !REMINDER_KINDS.includes(body.kind)) return [400, { error: 'Unknown game.' }];
     const targets = await deps.db.reminderTargets(body.reminder_game_id, body.kind);
     return [200, await deliver(targets, (t) => gameReminderNotification(t, body.reminder_game_id, body.kind), deps)];
+  }
+  if (body?.session_ask) {
+    const period = sessionOf(body.session_ask);
+    if (!period || !SESSION_ASK_KINDS.includes(body.kind)) return [400, { error: 'Unknown session.' }];
+    const targets = await deps.db.sessionAskTargets(period.year, period.session, body.kind);
+    return [200, await deliver(targets, (t) => sessionAskNotification(t, period), deps)];
   }
   return [400, { error: 'Nothing to do.' }];
 }

@@ -216,7 +216,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
   (`session_asks`, `roster_ask()` / `roster_answer()`, `AskSessionDialog.jsx`): answers go into that session's list
   only, its list follows today's statuses for anyone who hasn't answered (`roster_follow_ahead()`), between sessions
   it's the current session (`roster_current_session()` = `currentSession()`), and when it becomes current the answers
-  become everyone's status (`roster_apply_asked()`). Rules: section 6 of `docs/games.md`. Captains correct a past
+  become everyone's status (`roster_apply_asked()`). Captains asking notifies everyone asked, and anyone who hasn't
+  answered gets a reminder at noon a week before the session starts, also when the question opened on its own
+  (`session_ask_targets()`, timer `session_asks_tick()`, Game alerts). Rules: section 6 of `docs/games.md`. Captains correct a past
   session from Team dues (`SessionRosterDialog.jsx`).
 - Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
   (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts

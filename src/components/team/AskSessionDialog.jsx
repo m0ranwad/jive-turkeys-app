@@ -48,7 +48,8 @@ export function AskSessionDialog({ open, onOpenChange, period, ask, onSaved }) {
         <p className="-mt-2 text-sm text-zinc-600">
           Everyone sees "Playing session {period.session}?" on Schedule now, even before the schedule is out or while this
           session still has games left. Their answers only count for session {period.session}. Add its games when the
-          league sends them.
+          league sends them. Players with Game alerts on get a notification when you ask, and a reminder at noon a
+          week before the first game if they haven't answered.
         </p>
         <div className="space-y-2">
           <Label htmlFor="session-starts">First game's date</Label>
