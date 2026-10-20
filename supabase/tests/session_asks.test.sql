@@ -271,6 +271,15 @@ select ask_test.ok(ask_test.status('zed', 2) = 'on_break' and ask_test.answered(
   'the player who picks that name keeps the answer given for it');
 select ask_test.ok(ask_test.status('zed', 1) = 'active' and ask_test.profile('zed') = 'active',
   'session 1 and their status right now are the name''s, as before');
+select ask_test.ok(
+  (select merged_roster -> 0 -> 'before' ->> 'status' = 'active' and merged_roster -> 0 -> 'before' ->> 'answered_at' is null
+     and jsonb_array_length(merged_roster) = 1
+   from public.team_guest_links where guest_id = ask_test.id('sam') and user_id = ask_test.id('zed') and unlinked_at is null),
+  'the pick keeps the account''s entry as it was');
+select ask_test.ok(
+  (select count(*) = 1 from public.dues_changes
+   where season_year = ask_test.year() and session = 2 and kind = 'roster' and user_id = ask_test.id('zed')),
+  'the dues change that answer made comes with it, once');
 select ask_test.sign_in('kim');
 select public.unlink_team_guest(ask_test.id('sam'));
 reset role;

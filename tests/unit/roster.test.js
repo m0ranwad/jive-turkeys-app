@@ -351,7 +351,9 @@ describe('"Playing session N?" asked ahead', () => {
       await api.users.claimGuest(mike.id);
       expect(await rosterOf(api, 3, account.id)).toMatchObject({ status: 'on_break' });
       expect((await rosterOf(api, 3, account.id)).answered_at).not.toBeNull();
-      expect(await rosterOf(api, 3, mike.id)).toBeUndefined();
+      expect((await api.entities.TeamGuestLink.list()).find((l) => l.guest_id === mike.id)).toMatchObject({
+        merged_roster: [{ before: { status: 'active', answered_at: null } }],
+      });
 
       await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
       await api.users.unlinkGuest(mike.id);

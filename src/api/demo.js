@@ -9,7 +9,7 @@ import { today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v25';
+const DB_KEY = 'jt_demo_db_v26';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -368,7 +368,7 @@ function seed() {
     {
       id: uid(), guest_id: kellyName.id, user_id: kelly.user_id, moved_payments: kellys(duesPayments),
       moved_history: kellys(duesHistory), moved_roster: kellys(sessionRoster), moved_rsvps: [], moved_stats: [],
-      moved_votes: [], moved_changes: [], merged_payments: [], filled: {}, status_before: 'active', status_after: 'active',
+      moved_votes: [], moved_changes: [], merged_payments: [], merged_roster: [], filled: {}, status_before: 'active', status_after: 'active',
       guest_partner: null, user_partner: null, rebuilt: false, linked_by: kelly.user_id, created_date: kellyJoined,
       unlinked_by: null, unlinked_at: null,
     },
@@ -953,6 +953,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     paid: !!p.paid, paid_date: p.paid_date ?? null, paid_by: p.paid_by ?? null, paid_amount: p.paid_amount ?? null,
     override_amount: p.override_amount ?? null,
   });
+  const rosterFields = (r) => ({ status: r.status, answered_at: r.answered_at ?? null, changed_by: r.changed_by ?? null });
   const partnerOf = (id) => {
     const p = db.player_profiles.find((x) => x.user_id === id);
     const g = db.team_guests.find((x) => x.id === id);
@@ -968,7 +969,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     const profile = db.player_profiles.find((p) => p.user_id === userId);
     const link = {
       id: uid(), guest_id: guestId, user_id: userId, moved_payments: [], moved_history: [], moved_roster: [], moved_rsvps: [],
-      moved_stats: [], moved_votes: [], moved_changes: [], merged_payments: [], filled: {}, status_before: profile?.status ?? null,
+      moved_stats: [], moved_votes: [], moved_changes: [], merged_payments: [], merged_roster: [], filled: {}, status_before: profile?.status ?? null,
       status_after: null, guest_partner: null, user_partner: null, rebuilt: false, linked_by: currentUser()?.id ?? null,
       created_date: now(), unlinked_by: null, unlinked_at: null,
     };
@@ -1009,13 +1010,16 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       });
     // Sessions asked about ahead: an answer given for the name counts over an account entry
     // that's only been following its status (a new player is put on those lists when they
-    // make their profile). That entry makes way; an undo puts the account back on.
+    // make their profile). That entry takes the name's answer, recorded so an undo can put
+    // it back; the dues change the answer made moved with the name's (above).
     const cur = current();
-    const answeredForName = (r) =>
-      db.session_roster.some((n) => n.guest_id === guestId && n.answered_at && sessionOf(n) === sessionOf(r));
-    db.session_roster = db.session_roster.filter(
-      (r) => !(r.user_id === userId && !r.answered_at && isEarlier(cur, { year: r.season_year, session: r.session }) && answeredForName(r)),
-    );
+    for (const row of db.session_roster.filter((r) => r.user_id === userId && !r.answered_at)) {
+      const named = db.session_roster.find((n) => n.guest_id === guestId && n.answered_at && sessionOf(n) === sessionOf(row));
+      if (!named || !isEarlier(cur, { year: row.season_year, session: row.session })) continue;
+      const before = rosterFields(row);
+      Object.assign(row, { status: named.status, answered_at: named.answered_at, changed_by: named.changed_by, updated_date: now() });
+      link.merged_roster.push({ id: row.id, before, after: rosterFields(row) });
+    }
     // Sessions the roster name was on and the account wasn't move over; where both were, the account's entry counts.
     for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
       if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) move('moved_roster', row);
@@ -1116,6 +1120,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       db.potm_votes
         .filter((v) => link.moved_votes.includes(v.id) && v.voted_for_id === userId)
         .forEach((v) => Object.assign(v, { voted_for_id: null, voted_for_guest_id: guestId }));
+      // The account's entries that took the name's answer, unless changed since.
+      for (const { id, before, after } of link.merged_roster) {
+        const row = db.session_roster.find((r) => r.id === id && r.user_id === userId);
+        if (row && JSON.stringify(rosterFields(row)) === JSON.stringify(after)) Object.assign(row, before, { updated_date: now() });
+      }
 
       const profile = db.player_profiles.find((p) => p.user_id === userId);
       if (profile) {
@@ -1141,7 +1150,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const period = current();
       const started = db.session_roster.some((r) => sessionOf(r) === `${period.year}-${period.session}`);
       if (started && !nameHas('session_roster', (r) => sessionOf(r) === `${period.year}-${period.session}`)) followStatus('team_guests', guest);
-      // And on the lists of sessions asked about ahead, where they aren't on them.
+      // Both keep up with their status in sessions asked about ahead, where they haven't answered.
       followAhead({ guest_id: guestId }, guest.removed ? 'off' : guest.status);
       if (profile) followAhead({ user_id: userId }, profile.removed ? 'off' : profile.status);
 

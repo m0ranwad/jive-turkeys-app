@@ -19,8 +19,9 @@
 -- status right now (roster_apply_asked()).
 --
 -- Also: a new player who picks their roster name brings over an answer given
--- for that name ahead (move_team_guest()), and an undo puts both back on the
--- lists (unlink_team_guest()).
+-- for that name ahead (move_team_guest(), recorded in
+-- team_guest_links.merged_roster), and an undo puts it back
+-- (unlink_team_guest()).
 
 create table public.session_asks (
   id uuid primary key default gen_random_uuid(),
@@ -433,9 +434,15 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- Same as 20261018150000_unlink_team_guest.sql, plus: in a session asked about
--- ahead, an answer given for the name moves to the account that picks it, and
--- an undo puts the name and the account back on those lists.
+-- ahead, an answer given for the name goes to the account that picks it
+-- (recorded, like merged_payments), and an undo puts it back and puts the name
+-- and the account back on those lists.
 -- ---------------------------------------------------------------------------
+
+-- The account's entries in sessions asked about ahead that took the name's
+-- answer, before and after: [{ id, before: { status, answered_at, changed_by }, after: { ... } }].
+alter table public.team_guest_links
+  add column merged_roster jsonb not null default '[]';
 
 create or replace function public.move_team_guest(p_guest_id uuid, p_user_id uuid)
 returns void
@@ -512,15 +519,27 @@ begin
   -- Sessions asked about ahead: an answer given for the name (by a captain,
   -- say) counts over an account entry that's only been following its status.
   -- A new player is put on those lists when they make their profile, just
-  -- before they pick their name. That entry makes way and the name's moves
-  -- over (below); an undo moves it back and puts the account back on.
+  -- before they pick their name. That entry takes the name's answer (the
+  -- name's is kept), as it was is recorded, and the dues change that answer
+  -- made moves with the name's (above), so it isn't recorded again.
   select * into cur from public.roster_current_session();
-  delete from public.session_roster u
-    using public.session_roster r
-    where u.user_id = p_user_id and u.answered_at is null
-      and r.guest_id = p_guest_id and r.answered_at is not null
-      and r.season_year = u.season_year and r.session = u.session
-      and (u.season_year, u.session) > (cur.cur_year, cur.cur_session);
+  perform set_config('jive.roster_applying', 'on', true);
+  with merged as (
+    update public.session_roster u
+      set status = r.status, answered_at = r.answered_at, changed_by = r.changed_by
+      from public.session_roster r, public.session_roster was
+      where u.user_id = p_user_id and u.answered_at is null
+        and r.guest_id = p_guest_id and r.answered_at is not null
+        and r.season_year = u.season_year and r.session = u.session
+        and (u.season_year, u.session) > (cur.cur_year, cur.cur_session)
+        and was.id = u.id
+      returning u.id,
+        jsonb_build_object('status', was.status, 'answered_at', was.answered_at, 'changed_by', was.changed_by) as before,
+        jsonb_build_object('status', u.status, 'answered_at', u.answered_at, 'changed_by', u.changed_by) as after
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'before', before, 'after', after)), '[]')
+    into rec.merged_roster from merged;
+  perform set_config('jive.roster_applying', 'off', true);
 
   -- Sessions the roster name was on and the app player wasn't. Where both
   -- were, the app player's own entry counts (the roster name's is kept).
@@ -662,6 +681,18 @@ begin
     and not exists (select 1 from public.game_stats x where x.guest_id = p_guest_id and x.game_id = s.game_id);
   update public.potm_votes set voted_for_id = null, voted_for_guest_id = p_guest_id
     where id = any (l.moved_votes) and voted_for_id = u;
+  -- The account's entries that took the name's answer, unless changed since.
+  perform set_config('jive.roster_applying', 'on', true);
+  update public.session_roster r set
+      status = was.before ->> 'status',
+      answered_at = (was.before ->> 'answered_at')::timestamptz,
+      changed_by = (was.before ->> 'changed_by')::uuid
+    from jsonb_to_recordset(l.merged_roster) as was (id uuid, before jsonb, after jsonb)
+    where r.id = was.id and r.user_id = u
+      and r.status = was.after ->> 'status'
+      and r.answered_at is not distinct from (was.after ->> 'answered_at')::timestamptz
+      and r.changed_by is not distinct from (was.after ->> 'changed_by')::uuid;
+  perform set_config('jive.roster_applying', 'off', true);
 
   -- The account's details and status, unless they've been changed since.
   update public.player_profiles set
@@ -697,8 +728,8 @@ begin
     values (cur.cur_year, cur.cur_session, p_guest_id, case when g.removed then 'off' else g.status end, now(), me)
     on conflict do nothing;
   end if;
-  -- And on the lists of sessions asked about ahead, following their status,
-  -- where they aren't on them (the account's entry made way for the name's).
+  -- Both keep up with their status in sessions asked about ahead, where they
+  -- haven't answered (the name may have been left off one asked while linked).
   perform public.roster_follow_ahead(null, p_guest_id, case when g.removed then 'off' else g.status end);
   select case when removed then 'off' else status end into back from public.player_profiles where user_id = u;
   if back is not null then
