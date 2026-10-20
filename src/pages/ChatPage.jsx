@@ -970,15 +970,18 @@ export function ChatPage() {
             {/* Phones: back to the list, with what's waiting in the other rooms, counted like the list rows. */}
             <button
               onClick={showList}
-              aria-label={backLabel}
               className="-ml-1 inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-0.5 rounded-full pr-0.5 text-zinc-500 transition hover:bg-zinc-100 md:hidden"
             >
-              <ChevronLeft className="h-5 w-5 shrink-0" />
-              {waiting.mentions > 0 && <MentionCount n={waiting.mentions} />}
-              {waiting.unread > 0 && <UnreadCount n={waiting.unread} />}
-              {!waiting.mentions && !waiting.unread && waiting.fresh && (
-                <span className="mr-1 h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
-              )}
+              {/* Screen readers hear the counts in words; an aria-label would leave out the numbers on screen. */}
+              <span className="sr-only">{backLabel}</span>
+              <span aria-hidden="true" className="inline-flex items-center gap-0.5">
+                <ChevronLeft className="h-5 w-5 shrink-0" />
+                {waiting.mentions > 0 && <MentionCount n={waiting.mentions} />}
+                {waiting.unread > 0 && <UnreadCount n={waiting.unread} />}
+                {!waiting.mentions && !waiting.unread && waiting.fresh && (
+                  <span className="mr-1 h-2 w-2 rounded-full bg-lime-500" aria-label="New threads" />
+                )}
+              </span>
             </button>
             {/* The room's icon on computers; phones keep the space for its name. */}
             {thread ? (

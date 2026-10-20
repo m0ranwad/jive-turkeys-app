@@ -20,7 +20,7 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
             <Chip
               key={entry.profile.user_id}
               data-player={entry.profile.display_name}
-              {...(onPick && { type: 'button', onClick: () => onPick(entry.profile), 'aria-label': `RSVP for ${entry.profile.display_name}` })}
+              {...(onPick && { type: 'button', onClick: () => onPick(entry.profile) })}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
                 // Not joined the site yet: grey and dashed, like their card on the Team page.
@@ -32,6 +32,8 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
                 onPick && 'transition hover:border-zinc-900',
               )}
             >
+              {/* Heard as "RSVP for Taylor Brooks GK": the name and tags on screen, in order. */}
+              {onPick && <span className="sr-only">RSVP for </span>}
               {entry.profile.display_name}
               {entry.playing_gk && <span className="text-[11px] font-black uppercase text-zinc-500">GK</span>}
               {suspendedIds.includes(entry.profile.user_id) && (

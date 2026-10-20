@@ -142,12 +142,12 @@ test('anyone can mark teammates paid in one tap, but undoing one takes two taps 
   await expect(page.getByText('Payment links')).toHaveCount(0);
   await expect(page.getByLabel('Amount for Kelly Moss')).toHaveText('$61');
 
-  await page.getByRole('button', { name: 'Mark Kelly Moss paid' }).click();
+  await page.getByRole('button', { name: 'Mark paid for Kelly Moss' }).click();
   await expect(paidHeading(page, '7 of 12 paid')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Kelly Moss');
   await expect(page.getByTestId('dues-paid')).toContainText('marked by Jordan R.');
   // A paid player has no button to tap by accident.
-  await expect(page.getByRole('button', { name: 'Mark Kelly Moss paid' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mark paid for Kelly Moss' })).toHaveCount(0);
   await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Kelly M. paid');
 
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
@@ -172,7 +172,7 @@ test('a couple are marked paid together, and anyone can link a couple', async ({
   await page.getByRole('tab', { name: 'Team dues' }).click();
 
   await expect(page.getByTestId('dues-unpaid')).toContainText(/Alex Chen.*Riley Novak.*Casey Captain/);
-  await page.getByRole('button', { name: 'Mark Riley Novak paid' }).click();
+  await page.getByRole('button', { name: 'Mark paid for Riley Novak' }).click();
   await expect(paidHeading(page, '8 of 12 paid')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Alex Chen');
 
@@ -320,10 +320,10 @@ test('players keep what they paid when the fee changes, and the difference can b
   await expect(summary).toContainText('$385Collected');
   await expect(summary).toContainText('$420Still to collect');
 
-  await page.getByRole('button', { name: 'Mark $1 more paid for Jordan Rivera' }).click();
+  await page.getByRole('button', { name: 'Mark $1 paid for Jordan Rivera' }).click();
   await expect(page.getByText('Jordan Rivera: $1 more marked paid')).toBeVisible();
   await expect(page.getByLabel('Amount for Jordan Rivera')).toHaveText('$62');
-  await expect(page.getByRole('button', { name: 'Mark $1 more paid for Jordan Rivera' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mark $1 paid for Jordan Rivera' })).toHaveCount(0);
   await expect(summary).toContainText('$386Collected');
   await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Jordan R. paid $1 more');
 
@@ -404,7 +404,7 @@ test('a player pays part of their share, and the rest stays on the list to pay',
   await expect(page.getByTestId('dues-paid')).toContainText('Kelly Moss');
   await expect(page.getByLabel('Amount for Kelly Moss')).toHaveText('$35');
   await expect(page.getByTestId('dues-paid')).toContainText('share is $61');
-  await page.getByRole('button', { name: 'Mark $26 more paid for Kelly Moss' }).click();
+  await page.getByRole('button', { name: 'Mark $26 paid for Kelly Moss' }).click();
   await expect(page.getByLabel('Amount for Kelly Moss')).toHaveText('$61');
 });
 
@@ -547,7 +547,7 @@ test('roster players who have not joined count in the split, and anyone can mark
   await expect(page.getByTestId('dues-unpaid')).toContainText('Mike Russonot joined yet');
   await expect(page.getByTestId('dues-paid')).toContainText('Dana Wellsnot joined yet');
 
-  await page.getByRole('button', { name: 'Mark Mike Russo paid' }).click();
+  await page.getByRole('button', { name: 'Mark paid for Mike Russo' }).click();
   await expect(paidHeading(page, '7 of 12 paid')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('not joined yet · marked by Jordan R.');
   await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Mike R. paid');

@@ -157,7 +157,7 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
         <button
           type="button"
           aria-expanded={showCards}
-          aria-label={`Cards for ${name}`}
+          aria-label={`Card for ${name}`}
           onClick={onToggleCards}
           className={cn(SMALL_BUTTON, showCards ? 'bg-zinc-900 text-white' : 'border border-zinc-200 text-zinc-600')}
         >

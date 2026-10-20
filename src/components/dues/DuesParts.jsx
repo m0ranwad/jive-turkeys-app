@@ -60,8 +60,10 @@ export function Avatar({ name, className }) {
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('');
+  // The full name always sits beside it, so screen readers skip the initials.
   return (
     <span
+      aria-hidden="true"
       className={cn(
         'grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-100 font-display text-[11px] font-black text-zinc-600',
         className,
@@ -182,7 +184,10 @@ export function PayButtons({ amount, note, settings }) {
       {options.map((option) => {
         const brand = BRAND[option.key];
         const icon = (
-          <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl font-display text-base font-black', brand.className)}>
+          <span
+            aria-hidden="true"
+            className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl font-display text-base font-black', brand.className)}
+          >
             {brand.letter}
           </span>
         );
@@ -214,11 +219,11 @@ export function PayButtons({ amount, note, settings }) {
             href={option.href}
             target="_blank"
             rel="noreferrer"
-            aria-label={`Pay ${dollars(amount)} with ${option.label}`}
             className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-2.5 pr-3 transition hover:border-zinc-900"
           >
+            {/* Heard as "Pay $122 with Venmo": the words on its button, then which app. */}
             {icon}
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0 flex-1" aria-hidden="true">
               <span className="block text-sm font-bold">{option.label}</span>
               <span className="block truncate text-xs font-medium text-zinc-500">
                 {option.prefilled ? option.handle : `Opens PayPal. Enter ${dollars(amount)}.`}
@@ -226,6 +231,7 @@ export function PayButtons({ amount, note, settings }) {
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-950 px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
               Pay {dollars(amount)}
+              <span className="sr-only"> with {option.label}</span>
               <ExternalLink className="h-3 w-3" />
             </span>
           </a>
