@@ -514,9 +514,8 @@ export function TeamPage() {
               {notJoined.length} {notJoined.length === 1 ? "hasn't" : "haven't"} joined yet
             </h3>
             <p className="mt-1 text-xs font-medium text-zinc-500">
-              {/* Sub Pool and On Break names are listed here too, and they don't share the dues. */}
-              Already on the roster, but {notJoined.length === 1 ? "hasn't" : "haven't"} signed up yet. Active players
-              share the dues. When they sign up, they pick their name and their spot and dues come with them.
+              {/* Nothing about splitting the dues: Sub Pool and On Break names are listed here too. */}
+              Send them the invite. When they sign up and pick their name, their spot and dues move to their account.
             </p>
             <button
               onClick={copyInvite}
