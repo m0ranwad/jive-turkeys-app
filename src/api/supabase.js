@@ -359,6 +359,16 @@ export function createSupabaseBackend(url, key) {
       if (error) fail(error);
       return data;
     },
+    /** Captains: ask "Playing session N?" before it starts, with its first game's date (null stops asking). */
+    async ask({ year, session, startsOn }) {
+      const { error } = await supabase.rpc('roster_ask', { p_year: Number(year), p_session: Number(session), p_starts_on: startsOn || null });
+      if (error) fail(error);
+    },
+    /** Your answer to "Playing session N?": for the current session it's your status; for one asked ahead, that session only. */
+    async answer({ year, session, status }) {
+      const { error } = await supabase.rpc('roster_answer', { p_year: Number(year), p_session: Number(session), p_status: status });
+      if (error) fail(error);
+    },
   };
 
   const notifyChat = async (action) => {

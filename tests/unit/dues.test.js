@@ -574,4 +574,24 @@ describe('which session the captains see first', () => {
     expect(currentSession(games, '2026-12-01')).toEqual({ year: 2026, session: 2 });
     expect(currentSession([], '2027-01-05')).toEqual({ year: 2027, session: 1 });
   });
+
+  it('is a later session captains asked about, between sessions (same as roster_current_session())', () => {
+    const asks = [{ season_year: 2026, session: 3, starts_on: '2027-01-03' }];
+    expect(currentSession(games, '2026-12-01', asks)).toEqual({ year: 2026, session: 3 });
+    // A game coming up still decides it.
+    expect(currentSession(games, '2026-10-10', asks)).toEqual({ year: 2026, session: 2 });
+    // Not once captains stop asking, nor a session that's already been played.
+    expect(currentSession(games, '2026-12-01', [{ ...asks[0], starts_on: null }])).toEqual({ year: 2026, session: 2 });
+    expect(currentSession(games, '2026-12-01', [{ season_year: 2026, session: 1, starts_on: '2026-09-01' }])).toEqual({
+      year: 2026,
+      session: 2,
+    });
+    // The one starting first, if captains asked about two.
+    expect(currentSession(games, '2026-12-01', [{ season_year: 2027, session: 1, starts_on: '2027-03-01' }, ...asks])).toEqual({
+      year: 2026,
+      session: 3,
+    });
+    // With no games yet at all.
+    expect(currentSession([], '2026-12-01', asks)).toEqual({ year: 2026, session: 3 });
+  });
 });
