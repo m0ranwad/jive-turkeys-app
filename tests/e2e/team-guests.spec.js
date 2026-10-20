@@ -44,6 +44,8 @@ async function signOutAndInAsCaptain(page) {
   await page.getByRole('button', { name: 'Skip' }).click();
 }
 
+const field = (page) => page.locator('section').filter({ has: page.getByRole('heading', { name: 'On the field' }) });
+
 const card = (page, name) => page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
 
 test('everyone sees players who have not joined yet as grey cards, in the counts, with an invite to copy', async ({ page, context }) => {
@@ -68,6 +70,10 @@ test('everyone sees players who have not joined yet as grey cards, in the counts
   expect(await top(card(page, 'Kelly Moss'))).toBeLessThan(await top(notJoined));
   expect(await top(card(page, 'Dana Wells'))).toBeGreaterThan(await top(notJoined));
   expect(await top(card(page, 'Mike Russo'))).toBeGreaterThan(await top(notJoined));
+  // They have positions, so they're on the field too: dashed, with a note (and screen reader text) saying why.
+  await expect(page.getByTestId('field-legend')).toHaveText("Dashed outline = hasn't joined yet");
+  await expect(field(page)).toContainText("Mike Russo (hasn't joined yet)");
+  await expect(field(page)).not.toContainText("Kelly Moss (hasn't joined yet)");
   await notJoined.getByRole('button', { name: 'Copy invite' }).click();
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
@@ -97,6 +103,7 @@ test('a captain adds several players at once, and they split the dues', async ({
   await edit.getByLabel('Position').selectOption('Goalie');
   await edit.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(card(page, 'Pat Lee')).toContainText('Goalie');
+  await expect(field(page)).toContainText("Pat Lee (hasn't joined yet)");
 
   // $721 across 14: $51.50, rounded up.
   await openDues(page);

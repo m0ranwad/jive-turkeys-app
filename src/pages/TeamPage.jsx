@@ -514,8 +514,9 @@ export function TeamPage() {
               {notJoined.length} {notJoined.length === 1 ? "hasn't" : "haven't"} joined yet
             </h3>
             <p className="mt-1 text-xs font-medium text-zinc-500">
-              On the roster and in the dues, but not signed up yet. When they do, they pick their name and their spot and
-              dues come with them.
+              {/* Sub Pool and On Break names are listed here too, and they don't share the dues. */}
+              Already on the roster, but {notJoined.length === 1 ? "hasn't" : "haven't"} signed up yet. Active players
+              share the dues. When they sign up, they pick their name and their spot and dues come with them.
             </p>
             <button
               onClick={copyInvite}
