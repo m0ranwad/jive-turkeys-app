@@ -5,11 +5,11 @@ import dayjs from 'dayjs';
 import { canManageRoom } from '@/lib/chat';
 import { currentSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
-import { today } from '@/lib/format';
+import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v26';
+const DB_KEY = 'jt_demo_db_v27';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -68,7 +68,8 @@ function seed() {
   }));
 
   const opponents = ['Net Ninjas', 'Grass Kickers', 'Ball Busters', 'The Hat Tricks', 'Goal Diggers', 'FC Lightning'];
-  const year = dayjs().year();
+  // This season (2026 for 2026–27), so January to April samples land in the season that started in November.
+  const year = seasonOf(today());
   const games = [];
   for (let i = -4; i <= 3; i += 1) {
     const date = dayjs().add(i * 7 + (i < 0 ? 0 : 2), 'day').format('YYYY-MM-DD');
@@ -93,9 +94,9 @@ function seed() {
       updated_date: now(),
     });
   }
-  // A game from last year so the stats pages have history.
+  // A game from last season's session 3 (in April) so the stats pages have history.
   games.push({
-    id: uid(), season_year: year - 1, session: 3, date: `${year - 1}-11-14`, time: '19:00', field_number: '2',
+    id: uid(), season_year: year - 1, session: 3, date: `${year}-04-11`, time: '19:00', field_number: '2',
     opponent: 'Net Ninjas', location: '', jersey: 'primary', notes: '', has_result: true, score_us: 2, score_them: 2,
     created_date: now(), updated_date: now(),
   });

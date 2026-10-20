@@ -455,8 +455,8 @@ describe('teammates who are not on the app', () => {
 
 describe('pay buttons', () => {
   it("carry a note saying who it's for", () => {
-    expect(payNote(2026, 2)).toBe('Jive Turkeys dues · Session 2 2026');
-    expect(payNote(2026, 2, ['Alex Chen', 'Riley Novak'])).toBe('Jive Turkeys dues · Session 2 2026 · Alex Chen & Riley Novak');
+    expect(payNote(2026, 2)).toBe('Jive Turkeys dues · Session 2 2026–27');
+    expect(payNote(2026, 2, ['Alex Chen', 'Riley Novak'])).toBe('Jive Turkeys dues · Session 2 2026–27 · Alex Chen & Riley Novak');
   });
 
   const note = 'Jive Turkeys dues · Session 2 2026';

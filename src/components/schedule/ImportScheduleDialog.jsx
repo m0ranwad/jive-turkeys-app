@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle, Plus, Upload, X } from 'lucide-react';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label } from '@/components/ui/input';
-import { venueText } from '@/lib/format';
+import { seasonLabel, seasonOf, today, venueText } from '@/lib/format';
 import { parseScheduleFile } from '@/lib/schedule-import';
 import { cn } from '@/lib/utils';
+import { SeasonPicker } from './SeasonPicker';
 import { SessionPicker } from './SessionPicker';
 
 const isDuplicate = (row, games) =>
@@ -14,14 +15,22 @@ const isDuplicate = (row, games) =>
     (g) => g.date === row.date && (g.opponent || '').trim().toLowerCase() === (row.opponent || '').trim().toLowerCase(),
   );
 
-export function ImportScheduleDialog({ open, onOpenChange, settings, existingGames, onDone }) {
+export function ImportScheduleDialog({ open, onOpenChange, settings, existingGames, defaultSession, onDone }) {
   const [step, setStep] = useState('pick');
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [session, setSession] = useState(1);
+  // The season (the year it starts in) and session the games go in: the one new games most likely belong to.
+  const season = defaultSession?.year || seasonOf(today());
+  const [year, setYear] = useState(season);
+  const [session, setSession] = useState(defaultSession?.session || 1);
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const fileInput = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setYear(season);
+    setSession(defaultSession?.session || 1);
+  }, [open]);
 
   const reset = () => {
     setStep('pick');
@@ -94,10 +103,10 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
 
         {step === 'pick' && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Season year</Label>
-                <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+                <Label>Season</Label>
+                <SeasonPicker value={year} around={season} onChange={setYear} />
               </div>
               <div className="space-y-2">
                 <Label>Session</Label>
@@ -136,7 +145,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-zinc-600">
-                {ready.length} row{ready.length === 1 ? '' : 's'} ready for {year} · Session {session}
+                {ready.length} row{ready.length === 1 ? '' : 's'} ready for {seasonLabel(year, session)}
               </p>
               {duplicates > 0 && (
                 <span className="rounded-full bg-amber-300 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">

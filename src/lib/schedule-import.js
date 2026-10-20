@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import { yearInSeason } from './format';
 
 dayjs.extend(customParseFormat);
 
@@ -25,8 +26,10 @@ const WEEKDAY_PREFIX = /^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s*/i;
 
 const pad = (n) => String(n).padStart(2, '0');
 
-function fullYear(y, fallback) {
-  if (y == null || y === '') return Number(fallback);
+// A date written without a year takes it from the season being imported:
+// November and December are its first year, January to April the next.
+function fullYear(y, season, month) {
+  if (y == null || y === '') return yearInSeason(season, Number(month));
   const n = Number(y);
   return n < 100 ? 2000 + n : n;
 }
@@ -36,8 +39,8 @@ function isoDate(y, m, d) {
   return dayjs(iso, 'YYYY-MM-DD', true).isValid() ? iso : '';
 }
 
-/** Any common date format -> YYYY-MM-DD (or '' if it isn't a date). */
-export function normalizeDate(value, year) {
+/** Any common date format -> YYYY-MM-DD (or '' if it isn't a date). `season` is the year the season starts in. */
+export function normalizeDate(value, season) {
   if (value == null || value === '') return '';
   if (value instanceof Date) {
     if (value.getFullYear() < 1901) return '';
@@ -53,14 +56,14 @@ export function normalizeDate(value, year) {
   let m;
   if ((m = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/))) return isoDate(m[1], m[2], m[3]);
   if ((m = text.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2,4}))?(?!\d)/)))
-    return isoDate(fullYear(m[3], year), m[1], m[2]);
+    return isoDate(fullYear(m[3], season, m[1]), m[1], m[2]);
   if ((m = text.match(/^([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/i))) {
     const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase());
-    if (month >= 0) return isoDate(fullYear(m[3], year), month + 1, m[2]);
+    if (month >= 0) return isoDate(fullYear(m[3], season, month + 1), month + 1, m[2]);
   }
   if ((m = text.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?(?:,?\s+(\d{4}))?/i))) {
     const month = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase());
-    if (month >= 0) return isoDate(fullYear(m[3], year), month + 1, m[1]);
+    if (month >= 0) return isoDate(fullYear(m[3], season, month + 1), month + 1, m[1]);
   }
   return '';
 }
@@ -129,14 +132,14 @@ function opponentFromTeams(home, away) {
   return null;
 }
 
-function rowsWithHeader(rows, { index, cols }, year) {
+function rowsWithHeader(rows, { index, cols }, season) {
   const games = [];
   let anyMatchedOurTeam = false;
   const pending = [];
 
   for (const row of rows.slice(index + 1)) {
     const dateCell = row[cols.date];
-    const date = normalizeDate(dateCell, year);
+    const date = normalizeDate(dateCell, season);
     if (!date) continue;
     const time = normalizeTime(cols.time != null ? row[cols.time] : '') || normalizeTime(dateCell);
     const field = cols.field != null ? cellText(row[cols.field]) : '';
@@ -169,11 +172,11 @@ function rowsWithHeader(rows, { index, cols }, year) {
 }
 
 /** No recognizable header: guess each cell's role from what it looks like. */
-function rowsByShape(rows, year) {
+function rowsByShape(rows, season) {
   const games = [];
   for (const row of rows) {
     const cells = row.map((c) => ({ raw: c, text: cellText(c) })).filter((c) => c.text);
-    const dateCell = cells.find((c) => normalizeDate(c.raw, year));
+    const dateCell = cells.find((c) => normalizeDate(c.raw, season));
     if (!dateCell) continue;
     const timeCell = cells.find((c) => c !== dateCell && normalizeTime(c.raw));
     const rest = cells.filter((c) => c !== dateCell && c !== timeCell);
@@ -182,7 +185,7 @@ function rowsByShape(rows, year) {
     const notUs = names.filter((c) => !OUR_TEAM.test(c.text));
     const opponent = (notUs.length ? notUs : names).sort((a, b) => b.text.length - a.text.length)[0];
     games.push({
-      date: normalizeDate(dateCell.raw, year),
+      date: normalizeDate(dateCell.raw, season),
       time: timeCell ? normalizeTime(timeCell.raw) : normalizeTime(dateCell.raw),
       field_number: field ? field.text : '',
       opponent: opponent ? opponent.text.replace(/^(vs\.?|@)\s*/i, '') : '',
@@ -191,14 +194,15 @@ function rowsByShape(rows, year) {
   return games;
 }
 
-export async function parseScheduleFile(file, year) {
+/** `season` is the year the season starts in (dates without a year go by it). */
+export async function parseScheduleFile(file, season) {
   // The spreadsheet reader is large, so it's only loaded when someone imports.
   const XLSX = await import('xlsx');
   const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: true });
   for (const name of workbook.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: '' });
     const header = findHeader(rows);
-    const games = header ? rowsWithHeader(rows, header, year) : rowsByShape(rows, year);
+    const games = header ? rowsWithHeader(rows, header, season) : rowsByShape(rows, season);
     if (games.length) return games;
   }
   return [];
