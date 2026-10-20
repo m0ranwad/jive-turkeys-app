@@ -19,6 +19,7 @@ function PlayerChip({ player }) {
     >
       <span className={cn('h-2 w-2 shrink-0 rounded-full', player.gender === 'F' ? 'bg-lime-500' : 'bg-zinc-900')} />
       <span className="truncate text-[11px] font-bold text-zinc-800">{player.display_name}</span>
+      {player.guest && <span className="sr-only">{" (hasn't joined yet)"}</span>}
     </span>
   );
 }
@@ -68,6 +69,12 @@ export function Formation({ players = [] }) {
           );
         })}
       </div>
+      {placed.some((p) => p.guest) && (
+        <p className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500" data-testid="field-legend">
+          <span aria-hidden="true" className="h-3 w-6 shrink-0 rounded-full border border-dashed border-zinc-500" />
+          Dashed outline = hasn't joined yet
+        </p>
+      )}
       {floaters.length > 0 && (
         <div className="mt-3">
           <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
