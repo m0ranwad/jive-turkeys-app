@@ -119,43 +119,6 @@ test("a player's screens", async ({ page }) => {
   await expectAccessible(page, 'My dues');
 });
 
-test('asking who\'s playing a later session', async ({ page }) => {
-  test.setTimeout(60_000);
-  // A player: the question asked ahead, under the next game.
-  await signIn(page, PLAYER);
-  await expect(page.getByTestId('session-ahead')).toBeVisible();
-  await expectAccessible(page, 'Schedule, asked ahead');
-  await page.getByTestId('session-ahead').getByRole('button', { name: 'Sitting out' }).click();
-  await expect(page.getByTestId('session-ahead')).toContainText('Session 3: Sitting out');
-  await expectAccessible(page, 'Schedule, answered ahead');
-});
-
-test('captains asking who\'s playing, and between sessions', async ({ page }) => {
-  test.setTimeout(60_000);
-  await signIn(page);
-  await visit(page, '/team', 'Team');
-  await page.getByRole('button', { name: 'Answer for someone' }).click();
-  await expect(page.getByRole('dialog', { name: 'Answers for session 3' })).toBeVisible();
-  await expectAccessible(page, 'Answers for a later session');
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Change date' }).click();
-  await expect(page.getByRole('dialog', { name: "Ask who's playing session 3" })).toBeVisible();
-  await expectAccessible(page, "Ask who's playing");
-  await page.keyboard.press('Escape');
-
-  // Session 2's games are played: the question is at the top of Schedule.
-  await page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
-    const db = JSON.parse(localStorage.getItem(key));
-    const year = new Date().getFullYear();
-    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-10-0${i + 2}`));
-    localStorage.setItem(key, JSON.stringify(db));
-  });
-  await visit(page, '/', 'Schedule');
-  await expect(page.getByTestId('next-session')).toBeVisible();
-  await expectAccessible(page, 'Schedule between sessions');
-});
-
 test('toggle buttons tell screen readers which one is picked', async ({ page }) => {
   await signIn(page);
   await visit(page, '/stats', 'Stats');

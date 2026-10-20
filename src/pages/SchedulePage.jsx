@@ -5,7 +5,7 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, usePush } from '@/components/chat/Notifications';
-import { NextSessionCard, SessionAheadCard, SessionPrompt, sessionAsk } from '@/components/SessionPrompt';
+import { SessionPrompt } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
 import { NextGameCard } from '@/components/schedule/NextGame';
@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { seasonLabel, today } from '@/lib/format';
-import { isEarlier, membersForSession } from '@/lib/roster';
+import { membersForSession } from '@/lib/roster';
 import { headcount, isRosterStatus, suspendedIds } from '@/lib/team-logic';
 
 export function SchedulePage() {
@@ -66,11 +66,6 @@ export function SchedulePage() {
   const currentSessions = sessions.slice(0, currentIndex + 2);
   const pastSessions = sessions.slice(currentIndex + 2);
   const onRoster = isRosterStatus(data.profile);
-  // "Playing session N?": at the top between sessions (no game coming up), under the
-  // Next game card when it's about a later session asked ahead, else the current session's card.
-  const ask = sessionAsk({ profile: data.profile, roster: data.roster, games: data.games });
-  const askedAhead =
-    !!ask && !!nextGame && isEarlier({ year: nextGame.season_year, session: nextGame.session }, ask.period);
 
   const sessionBlock = (s) => (
     <section key={`${s.year}-${s.session}`} className="space-y-3">
@@ -136,9 +131,6 @@ export function SchedulePage() {
         )}
       </PageHeader>
 
-      {!nextGame && ask && (
-        <NextSessionCard ask={ask} rows={data.roster.rows} players={data.players || []} onAnswered={data.reload} />
-      )}
       {nextGame && (
         <NextGameCard
           game={nextGame}
@@ -151,11 +143,8 @@ export function SchedulePage() {
           busy={rsvp.isBusy(nextGame)}
         />
       )}
-      {askedAhead && (
-        <SessionAheadCard ask={ask} rows={data.roster.rows} players={data.players || []} onAnswered={data.reload} />
-      )}
       <PotmPrompt data={data} />
-      {nextGame && ask && !askedAhead && !ask.answered && <SessionPrompt ask={ask} onAnswered={data.reload} />}
+      <SessionPrompt profile={data.profile} roster={data.roster} games={data.games} onAnswered={data.reload} />
       <NotificationsPrompt state={pushStatus} variant="card" />
 
       {sessions.length === 0 && (

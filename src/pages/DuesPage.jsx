@@ -17,7 +17,7 @@ const VIEWS = [
 
 /** What you owe and how to pay, and the whole team's dues. Anyone can mark players paid; captains set the fee. */
 export function DuesPage() {
-  const { user, isCaptain, loading: teamLoading, settings, roster, reload: reloadTeam } = useTeam();
+  const { user, isCaptain, loading: teamLoading, settings, reload: reloadTeam } = useTeam();
   const dues = useDues();
   const [picked, setPicked] = useState(null);
   const [period, setPeriod] = useState(null);
@@ -36,8 +36,8 @@ export function DuesPage() {
 
   // Captains usually come here to collect, players to pay.
   const view = picked ?? (isCaptain ? 'team' : 'mine');
-  // Opens on the current session: the next game's, a session asked about between sessions, or the latest one.
-  const current = currentSession(dues.games, today(), roster?.asks);
+  // Opens on the session of the next game (or the latest one).
+  const current = currentSession(dues.games, today());
   const shown = period ?? current;
   const isCurrent = shown.year === current.year && shown.session === current.session;
   const hasFee = dues.dues.some((d) => d.season_year === Number(shown.year) && d.session === Number(shown.session));

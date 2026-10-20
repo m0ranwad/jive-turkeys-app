@@ -1,21 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { CalendarPlus, Copy, MessageCircle, Pencil, Phone, UserPlus } from 'lucide-react';
+import { Copy, MessageCircle, Pencil, Phone, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
-import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
-import { AskSessionDialog } from '@/components/team/AskSessionDialog';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
 import { PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { CARD, STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
+import { STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 import { saveFailedToast } from '@/lib/errors';
-import { guestAsPlayer, stepSession } from '@/lib/dues';
-import { fmtDateShort, initials, today } from '@/lib/format';
-import { askFor, beforeFirstGame, entryFor, isEarlier, sessionRows, stillAsking, unanswered } from '@/lib/roster';
+import { guestAsPlayer } from '@/lib/dues';
+import { initials, today } from '@/lib/format';
+import { beforeFirstGame, sessionRows, unanswered } from '@/lib/roster';
 import { codeIsStale } from '@/lib/team-code';
 import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
@@ -51,9 +49,6 @@ export function TeamPage() {
   // Captains: the signed-up player being removed, and the pick being undone ({ guest, player }).
   const [removing, setRemoving] = useState(null);
   const [unlinking, setUnlinking] = useState(null);
-  // Captains: asking who's playing a later session, and answering it for teammates.
-  const [askOpen, setAskOpen] = useState(false);
-  const [answersOpen, setAnswersOpen] = useState(false);
 
   const loadGuests = useCallback(async () => {
     // Together, so a grey card never shows before we know which accounts it was taken off.
@@ -133,27 +128,6 @@ export function TeamPage() {
   const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
   const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
   const waiting = asking ? onList(unanswered(data.roster.rows, current)) : [];
-
-  // A session captains asked about ahead ("Playing session N?" before its schedule is out, or while
-  // this one has games left), still being asked; or the session they can ask about next.
-  const asks = data.roster?.asks || [];
-  const askedPeriod =
-    current && data.isCaptain
-      ? asks
-          .map((a) => ({ year: a.season_year, session: a.session }))
-          .filter((p) => askFor(asks, p) && !isEarlier(p, current) && !(asking && !isEarlier(current, p)))
-          .filter((p) => stillAsking(data.games, p, today(), askFor(asks, p).starts_on))
-          .sort((a, b) => (isEarlier(a, b) ? -1 : 1))[0]
-      : null;
-  const asked = askedPeriod ? askFor(asks, askedPeriod) : null;
-  const nextPeriod = current && data.isCaptain && !askedPeriod ? stepSession(current, 1) : null;
-  // Everyone on the team, with their answer for the asked session (anyone not on its list yet carries over).
-  const askedTeam = askedPeriod
-    ? roster
-        .map((p) => ({ player: p, entry: entryFor(data.roster.rows, askedPeriod, p.user_id) }))
-        .filter(({ entry }) => entry?.status !== 'off')
-    : [];
-  const askedWaiting = askedTeam.filter(({ entry }) => !entry?.answered_at).map(({ player }) => player);
 
   const setStatus = async (profile, status) => {
     try {
@@ -252,49 +226,6 @@ export function TeamPage() {
             </p>
           )}
         </section>
-      )}
-
-      {askedPeriod && (
-        <section className={CARD} data-testid="session-ask">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-            Playing session {askedPeriod.session}? · {askedTeam.length - askedWaiting.length} of {askedTeam.length} answered
-          </h3>
-          <p className="mt-1 text-xs font-medium text-zinc-600">
-            Asked ahead · starts {fmtDateShort(asked.starts_on)}. Answers only count for session {askedPeriod.session}.
-            {askedWaiting.length > 0
-              ? ` Still to answer: ${askedWaiting.map((p) => p.display_name).join(', ')}.`
-              : ' Everyone has answered.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAnswersOpen(true)}
-              className="rounded-full bg-zinc-950 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800"
-            >
-              Answer for someone
-            </button>
-            <button
-              type="button"
-              onClick={() => setAskOpen(true)}
-              className="rounded-full bg-zinc-100 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
-            >
-              Change date
-            </button>
-          </div>
-        </section>
-      )}
-      {nextPeriod && (
-        <button
-          type="button"
-          onClick={() => setAskOpen(true)}
-          className="flex w-full items-center gap-3 rounded-3xl border border-dashed border-zinc-300 bg-white px-4 py-3 text-left transition hover:border-zinc-900"
-        >
-          <CalendarPlus className="h-4 w-4 shrink-0 text-zinc-600" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold uppercase tracking-[0.1em]">Ask who's playing session {nextPeriod.session}</span>
-            <span className="block text-[11px] font-medium text-zinc-500">Before its schedule is out, or with games still left.</span>
-          </span>
-        </button>
       )}
 
       {data.profile && <PickPositionCard profile={data.profile} onSaved={data.reload} />}
@@ -573,31 +504,6 @@ export function TeamPage() {
             await loadGuests();
             await data.reload();
           }}
-        />
-      )}
-      {data.isCaptain && (
-        <AskSessionDialog
-          open={askOpen}
-          onOpenChange={setAskOpen}
-          period={askedPeriod || nextPeriod}
-          ask={asked}
-          onSaved={data.reload}
-        />
-      )}
-      {askedPeriod && (
-        <SessionRosterDialog
-          open={answersOpen}
-          onOpenChange={setAnswersOpen}
-          period={askedPeriod}
-          members={roster}
-          rows={data.roster.rows}
-          meId={data.user?.id}
-          onSaved={async () => {
-            await loadGuests();
-            await data.reload();
-          }}
-          ahead
-          current={!isEarlier(current, askedPeriod)}
         />
       )}
     </div>

@@ -5,8 +5,8 @@ says which automated test checks it, so a change that breaks one shows up as a r
 publish it. If you change how game day works on purpose, update this page and the tests in the same change.
 
 **Tests:** `[browser]` = `tests/e2e/game-day.spec.js` and the other `tests/e2e/*.spec.js` (Playwright, demo
-mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test.sql` and `session_asks.test.sql` ·
-`[unit]` = `tests/unit/game-day.test.js`, `games.test.js`, `results.test.js`, `roster.test.js`. How to run them: see the Tests section of
+mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql` and `potm.test.sql` · `[unit]` =
+`tests/unit/game-day.test.js`, `games.test.js`, `results.test.js`. How to run them: see the Tests section of
 `CLAUDE.md`.
 
 ## 1. RSVPs and the headcount
@@ -68,24 +68,3 @@ the words and picks who gets each one (`game_reminder_targets`).
 | Each goes out once per game; none after kickoff or once there's a result; never to players who turned **Game alerts** off. | `[db]` |
 | Kickoff times are read the way captains type them ("19:00", "7:00 PM", "7pm"), in Eastern time; a game with no time gets no reminder. | `[db]` |
 
-## 6. "Playing session N?"
-
-Each session keeps its own list of who's playing (`session_roster`); a new session's list starts as a copy of
-everyone's status, and players confirm theirs. Captains can ask ahead (`session_asks`), before the league sends
-the schedule or while this session still has games left.
-
-| Rule | Checked by |
-|---|---|
-| The current session is the next game's. Between sessions (no game coming up), it's the next session captains asked about; otherwise the latest game's. The site and the database agree (`currentSession()`, `roster_current_session()`). | `[unit]` `[db]` |
-| The current session's question is asked until its first game, under the Next game card. | `[browser]` |
-| Only captains ask about a later session, from the Team page, with its first game's date. They can change the date or stop asking until its first game; asking about a session that's over or has started is refused. Asking starts its list (everyone's status, nobody answered). | `[db]` `[browser]` |
-| While this session has games left, players see the later session's question under the Next game card ("Asking ahead"). Their answer goes into that session's list only: this session's list and dues, and their status right now, don't change. Once answered it shrinks to one line with **Change**. | `[db]` `[browser]` |
-| Players are asked one session at a time: the first they haven't answered, else the latest one asked. | `[unit]` `[browser]` |
-| Until it starts, a session asked about ahead keeps up with today's statuses for anyone who hasn't answered it, adds new players and takes off anyone removed. That isn't recorded as a dues change; answers are. | `[db]` `[unit]` |
-| A player taken off the team is off the session asked about even if they'd answered. Added back, they're on it again, following their status, and asked again. | `[db]` `[unit]` |
-| Asked again after captains stopped, the session's list catches up with what changed in between (statuses of anyone still to answer, new players, anyone removed) and keeps the answers given. | `[db]` `[unit]` |
-| An answer given for a roster name ahead (by a captain) goes with the name: the new player who picks it has that answer, not a fresh "still to answer". Undoing the pick gives the name its answer back and puts the account back on the list, still to answer. | `[db]` `[unit]` |
-| Between sessions, the question is the **Next up** card at the top of Schedule, with the answers so far (in, women, subs, sitting out, still to answer). Status changes made then (My Profile, Team page) count for that session, not the one that just ended. | `[db]` `[browser]` |
-| When an asked session becomes the current one, the answers given ahead become everyone's status right now, once, without being recorded again as dues changes. | `[db]` `[unit]` |
-| Captains see how many have answered and who hasn't on the Team page, and can answer for anyone, roster names included. Players don't see that list. Between sessions that session is the current one, so a captain's answer is that player's status right now, as when tapping a status on the Team page. | `[browser]` |
-| Answers stop once the session's first game is played. | `[db]` |

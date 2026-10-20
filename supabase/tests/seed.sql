@@ -238,13 +238,3 @@ begin
   end if;
 end;
 $$;
-
--- A session captains asked about before its schedule was out (once those exist).
-do $$
-begin
-  if to_regclass('public.session_asks') is not null then
-    insert into public.session_asks (season_year, session, starts_on, asked_by, applied_at, created_date) values
-      (2026, 3, '2027-01-03', '11111111-1111-4111-8111-111111111111', null, '2026-10-12 18:00+00');
-  end if;
-end;
-$$;

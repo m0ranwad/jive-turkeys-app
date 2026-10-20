@@ -212,12 +212,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   `team_guests.status` stay each player's status right now. Dues and headcounts read the session's list
   (`membersForSession()`); a session that hasn't started uses today's statuses. Before a new session's first game,
   players are asked **Playing session N?** on Schedule (`src/components/SessionPrompt.jsx`) and captains see who
-  hasn't answered on Team. Captains can also ask ahead, before the schedule is out or with games still left
-  (`session_asks`, `roster_ask()` / `roster_answer()`, `AskSessionDialog.jsx`): answers go into that session's list
-  only, its list follows today's statuses for anyone who hasn't answered (`roster_follow_ahead()`), between sessions
-  it's the current session (`roster_current_session()` = `currentSession()`), and when it becomes current the answers
-  become everyone's status (`roster_apply_asked()`). Rules: section 6 of `docs/games.md`. Captains correct a past
-  session from Team dues (`SessionRosterDialog.jsx`).
+  hasn't answered on Team. Captains correct a past session from Team dues (`SessionRosterDialog.jsx`).
 - Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
   (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts
   and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough
