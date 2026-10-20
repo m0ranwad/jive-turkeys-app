@@ -181,9 +181,10 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         <button
           type="button"
           onClick={() => setSheetFor(p.user_id)}
-          aria-label={`Details for ${p.display_name}`}
           className="-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-left transition hover:bg-zinc-50"
         >
+          {/* Heard as "Details for" and the name and notes on screen. */}
+          <span className="sr-only">Details for </span>
           <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{p.display_name}</span>
@@ -198,7 +199,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             type="button"
             onClick={() => markPaid(p)}
             disabled={busyId === p.user_id}
-            aria-label={`Mark ${dollars(balance)} more paid for ${p.display_name}`}
+            aria-label={`Mark ${dollars(balance)} paid for ${p.display_name}`}
             className="h-8 min-w-[78px] shrink-0 whitespace-nowrap rounded-full bg-lime-400 px-3 text-[11px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
           >
             Mark {dollars(balance)} paid
@@ -210,7 +211,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
             type="button"
             onClick={() => markPaid(p)}
             disabled={busyId === p.user_id}
-            aria-label={`Mark ${p.display_name} paid`}
+            aria-label={`Mark paid for ${p.display_name}`}
             className="h-8 w-[78px] shrink-0 rounded-full bg-lime-400 text-[11px] font-black uppercase tracking-[0.08em] text-black transition hover:bg-lime-300 disabled:opacity-50"
           >
             Mark paid
@@ -234,9 +235,9 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         <button
           type="button"
           onClick={() => setSheetFor(p.user_id)}
-          aria-label={`Details for ${p.display_name}`}
           className="-ml-2 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-left transition hover:bg-zinc-50"
         >
+          <span className="sr-only">Details for </span>
           <Avatar name={p.display_name} className={cn(p.guest && 'border border-dashed border-zinc-300 bg-white')} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{p.display_name}</span>

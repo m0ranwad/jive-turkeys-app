@@ -170,7 +170,7 @@ test("a captain's status change takes a player who has not joined out of the spl
 test('a captain links a player who joined without picking their name', async ({ page }) => {
   await signIn(page);
   await openDues(page);
-  await page.getByRole('button', { name: 'Mark Mike Russo paid' }).click();
+  await page.getByRole('button', { name: 'Mark paid for Mike Russo' }).click();
   await expect(page.getByRole('heading', { name: '7 of 12 paid' })).toBeVisible();
 
   // Say Mike joined the app as Chris Dunn: his payment and history move to that account.

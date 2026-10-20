@@ -422,7 +422,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
                 <button
                   type="button"
                   onClick={() => onRemove(m)}
-                  aria-label={`Take ${m.person.name} out`}
+                  aria-label={`Remove ${m.person.name}`}
                   className="shrink-0 rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
                 >
                   Remove

@@ -150,7 +150,7 @@ test('people in a private chat: add someone, and leave', async ({ page }) => {
   await expect(people).toContainText('Only the two of you can see it.');
   const rows = people.getByRole('list', { name: 'People in this chat' }).getByRole('listitem');
   await expect(rows).toHaveText([/Casey Captain\s*You\s*Captain/, /Jordan Rivera\s*Started it/]);
-  await expect(people.getByRole('button', { name: /Take .* out/ }), 'only the starter takes people out').toHaveCount(0);
+  await expect(people.getByRole('button', { name: /^Remove / }), 'only the starter takes people out').toHaveCount(0);
 
   await people.getByRole('button', { name: 'Add people' }).click();
   await expect(people).toContainText("They'll see the whole chat, earlier messages included.");
@@ -192,7 +192,7 @@ test('the starter of a private chat takes someone out', async ({ page }) => {
   await page.getByRole('button', { name: 'People' }).click();
   const people = page.getByRole('dialog', { name: 'People in this chat' });
   await expect(people.getByRole('listitem').first()).toHaveText(/Casey Captain\s*You\s*Started it\s*Captain/);
-  await people.getByRole('button', { name: 'Take Drew Patel out' }).click();
+  await people.getByRole('button', { name: 'Remove Drew Patel' }).click();
   await expect(people.getByRole('listitem')).toHaveCount(2);
   await expect(people).toContainText('Only the two of you can see it.');
   await page.keyboard.press('Escape');

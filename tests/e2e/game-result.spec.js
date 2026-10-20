@@ -76,7 +76,7 @@ test('goals, assists and cards go in with + and −, and our score adds itself u
 
   // Cards are tucked away until asked for.
   await expect(result.getByRole('button', { name: 'Add a blue card for Alex Chen' })).toHaveCount(0);
-  await result.getByRole('button', { name: 'Cards for Alex Chen' }).click();
+  await result.getByRole('button', { name: 'Card for Alex Chen' }).click();
   await result.getByRole('button', { name: 'Add a blue card for Alex Chen' }).click();
   await expect(player(result, 'Alex Chen')).toContainText('1 blue');
 
@@ -116,7 +116,7 @@ test("take off a no-show, add someone who came anyway, and Edit result opens as 
   await result.getByRole('button', { name: 'Add a goal for Kelly Moss' }).click();
 
   // A red card from the bench stays on the list.
-  await result.getByRole('button', { name: 'Cards for Sam Okafor' }).click();
+  await result.getByRole('button', { name: 'Card for Sam Okafor' }).click();
   await result.getByRole('button', { name: 'Add a red card for Sam Okafor' }).click();
   await result.getByRole('button', { name: "Sam Okafor didn't play" }).click();
   await expect(player(result, 'Sam Okafor')).toContainText("Didn't play");

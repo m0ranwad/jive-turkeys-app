@@ -74,7 +74,7 @@ export async function expectChatStart(page) {
 export async function showRooms(page) {
   const list = page.locator('[data-room="team"]');
   // Wait for the chat to be on screen (say, after a reload): the list, or a room with its back arrow.
-  await expect(page.locator('[data-room="team"]:visible, [aria-label^="All chats"]:visible').first()).toBeVisible();
+  await expect(page.locator('[data-room="team"]:visible').or(page.getByRole('button', { name: /^All chats/ })).first()).toBeVisible();
   // Phones: the back arrow in a room.
   if (!(await list.isVisible())) await page.getByRole('button', { name: 'All chats' }).click();
   await expect(list).toBeVisible();

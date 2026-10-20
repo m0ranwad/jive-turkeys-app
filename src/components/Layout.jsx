@@ -184,7 +184,8 @@ export function Layout() {
             <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-2">
               <NavLink
                 to="/profile"
-                aria-label="My profile"
+                // Names it with the initials it shows, so voice control can tap it by what's on screen.
+                aria-label={myInitials ? `My profile, ${myInitials}` : 'My profile'}
                 title="My profile"
                 className={({ isActive }) =>
                   cn(
