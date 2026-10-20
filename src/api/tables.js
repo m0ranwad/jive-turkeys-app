@@ -15,6 +15,7 @@ export const TABLES = {
   TeamGuestLink: 'team_guest_links',
   TeamNameCheck: 'team_name_checks',
   SessionRoster: 'session_roster',
+  SessionAsk: 'session_asks',
   TeamJoinCode: 'team_join_code',
   Message: 'messages',
   ChatThread: 'chat_threads',
