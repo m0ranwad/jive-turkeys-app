@@ -21,6 +21,7 @@ import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@
 import { cn } from '@/lib/utils';
 
 const STATUS_ORDER = { active: 0, sub_pool: 1, on_break: 2 };
+const SECTION_LABEL = 'px-1 pt-1 text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500';
 
 function StatusButtons({ current, onPick }) {
   return STATUS_OPTIONS.map((opt) => (
@@ -102,6 +103,10 @@ export function TeamPage() {
   }, [roster]);
 
   if (data.loading) return <PageSpinner />;
+
+  // Players on the site first, then everyone still to join, under the invite.
+  const joined = roster.filter((p) => !p.guest);
+  const notJoined = roster.filter((p) => p.guest);
 
   const removedPlayers = data.isCaptain ? (data.profiles || []).filter((p) => p.removed) : [];
   // Captains: the roster name an account picked (or was linked to), and whether that can be undone here.
@@ -203,6 +208,191 @@ export function TeamPage() {
     }
   };
 
+  // One roster card: a player on the site, or a grey dashed one for a teammate who hasn't joined yet.
+  const rosterCard = (p) => {
+    const isMe = p.user_id === data.user.id;
+    // Captains: someone on the app with a name like this one probably joined without picking it.
+    const joinedAs = p.guest && data.isCaptain ? likelyAccount(p, data.profiles || [], guests, links) : null;
+    // Captains: the roster name this account came with, other accounts that look like the same
+    // person, and whether they joined without picking a roster name while names were waiting.
+    const picked = pickedName(p);
+    const lookalikes = data.isCaptain && !p.guest ? lookalikeAccounts(p, joined, guests, checks) : [];
+    const lookalikeNames = nameList(lookalikes.map((o) => o.display_name));
+    const skipped = data.isCaptain && !p.guest && skippedRosterName(p, guests, checks);
+    return (
+      <div
+        key={p.id}
+        className={cn(
+          'rounded-3xl p-3.5',
+          // Not joined yet: a grey dashed outline.
+          p.guest ? 'border-2 border-dashed border-zinc-300 bg-zinc-50' : 'border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
+              p.guest
+                ? 'border-2 border-dashed border-zinc-300 bg-white text-zinc-600'
+                : p.gender === 'F'
+                  ? 'bg-lime-400 text-black'
+                  : 'bg-zinc-900 text-lime-400',
+            )}
+          >
+            {initials(p.display_name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{p.display_name}</span>
+              {isMe && (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
+                  You
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
+                  STATUS_CLASS[p.status] || STATUS_CLASS.active,
+                )}
+              >
+                {STATUS_LABEL[p.status] || 'Active'}
+              </span>
+              <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
+              {p.guest && (
+                <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                  Not joined yet
+                </span>
+              )}
+              {p.year_joined && <span>Since {p.year_joined}</span>}
+              {p.is_captain && (
+                <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
+                  Captain
+                </span>
+              )}
+            </div>
+          </div>
+          {/* A private chat with them (opens the one you already have, if there is one). */}
+          {!isMe && !p.guest && p.user_id && (
+            <Link
+              to={`/banter?dm=${p.user_id}`}
+              aria-label={`Message ${p.display_name}`}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </Link>
+          )}
+          {p.phone && (
+            <a
+              href={`tel:${p.phone}`}
+              aria-label={`Call ${p.display_name}`}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
+            >
+              <Phone className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+        {joinedAs && (
+          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
+            Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
+          </p>
+        )}
+        {lookalikes.length > 0 && (
+          <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="two-accounts">
+            <p>
+              {lookalikes.length === 1
+                ? `Two accounts? ${lookalikeNames} looks like the same person. If so, keep the one they sign in with and remove the other.`
+                : `More than one account? ${lookalikeNames} look like the same person. If so, keep the one they sign in with and remove the others.`}
+            </p>
+            <button
+              onClick={() =>
+                answerCheck(
+                  lookalikes.map((o) => ({ kind: 'different_people', user_id: p.user_id, other_user_id: o.user_id })),
+                  `Got it: ${p.display_name} and ${lookalikeNames} are different people`,
+                )
+              }
+              aria-label={`They're different people: ${p.display_name} and ${lookalikeNames}`}
+              className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
+            >
+              They're different people
+            </button>
+          </div>
+        )}
+        {skipped && (
+          <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="no-roster-name">
+            <p>
+              Didn't pick a roster name. If they're one of the grey cards, tap Edit on that card to move it to this
+              account.
+            </p>
+            <button
+              onClick={() => answerCheck([{ kind: 'not_on_roster', user_id: p.user_id }], `Got it: ${p.display_name} isn't on the roster`)}
+              aria-label={`Not on the roster: ${p.display_name}`}
+              className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
+            >
+              Not on the roster
+            </button>
+          </div>
+        )}
+        {picked && (
+          <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500" data-testid="joined-as">
+            <span className="min-w-0 flex-1">
+              Joined as <b className="text-zinc-700">{picked.display_name}</b>
+              {!canUnlink(picked) && ' · picked before undo was added'}
+            </span>
+            {canUnlink(picked) && (
+              <button
+                onClick={() => setUnlinking({ guest: picked, player: p })}
+                aria-label={`Unlink ${picked.display_name} from ${p.display_name}`}
+                className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
+              >
+                Unlink
+              </button>
+            )}
+          </div>
+        )}
+        {(isMe || data.isCaptain) && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
+            {isMe && (
+              <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
+            )}
+            <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
+            {p.guest && data.isCaptain && (
+              <button
+                onClick={() => setGuestDialog(guests.find((g) => g.id === p.id))}
+                aria-label={`Edit ${p.display_name}`}
+                className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </button>
+            )}
+            {!isMe && !p.guest && data.isCaptain && (
+              <button
+                onClick={() => toggleCaptain(p)}
+                className={cn(
+                  'ml-auto rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
+                  p.is_captain ? 'bg-lime-400 text-black' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
+                )}
+              >
+                {p.is_captain ? 'Captain ✓' : 'Make captain'}
+              </button>
+            )}
+            {!isMe && !p.guest && data.isCaptain && (
+              <button
+                onClick={() => setRemoving(p)}
+                aria-label={`Remove ${p.display_name}`}
+                className="rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -298,26 +488,8 @@ export function TeamPage() {
       )}
 
       {data.profile && <PickPositionCard profile={data.profile} onSaved={data.reload} />}
-      <Formation players={roster} />
-
-      {totals.notJoined > 0 && (
-        <section className="rounded-3xl border-2 border-dashed border-zinc-300 bg-white p-4" data-testid="not-joined">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-            {totals.notJoined} {totals.notJoined === 1 ? "hasn't" : "haven't"} joined yet
-          </h3>
-          <p className="mt-1 text-xs font-medium text-zinc-500">
-            Grey cards are teammates on the roster who haven't signed up. When they do, they pick their name and their
-            spot and dues come with them.
-          </p>
-          <button
-            onClick={copyInvite}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Copy invite
-          </button>
-        </section>
-      )}
+      {/* Teammates who haven't joined only show on the field once a captain sets their position. */}
+      <Formation players={roster.filter((p) => !p.guest || p.position)} />
 
       <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
         Set your own roster status anytime{current ? ` — it counts for session ${current.session}` : ''}. On Break puts
@@ -326,200 +498,46 @@ export function TeamPage() {
       </p>
 
       <div className="space-y-2">
-        {roster.map((p) => {
-          const isMe = p.user_id === data.user.id;
-          // Captains: someone on the app with a name like this one probably joined without picking it.
-          const joinedAs = p.guest && data.isCaptain ? likelyAccount(p, data.profiles || [], guests, links) : null;
-          // Captains: the roster name this account came with, other accounts that look like the same
-          // person, and whether they joined without picking a roster name while names were waiting.
-          const picked = pickedName(p);
-          const lookalikes = data.isCaptain && !p.guest ? lookalikeAccounts(p, roster.filter((o) => !o.guest), guests, checks) : [];
-          const lookalikeNames = nameList(lookalikes.map((o) => o.display_name));
-          const skipped = data.isCaptain && !p.guest && skippedRosterName(p, guests, checks);
-          return (
-            <div
-              key={p.id}
-              className={cn(
-                'rounded-3xl p-3.5',
-                // Not joined yet: a grey dashed outline.
-                p.guest ? 'border-2 border-dashed border-zinc-300 bg-zinc-50' : 'border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
-                    p.guest ? 'bg-zinc-200 text-zinc-600' : p.gender === 'F' ? 'bg-lime-400 text-black' : 'bg-zinc-900 text-lime-400',
-                  )}
-                >
-                  {initials(p.display_name)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{p.display_name}</span>
-                    {isMe && (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
-                        You
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
-                        STATUS_CLASS[p.status] || STATUS_CLASS.active,
-                      )}
-                    >
-                      {STATUS_LABEL[p.status] || 'Active'}
-                    </span>
-                    <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
-                    {p.guest && (
-                      <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
-                        Not joined yet
-                      </span>
-                    )}
-                    {p.year_joined && <span>Since {p.year_joined}</span>}
-                    {p.is_captain && (
-                      <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
-                        Captain
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* A private chat with them (opens the one you already have, if there is one). */}
-                {!isMe && !p.guest && p.user_id && (
-                  <Link
-                    to={`/banter?dm=${p.user_id}`}
-                    aria-label={`Message ${p.display_name}`}
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </Link>
-                )}
-                {p.phone && (
-                  <a
-                    href={`tel:${p.phone}`}
-                    aria-label={`Call ${p.display_name}`}
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
-                )}
-              </div>
-              {joinedAs && (
-                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
-                  Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
-                </p>
-              )}
-              {lookalikes.length > 0 && (
-                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="two-accounts">
-                  <p>
-                    {lookalikes.length === 1
-                      ? `Two accounts? ${lookalikeNames} looks like the same person. If so, keep the one they sign in with and remove the other.`
-                      : `More than one account? ${lookalikeNames} look like the same person. If so, keep the one they sign in with and remove the others.`}
-                  </p>
-                  <button
-                    onClick={() =>
-                      answerCheck(
-                        lookalikes.map((o) => ({ kind: 'different_people', user_id: p.user_id, other_user_id: o.user_id })),
-                        `Got it: ${p.display_name} and ${lookalikeNames} are different people`,
-                      )
-                    }
-                    aria-label={`They're different people: ${p.display_name} and ${lookalikeNames}`}
-                    className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
-                  >
-                    They're different people
-                  </button>
-                </div>
-              )}
-              {skipped && (
-                <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="no-roster-name">
-                  <p>
-                    Didn't pick a roster name. If they're one of the grey cards, tap Edit on that card to move it to this
-                    account.
-                  </p>
-                  <button
-                    onClick={() => answerCheck([{ kind: 'not_on_roster', user_id: p.user_id }], `Got it: ${p.display_name} isn't on the roster`)}
-                    aria-label={`Not on the roster: ${p.display_name}`}
-                    className="mt-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-900 transition hover:bg-amber-100"
-                  >
-                    Not on the roster
-                  </button>
-                </div>
-              )}
-              {picked && (
-                <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500" data-testid="joined-as">
-                  <span className="min-w-0 flex-1">
-                    Joined as <b className="text-zinc-700">{picked.display_name}</b>
-                    {!canUnlink(picked) && ' · picked before undo was added'}
-                  </span>
-                  {canUnlink(picked) && (
-                    <button
-                      onClick={() => setUnlinking({ guest: picked, player: p })}
-                      aria-label={`Unlink ${picked.display_name} from ${p.display_name}`}
-                      className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
-                    >
-                      Unlink
-                    </button>
-                  )}
-                </div>
-              )}
-              {(isMe || data.isCaptain) && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
-                  {isMe && (
-                    <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
-                  )}
-                  <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
-                  {p.guest && data.isCaptain && (
-                    <button
-                      onClick={() => setGuestDialog(guests.find((g) => g.id === p.id))}
-                      aria-label={`Edit ${p.display_name}`}
-                      className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
-                    >
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  )}
-                  {!isMe && !p.guest && data.isCaptain && (
-                    <button
-                      onClick={() => toggleCaptain(p)}
-                      className={cn(
-                        'ml-auto rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
-                        p.is_captain ? 'bg-lime-400 text-black' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
-                      )}
-                    >
-                      {p.is_captain ? 'Captain ✓' : 'Make captain'}
-                    </button>
-                  )}
-                  {!isMe && !p.guest && data.isCaptain && (
-                    <button
-                      onClick={() => setRemoving(p)}
-                      aria-label={`Remove ${p.display_name}`}
-                      className="rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {joined.length > 0 && <h3 className={SECTION_LABEL}>On the site · {joined.length}</h3>}
+        {joined.map(rosterCard)}
         {roster.length === 0 && (
           <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
             No players yet. Teammates appear here once they sign up.
           </div>
         )}
-        {data.isCaptain && (
-          <button
-            onClick={() => setGuestDialog('new')}
-            className="flex w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-zinc-300 bg-white py-4 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
-          >
-            <UserPlus className="h-4 w-4" />
-            Add players to the roster
-          </button>
-        )}
       </div>
+
+      {notJoined.length > 0 && (
+        <div className="space-y-2">
+          <section className="rounded-3xl border-2 border-dashed border-zinc-300 bg-white p-4" data-testid="not-joined">
+            <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
+              {notJoined.length} {notJoined.length === 1 ? "hasn't" : "haven't"} joined yet
+            </h3>
+            <p className="mt-1 text-xs font-medium text-zinc-500">
+              On the roster and in the dues, but not signed up yet. When they do, they pick their name and their spot and
+              dues come with them.
+            </p>
+            <button
+              onClick={copyInvite}
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy invite
+            </button>
+          </section>
+          {notJoined.map(rosterCard)}
+        </div>
+      )}
+
+      {data.isCaptain && (
+        <button
+          onClick={() => setGuestDialog('new')}
+          className="flex w-full items-center justify-center gap-2 rounded-3xl border border-dashed border-zinc-300 bg-white py-4 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add players to the roster
+        </button>
+      )}
 
       {removedPlayers.length > 0 && (
         <section className="rounded-3xl border border-black/5 bg-white p-4" data-testid="removed-players">
