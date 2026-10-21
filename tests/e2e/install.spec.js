@@ -68,6 +68,18 @@ test.describe('on a phone', () => {
     await expect(guide(page)).toBeVisible();
   });
 
+  test('Get the app sits below the to-dos, above the notifications offer', async ({ context, page }) => {
+    await context.grantPermissions(['notifications']);
+    await signIn(page, undefined, { pushPrompt: true });
+    const top = async (locator) => (await locator.boundingBox()).y;
+    const nextGame = page.getByRole('region', { name: 'Next game' });
+    const notifications = page.getByRole('region', { name: 'Turn on notifications' });
+    await expect(card(page)).toBeVisible();
+    await expect(notifications).toBeVisible();
+    expect(await top(card(page))).toBeGreaterThan(await top(nextGame));
+    expect(await top(notifications)).toBeGreaterThan(await top(card(page)));
+  });
+
   test('Android: menu steps, or a one-tap Install button when Chrome offers it', async ({ page }) => {
     await signIn(page);
     await card(page).getByRole('button', { name: 'How' }).click();
@@ -96,6 +108,16 @@ test.describe('on a phone', () => {
       await expect(guide(page)).toContainText('Tap the Share button');
       await expect(guide(page)).toContainText('Add to Home Screen');
       await expect(guide(page)).toContainText('sign in once more');
+    });
+
+    test('Schedule makes one offer: Get the app, and closing it leaves none', async ({ page }) => {
+      await signIn(page, undefined, { pushPrompt: true });
+      const notifications = page.getByRole('region', { name: 'Turn on notifications' });
+      await expect(card(page)).toBeVisible();
+      await expect(notifications).toHaveCount(0);
+      await card(page).getByRole('button', { name: 'Not now' }).click();
+      await expect(card(page)).toHaveCount(0);
+      await expect(notifications).toHaveCount(0);
     });
   });
 

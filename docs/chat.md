@@ -151,8 +151,10 @@ Read markers are stored per player in the database (`chat_reads`), so phone and 
 
 ## 7. Phone notifications
 
-Players turn them on with the bell at the top of the chat's room list, on My Profile, or from the one-time offer at
-the top of Schedule (also shown at the top of the room list until it's answered or dismissed). Once on, players choose **Chat messages**,
+Players turn them on with the bell at the top of the chat's room list, on My Profile, or from the one-time offer on
+Schedule, below the to-dos (also shown at the top of the room list until it's answered or dismissed). In the iPhone
+browser, Schedule shows only its **Get the app** card instead, since notifications need the Home Screen app there
+(the room list's offer still says so). Once on, players choose **Chat messages**,
 **@mentions** and **Game alerts** separately (all on unless turned off; `player_profiles.notify_chat` /
 `notify_mentions` / `notify_games`), and the choice covers all their devices. Chat messages off with @mentions on
 means "only when someone @mentions me". They're standard Web Push: on an iPhone they only work once the site is on the Home Screen, so

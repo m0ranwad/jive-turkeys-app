@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
+import { InstallCard } from '@/components/InstallApp';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
-import { NotificationsPrompt, usePush } from '@/components/chat/Notifications';
+import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
 import { NextSessionCard, SessionAheadCard, SessionPrompt, sessionAsk } from '@/components/SessionPrompt';
 import { GameCard } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
@@ -154,7 +155,9 @@ export function SchedulePage() {
       )}
       <PotmPrompt data={data} />
       {nextGame && ask && !askedAhead && !ask.answered && <SessionPrompt ask={ask} onAnswered={data.reload} />}
-      <NotificationsPrompt state={pushStatus} variant="card" />
+      <InstallCard onShowHow={showInstallGuide} />
+      {/* In the iPhone browser notifications need the Home Screen app, so Get the app is the one offer (even once closed). */}
+      {pushStatus !== 'needs-install' && <NotificationsPrompt state={pushStatus} variant="card" />}
 
       {sessions.length === 0 && (
         <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">
