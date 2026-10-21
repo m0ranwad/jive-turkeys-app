@@ -3,7 +3,14 @@
 import { createECDH, randomBytes } from 'node:crypto';
 import ece from 'http_ece';
 import { describe, expect, it, vi } from 'vitest';
-import { TEST_NOTIFICATION, chatNotification, gameReminderNotification, handleNotify, potmNotification } from '../../supabase/functions/_shared/notify.js';
+import {
+  TEST_NOTIFICATION,
+  chatNotification,
+  gameReminderNotification,
+  handleNotify,
+  potmNotification,
+  sessionAskNotification,
+} from '../../supabase/functions/_shared/notify.js';
 import { b64u, generateVapidKeys } from '../../supabase/functions/_shared/webpush.js';
 
 const MESSAGE = '11111111-2222-4333-8444-555555555555';
@@ -33,6 +40,7 @@ async function setup({ targets = [], subscriptions = [], unread = async () => []
     unreadCounts: vi.fn(unread),
     potmTargets: vi.fn(async () => targets),
     reminderTargets: vi.fn(async () => targets),
+    sessionAskTargets: vi.fn(async () => targets),
     subscriptionsOf: vi.fn(async () => subscriptions),
     forget: vi.fn(async () => {}),
   };
@@ -241,5 +249,34 @@ describe('game reminders', () => {
     expect((await handleNotify({ reminder_game_id: GAME, kind: 'open' }, '', deps))[0]).toBe(400);
     expect((await handleNotify({ reminder_game_id: 'x', kind: 'rsvp' }, '', deps))[0]).toBe(400);
     expect(db.reminderTargets).not.toHaveBeenCalled();
+  });
+});
+
+describe('"Playing session N?"', () => {
+  it('sends what the database wrote to the phones it picked, one per session on screen', async () => {
+    const row = (id) => ({
+      ...phone(id),
+      subscription_id: id,
+      title: '📋 Playing session 2?',
+      body: "Session 2 starts Sat, Jan 2 and you haven't answered yet. Tap to say I'm in, Sub only or Sitting out.",
+      url: '/',
+    });
+    const { deps, db, delivered } = await setup({ targets: [row('a'), row('b')] });
+    const [status, result] = await handleNotify({ session_ask: { year: 2026, session: 2 }, kind: 'reminder' }, '', deps);
+    expect(status).toBe(200);
+    expect(result).toMatchObject({ sent: 2 });
+    expect(db.sessionAskTargets).toHaveBeenCalledWith(2026, 2, 'reminder');
+    expect(delivered[0].message).toMatchObject({ title: '📋 Playing session 2?', url: '/', tag: 'session-2026-2' });
+    // The reminder replaces the "captains asked" one on screen.
+    expect(sessionAskNotification({ title: 't', body: 'b', url: '/' }, { year: 2026, session: 2 }).tag).toBe('session-2026-2');
+  });
+
+  it('ignores anything that is not a real session and kind', async () => {
+    const { deps, db } = await setup();
+    expect((await handleNotify({ session_ask: { year: 2026, session: 2 }, kind: 'subs' }, '', deps))[0]).toBe(400);
+    expect((await handleNotify({ session_ask: { year: 'x', session: 2 }, kind: 'asked' }, '', deps))[0]).toBe(400);
+    expect((await handleNotify({ session_ask: { year: 2026, session: 0 }, kind: 'asked' }, '', deps))[0]).toBe(400);
+    expect((await handleNotify({ session_ask: 'yes', kind: 'asked' }, '', deps))[0]).toBe(400);
+    expect(db.sessionAskTargets).not.toHaveBeenCalled();
   });
 });

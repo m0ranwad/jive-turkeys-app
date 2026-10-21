@@ -5,7 +5,7 @@ says which automated test checks it, so a change that breaks one shows up as a r
 publish it. If you change how game day works on purpose, update this page and the tests in the same change.
 
 **Tests:** `[browser]` = `tests/e2e/game-day.spec.js` and the other `tests/e2e/*.spec.js` (Playwright, demo
-mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test.sql` and `session_asks.test.sql` ·
+mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test.sql`, `session_asks.test.sql` and `session_notify.test.sql` ·
 `[unit]` = `tests/unit/game-day.test.js`, `games.test.js`, `results.test.js`, `roster.test.js`. How to run them: see the Tests section of
 `CLAUDE.md`.
 
@@ -92,3 +92,14 @@ the schedule or while this session still has games left.
 | When an asked session becomes the current one, the answers given ahead become everyone's status right now, once, without being recorded again as dues changes. | `[db]` `[unit]` |
 | Captains see how many have answered and who hasn't on the Team page, and can answer for anyone, roster names included. Players don't see that list. Between sessions that session is the current one, so a captain's answer is that player's status right now, as when tapping a status on the Team page. | `[browser]` |
 | Answers stop once the session's first game is played. | `[db]` |
+
+**Notifications** (under **Game alerts**, through `notify-chat`; the database writes the words and picks who gets
+each one, `session_ask_targets()`). A session starts on its first game's date once the schedule is up, else on
+the date captains gave.
+
+| Rule | Checked by |
+|---|---|
+| When captains ask about a session, everyone on its list gets "📋 Playing session N?" with when it starts; not the captain who asked. Tapping it opens Schedule. Changing the date, or stopping and asking again, doesn't send it again. | `[db]` `[unit]` |
+| At noon (Eastern) a week before a session starts, anyone asked who hasn't answered gets a reminder: whenever the question is open, whether captains asked ahead or it opened on its own once the schedule was up. A timer (`pg_cron`, every 5 minutes, `session_asks_tick()`) sends it. | `[db]` |
+| If the question opens later than that, the reminder goes at the next chance between noon and 9 PM, at least a day after the "captains asked" one, and never on the first game's day. | `[db]` |
+| Each goes out once per session, only to players on the team who kept **Game alerts** on, never to anyone taken off the team or not yet in with the team code. Nothing once the first game is played. | `[db]` |

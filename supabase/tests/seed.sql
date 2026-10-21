@@ -248,3 +248,13 @@ begin
   end if;
 end;
 $$;
+
+-- "Playing session 3?" went out when captains asked (once those notifications exist).
+do $$
+begin
+  if to_regclass('public.session_ask_log') is not null then
+    insert into public.session_ask_log (season_year, session, kind, created_date) values
+      (2026, 3, 'asked', '2026-10-12 18:00+00');
+  end if;
+end;
+$$;
