@@ -83,9 +83,10 @@ function readDismissed() {
 
 /**
  * A one-time offer to turn notifications on (or, on iPhone, to add the site to
- * the Home Screen first): a card at the top of Schedule (`card`), or a smaller
- * one at the top of the chat's room list (`list`). "Not now" in either hides
- * both for good.
+ * the Home Screen first): a card on Schedule below the to-dos (`card`), or a
+ * smaller one at the top of the chat's room list (`list`). "Not now" in either
+ * hides both for good. Schedule leaves out the iPhone version, since its Get the
+ * app card already makes that offer.
  */
 export function NotificationsPrompt({ state, variant = 'list' }) {
   const [dismissed, setDismissed] = useState(readDismissed);

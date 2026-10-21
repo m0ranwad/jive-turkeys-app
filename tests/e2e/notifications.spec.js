@@ -1,5 +1,5 @@
 // Notifications on this device: the bell and the one-time offer (both at the top
-// of the chat's room list; the offer on Schedule too),
+// of the chat's room list; the offer on Schedule too, except in the iPhone browser),
 // the settings (with chat messages and game alerts switched separately), and the
 // background helper that shows notifications and opens the chat.
 // Previews have no sender, so turning on shows a local sample instead; the
@@ -185,6 +185,9 @@ test.describe('on an iPhone that has not added the site to its Home Screen', () 
 
   test('points to the Home Screen first', async ({ page }) => {
     await signIn(page, undefined, { pushPrompt: true });
+    // Schedule's Get the app card covers it there (tests/e2e/install.spec.js).
+    await expect(page.getByRole('region', { name: 'Add to Home Screen' })).toBeVisible();
+    await expect(card(page)).toHaveCount(0);
     await openChat(page);
     await showRooms(page);
     await expect(card(page)).toContainText('add Jive Turkeys to your Home Screen first');
