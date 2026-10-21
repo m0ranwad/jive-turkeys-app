@@ -46,13 +46,13 @@ test('a new session asks who is playing, and the last session keeps its dues', a
 
   // Session 2 splits without the captain; session 1 is exactly as it was.
   await openTab(page, '/dues', 'Dues');
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
   await expect(paidHeading(page, '6 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
   // The dues history says why the split changed.
   await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText("You're sitting out");
   await page.getByRole('button', { name: 'Previous session' }).click();
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026–27');
   await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Casey Captain');
@@ -101,7 +101,7 @@ test('captains can correct who was on a past session, and only that session chan
 
   // A session that hasn't started uses today's roster until it does.
   await page.getByRole('button', { name: 'Next session' }).click();
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
   await page.getByRole('button', { name: 'Set the fee' }).click();
   await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
   await expect(page.getByTestId('dues-not-started')).toContainText("Session 3 hasn't started, so this uses today's roster.");
