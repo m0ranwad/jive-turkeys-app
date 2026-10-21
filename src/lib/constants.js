@@ -1,5 +1,10 @@
 export const SESSIONS = [1, 2, 3];
 
+// A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is
+// filed under the year it starts in. From this month (May) on, dates belong to the
+// season that starts that November.
+export const SEASON_TURNS_MONTH = 5;
+
 export const POSITIONS = ['Forward', 'Mid-Field', 'Defense', 'Goalie'];
 
 export const STATUS_LABEL = { active: 'Active', on_break: 'On Break', sub_pool: 'Sub Pool' };

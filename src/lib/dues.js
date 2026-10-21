@@ -3,7 +3,7 @@
 // together, and the links players pay with.
 
 import { SESSIONS } from './constants';
-import { shortName } from './format';
+import { seasonName, shortName } from './format';
 
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
@@ -112,7 +112,7 @@ export function feeSentence(parts) {
 
 /** The note payments carry, so whoever collects can tell who and what they're for. */
 export const payNote = (year, session, names = []) =>
-  [`Jive Turkeys dues · Session ${session} ${year}`, names.join(' & ')].filter(Boolean).join(' · ');
+  [`Jive Turkeys dues · Session ${session} ${seasonName(year)}`, names.join(' & ')].filter(Boolean).join(' · ');
 
 /** A signed-up player a captain took off the team: off the roster, like a removed roster name. */
 export const profileAsPlayer = (p) => (p.removed ? { ...p, status: 'inactive' } : p);

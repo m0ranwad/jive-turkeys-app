@@ -16,7 +16,7 @@ import { AddToCalendar } from '@/components/game/AddToCalendar';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { saveFailedToast } from '@/lib/errors';
-import { fmtDateLong, fmtTime, jerseyText, today } from '@/lib/format';
+import { fmtDateLong, fmtTime, jerseyText, seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
@@ -161,7 +161,7 @@ export function GameDetailPage() {
       <section className="overflow-hidden rounded-3xl bg-zinc-950 text-white">
         <div className="p-5">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-lime-400">
-            {game.season_year} · Session {game.session}
+            {seasonLabel(game.season_year, game.session)}
           </div>
           <h1 className="mt-1.5 font-display text-3xl font-extrabold uppercase leading-none tracking-tight">vs {game.opponent}</h1>
           <p className="mt-2 text-sm font-medium text-white/60">

@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { CARD } from '@/lib/constants';
 import { dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues } from '@/lib/dues';
-import { today } from '@/lib/format';
+import { seasonName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip, shortDate } from './DuesParts';
 
@@ -218,7 +218,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
             className="flex w-full items-center gap-3 py-3 text-left"
           >
             <span className="flex-1 text-sm font-semibold">
-              Session {s.period.session} · {s.period.year}
+              Session {s.period.session} · {seasonName(s.period.year)}
             </span>
             {otherAmount(s) != null && (
               <span className="text-sm font-bold tabular-nums">{dollars(otherAmount(s))}</span>

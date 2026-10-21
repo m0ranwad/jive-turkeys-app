@@ -156,6 +156,17 @@ test('captains asking who\'s playing, and between sessions', async ({ page }) =>
   await expectAccessible(page, 'Schedule between sessions');
 });
 
+test('adding and importing games', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Add game' }).click();
+  await expect(page.getByRole('dialog', { name: 'Add game' })).toBeVisible();
+  await expectAccessible(page, 'Add game');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Import' }).click();
+  await expect(page.getByRole('dialog', { name: 'Import schedule' })).toBeVisible();
+  await expectAccessible(page, 'Import schedule');
+});
+
 test('toggle buttons tell screen readers which one is picked', async ({ page }) => {
   await signIn(page);
   await visit(page, '/stats', 'Stats');

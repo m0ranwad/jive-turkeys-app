@@ -4,15 +4,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveFailedToast } from '@/lib/errors';
-import { venueText } from '@/lib/format';
+import { seasonOf, today, venueText } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { JerseyDot } from './GameCard';
+import { SeasonPicker } from './SeasonPicker';
 import { SessionPicker } from './SessionPicker';
 
 export function GameFormDialog({ open, onOpenChange, game, settings, defaultSession, onSave }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
+  // The season the picker centers on: the game's own, or the one new games most likely belong to.
+  const season = game ? game.season_year : defaultSession?.year || seasonOf(today());
 
   useEffect(() => {
     if (!open) return;
@@ -20,7 +23,7 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
       game
         ? { ...game }
         : {
-            season_year: defaultSession?.year || new Date().getFullYear(),
+            season_year: season,
             session: defaultSession?.session || 1,
             date: '',
             time: '19:00',
@@ -69,14 +72,13 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Season year</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
+              <Label>Season</Label>
+              <SeasonPicker
                 value={form.season_year}
-                onChange={(e) => set({ season_year: e.target.value })}
+                around={season}
+                onChange={(season_year) => set({ season_year })}
               />
             </div>
             <div className="space-y-2">
@@ -86,27 +88,27 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Date</Label>
-              <Input type="date" value={form.date || ''} onChange={(e) => set({ date: e.target.value })} />
+              <Label htmlFor="game-date">Date</Label>
+              <Input id="game-date" type="date" value={form.date || ''} onChange={(e) => set({ date: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Time</Label>
-              <Input type="time" value={form.time || ''} onChange={(e) => set({ time: e.target.value })} />
+              <Label htmlFor="game-time">Time</Label>
+              <Input id="game-time" type="time" value={form.time || ''} onChange={(e) => set({ time: e.target.value })} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Opponent</Label>
-              <Input value={form.opponent || ''} onChange={(e) => set({ opponent: e.target.value })} placeholder="Team name" />
+              <Label htmlFor="game-opponent">Opponent</Label>
+              <Input id="game-opponent" value={form.opponent || ''} onChange={(e) => set({ opponent: e.target.value })} placeholder="Team name" />
             </div>
             <div className="space-y-2">
-              <Label>Field number</Label>
-              <Input value={form.field_number || ''} onChange={(e) => set({ field_number: e.target.value })} placeholder="3" />
+              <Label htmlFor="game-field">Field number</Label>
+              <Input id="game-field" value={form.field_number || ''} onChange={(e) => set({ field_number: e.target.value })} placeholder="3" />
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Location</Label>
-            <Input value={form.location || ''} onChange={(e) => set({ location: e.target.value })} />
+            <Label htmlFor="game-location">Location</Label>
+            <Input id="game-location" value={form.location || ''} onChange={(e) => set({ location: e.target.value })} />
           </div>
           <div className="space-y-2">
             <Label>Jersey</Label>
@@ -132,8 +134,9 @@ export function GameFormDialog({ open, onOpenChange, game, settings, defaultSess
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Notes</Label>
+            <Label htmlFor="game-notes">Notes</Label>
             <Textarea
+              id="game-notes"
               value={form.notes || ''}
               onChange={(e) => set({ notes: e.target.value })}
               rows={2}

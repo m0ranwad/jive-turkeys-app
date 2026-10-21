@@ -249,6 +249,23 @@ describe('importing a league schedule', () => {
     expect(normalizeTime('TBD')).toBe('');
   });
 
+  it("puts dates without a year in the season's years: November and December first, January to April the next", async () => {
+    expect(normalizeDate('Sat 11/7', 2026)).toBe('2026-11-07');
+    expect(normalizeDate('Dec 19', 2026)).toBe('2026-12-19');
+    expect(normalizeDate('Sat Jan 2', 2026)).toBe('2027-01-02');
+    expect(normalizeDate('1/9', 2026)).toBe('2027-01-09');
+    expect(normalizeDate('24 April', 2026)).toBe('2027-04-24');
+    // A year written in the sheet always wins.
+    expect(normalizeDate('Jan 2, 2027', 2026)).toBe('2027-01-02');
+    expect(normalizeDate('1/2/27', 2026)).toBe('2027-01-02');
+    // Session 2 of 2026–27, sent on December 29 without years.
+    const games = await parseScheduleFile(
+      csvFile(['Date,Time,Field,Opponent', 'Sat Jan 2,7:00 PM,2,Ball Busters', 'Sat Jan 9,8:10 PM,1,Goal Diggers'].join('\n')),
+      2026,
+    );
+    expect(games.map((g) => g.date)).toEqual(['2027-01-02', '2027-01-09']);
+  });
+
   it('finds the date, time, field and opponent columns by name in a spreadsheet', async () => {
     const games = await parseScheduleFile(
       xlsxFile([

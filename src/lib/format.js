@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { DEFAULT_SETTINGS } from './constants';
+import { DEFAULT_SETTINGS, SEASON_TURNS_MONTH } from './constants';
 
 dayjs.extend(customParseFormat);
 
@@ -22,7 +22,19 @@ export const fmtTime = (time) => {
 
 export const today = () => dayjs().format('YYYY-MM-DD');
 
-export const seasonLabel = (year, session) => `${year} · Session ${session}`;
+/** A season is filed under the year it starts in, and runs into the next: 2026 is "2026–27". */
+export const seasonName = (year) => `${year}–${String((Number(year) + 1) % 100).padStart(2, '0')}`;
+
+export const seasonLabel = (year, session) => `${seasonName(year)} · Session ${session}`;
+
+/** The season a date (YYYY-MM-DD) belongs to: January to April count for the one that started the November before. */
+export const seasonOf = (date) => {
+  const [year, month] = date.split('-').map(Number);
+  return month >= SEASON_TURNS_MONTH ? year : year - 1;
+};
+
+/** The calendar year a month (1-12) falls in during a season: November and December are its first year, January to April the next. */
+export const yearInSeason = (season, month) => (month >= SEASON_TURNS_MONTH ? Number(season) : Number(season) + 1);
 
 export const jerseyText = (jersey, settings) =>
   jersey === 'backup'

@@ -205,6 +205,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   or off a session's active roster (a session's list starting isn't a change). It shows in Team dues' Recent changes
   and players' history (`changeLine()`), and on My dues as **Why your share changed** (`shareChanges()`); the demo
   backend's `trackChange()` mirrors the triggers.
+- Seasons run November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and are filed under the year they start
+  in: `season_year` 2026 is the 2026–27 season, so January games of session 2 are still 2026. Show a season with
+  `seasonName()` / `seasonLabel()` ("2026–27 · Session 2") and get a date's with `seasonOf()` (`src/lib/format.js`).
+  Add game and Import start on `sessionForNewGames()` (`src/lib/roster.js`), and imported dates without a year go by
+  the season (`yearInSeason()`).
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
   current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status

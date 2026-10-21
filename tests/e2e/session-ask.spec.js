@@ -134,3 +134,29 @@ test("between sessions, a captain's answer for someone is their status right now
   await expect(playerCard(page, 'Mike Russo').getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'true');
   await expect(playerCard(page, 'Sam Okafor').getByRole('button', { name: 'On Break' })).toHaveAttribute('aria-pressed', 'true');
 });
+
+test("captains' new games go in the session they're asking about, with dates in the season's years", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Add game' }).click();
+  const form = page.getByRole('dialog', { name: 'Add game' });
+  await expect(form.getByRole('button', { name: '2026–27' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(form.getByRole('button', { name: '3', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(form).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Import' }).click();
+  const importer = page.getByRole('dialog', { name: 'Import schedule' });
+  await expect(importer.getByRole('button', { name: '2026–27' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(importer.getByRole('button', { name: '3', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  // The league's sheet has no years: March is in 2027, the season's second year.
+  await importer.locator('input[type="file"]').setInputFiles({
+    name: 'session-3.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('Date,Time,Field,Opponent\nSat Mar 6,7:00 PM,2,Ball Busters\n'),
+  });
+  await expect(importer.getByText('1 row ready for 2026–27 · Session 3')).toBeVisible();
+  await expect(importer.locator('input[type="date"]')).toHaveValue('2027-03-06');
+  await importer.getByRole('button', { name: 'Confirm 1 game' }).click();
+  await expect(importer).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '2026–27 · Session 3' })).toBeVisible();
+});

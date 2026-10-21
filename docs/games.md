@@ -29,6 +29,8 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Only captains add, change or delete games, and enter results and stat lines. | `[db]` |
+| A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is filed under the year it starts in. It's shown as both years, "2026–27 · Session 2", on Schedule, game pages, Stats and Dues, and in the note on dues payments. | `[unit]` `[browser]` |
+| A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. Captains can pick another season or session. | `[unit]` `[browser]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
 | A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
@@ -54,6 +56,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | A league sheet with Home and Away columns keeps only Jive Turkeys games, with the other team as the opponent. If our name isn't in it at all, every game is kept. | `[unit]` |
 | Without headers, each cell's role is guessed from what it looks like. | `[unit]` |
 | A date with no time gets no time (not 12:00 AM). | `[unit]` |
+| A date with no year takes it from the season being imported: November and December are its first year, January to April the next ("Sat Jan 2" in 2026–27 is January 2, 2027). A year in the sheet always wins. | `[unit]` `[browser]` |
 
 ## 5. Game reminders
 

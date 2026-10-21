@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { changeLine, dollars, feeParts, feeTotal, payOptions } from '@/lib/dues';
-import { shortName } from '@/lib/format';
+import { seasonName, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export const HEADING = 'font-display text-sm font-extrabold uppercase tracking-[0.12em]';
@@ -16,7 +16,7 @@ export const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 
 export const shortDate = (date) => (date ? dayjs(date).format('MMM D') : '');
 
-/** "‹ Session 2 · 2026 ›" */
+/** "‹ Session 2 · 2026–27 ›" */
 export function SessionStepper({ period, note, onStep }) {
   const arrow = 'grid h-10 w-10 place-items-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-black';
   return (
@@ -26,7 +26,7 @@ export function SessionStepper({ period, note, onStep }) {
       </button>
       <div className="text-center">
         <div className="font-display text-sm font-extrabold uppercase tracking-[0.12em]" data-testid="dues-session">
-          Session {period.session} · {period.year}
+          Session {period.session} · {seasonName(period.year)}
         </div>
         {note && <div className={cn(EYEBROW, 'mt-0.5 text-zinc-500')}>{note}</div>}
       </div>

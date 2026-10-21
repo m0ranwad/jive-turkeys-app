@@ -62,7 +62,7 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
   await signIn(page, ALEX);
   await openDues(page);
   await expect(page.getByRole('tab', { name: 'My dues' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
 
   const card = page.getByTestId('my-dues');
   await expect(card).toContainText('$122');
@@ -75,7 +75,7 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
 
   await expect(page.getByRole('link', { name: 'Pay $122 with Venmo' })).toHaveAttribute(
     'href',
-    'https://venmo.com/B-Kircher?txn=pay&audience=private&amount=122&note=Jive%20Turkeys%20dues%20%C2%B7%20Session%202%202026%20%C2%B7%20Alex%20Chen%20%26%20Riley%20Novak',
+    'https://venmo.com/B-Kircher?txn=pay&audience=private&amount=122&note=Jive%20Turkeys%20dues%20%C2%B7%20Session%202%202026%E2%80%9327%20%C2%B7%20Alex%20Chen%20%26%20Riley%20Novak',
   );
   const paypal = page.getByRole('link', { name: 'Pay $122 with PayPal' });
   await expect(paypal).toHaveAttribute('href', PAYPAL_QR);
@@ -521,12 +521,12 @@ test('stepping between sessions, and setting a new session fee from the last one
   await signIn(page);
   await openDues(page);
   await page.getByRole('button', { name: 'Previous session' }).click();
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026–27');
   await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
 
   await page.getByRole('button', { name: 'Next session' }).click();
   await page.getByRole('button', { name: 'Next session' }).click();
-  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
   await expect(page.getByText('No fee yet')).toBeVisible();
   await page.getByRole('button', { name: 'Set the fee' }).click();
   const dialog = page.getByRole('dialog', { name: 'Session 3 fee' });

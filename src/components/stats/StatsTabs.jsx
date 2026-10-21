@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ResultBadge } from '@/components/schedule/GameCard';
 import { CARD } from '@/lib/constants';
-import { seasonLabel } from '@/lib/format';
+import { seasonLabel, seasonName } from '@/lib/format';
 import { careerStats, filterGames, leaderboard, record, recordVsOpponents, resultOf } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +40,7 @@ export function StandingsTab({ games, year, session }) {
     session === 'all'
       ? year === 'all'
         ? `All-time record (as of ${new Date().getFullYear()})`
-        : `${year} season`
+        : `${seasonName(year)} season`
       : seasonLabel(year, session);
 
   return (
@@ -70,7 +70,7 @@ export function StandingsTab({ games, year, session }) {
           <h3 className={sectionTitle}>By season</h3>
           <div className="mt-3 space-y-2">
             {years.map((y) => (
-              <RecordRow key={y} label={`${y}`} record={record(games.filter((g) => g.season_year === y))} />
+              <RecordRow key={y} label={seasonName(y)} record={record(games.filter((g) => g.season_year === y))} />
             ))}
             {years.length === 0 && <p className="text-sm text-zinc-500">No results yet.</p>}
           </div>
@@ -201,7 +201,7 @@ export function OpponentsTab({ games, year, session }) {
                 {row.played.map((g) => (
                   <div key={g.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                     <span className="w-24 shrink-0 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-500">
-                      {g.season_year} S{g.session}
+                      {seasonName(g.season_year)} S{g.session}
                     </span>
                     <span className="flex-1 text-xs font-medium text-zinc-500">{g.date}</span>
                     <span className="font-display text-sm font-extrabold">
@@ -316,7 +316,7 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                       className="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-2 border-t border-zinc-50 py-2 text-sm"
                     >
                       <span className="truncate text-xs font-bold uppercase tracking-[0.06em] text-zinc-500">
-                        {s.year} · S{s.session}
+                        {seasonName(s.year)} · S{s.session}
                       </span>
                       <span className="w-7 text-center font-semibold">{s.games}</span>
                       <span className="w-7 text-center font-semibold">{s.goals}</span>

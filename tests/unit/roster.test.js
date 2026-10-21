@@ -7,7 +7,17 @@ import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
 import { sessionAsk } from '@/components/SessionPrompt';
-import { askFor, beforeFirstGame, entryFor, isEarlier, membersForSession, stillAsking, unanswered } from '@/lib/roster';
+import { seasonLabel, seasonName, seasonOf } from '@/lib/format';
+import {
+  askFor,
+  beforeFirstGame,
+  entryFor,
+  isEarlier,
+  membersForSession,
+  sessionForNewGames,
+  stillAsking,
+  unanswered,
+} from '@/lib/roster';
 
 const S1 = { year: 2026, session: 1 };
 const S2 = { year: 2026, session: 2 };
@@ -372,5 +382,50 @@ describe('"Playing session N?" asked ahead', () => {
       await expect(api.roster.ask({ year, session: 2, startsOn: '2099-01-02' })).resolves.toBeNull();
       await expect(api.entities.SessionAsk.create({ season_year: year, session: 3, starts_on: '2099-01-02' })).rejects.toThrow();
     });
+  });
+});
+
+describe('seasons that cross New Year', () => {
+  it('are filed under the year they start in and shown as both years', () => {
+    expect(seasonName(2026)).toBe('2026–27');
+    expect(seasonName(2099)).toBe('2099–00');
+    expect(seasonLabel(2026, 2)).toBe('2026–27 · Session 2');
+  });
+
+  it('run November to April, and the months in between count for the season coming up', () => {
+    expect(seasonOf('2026-11-07')).toBe(2026);
+    expect(seasonOf('2026-12-19')).toBe(2026);
+    expect(seasonOf('2027-01-02')).toBe(2026);
+    expect(seasonOf('2027-04-24')).toBe(2026);
+    expect(seasonOf('2027-05-01')).toBe(2027);
+    expect(seasonOf('2027-10-20')).toBe(2027);
+  });
+});
+
+describe('which session new games go in', () => {
+  const game = (period, date) => ({ season_year: period.year, session: period.session, date });
+  // Session 1 of 2026–27: Saturdays (none on Thanksgiving weekend), the last on December 19.
+  const session1 = ['2026-11-07', '2026-11-14', '2026-11-21', '2026-12-05', '2026-12-12', '2026-12-19'].map((d) => game(S1, d));
+  const askedS2 = [{ season_year: 2026, session: 2, starts_on: '2027-01-02' }];
+
+  it('is the session captains are asking about, while this one wraps up or before its schedule is out', () => {
+    expect(sessionForNewGames(session1, '2026-12-15', askedS2)).toEqual(S2);
+    expect(sessionForNewGames(session1, '2026-12-29', askedS2)).toEqual(S2);
+    // Not once they stopped asking.
+    expect(sessionForNewGames(session1, '2026-12-15', [{ ...askedS2[0], starts_on: null }])).toEqual(S1);
+  });
+
+  it("is the newest session on the schedule while it has games to come, and the next one once it's over", () => {
+    expect(sessionForNewGames(session1, '2026-12-15', [])).toEqual(S1);
+    expect(sessionForNewGames(session1, '2026-12-29', [])).toEqual(S2);
+    // Session 2's games are up: more of them go in session 2, even with session 1 still going.
+    expect(sessionForNewGames([...session1, game(S2, '2027-01-02')], '2026-12-15', askedS2)).toEqual(S2);
+    // After session 3 comes the next season's first.
+    expect(sessionForNewGames([game({ year: 2026, session: 3 }, '2027-04-24')], '2027-05-10', [])).toEqual({ year: 2027, session: 1 });
+  });
+
+  it("is the first session of today's season when there are no games yet", () => {
+    expect(sessionForNewGames([], '2026-10-20', [])).toEqual({ year: 2026, session: 1 });
+    expect(sessionForNewGames([], '2027-02-01', [])).toEqual({ year: 2026, session: 1 });
   });
 });

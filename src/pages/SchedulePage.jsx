@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import dayjs from 'dayjs';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
@@ -15,7 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { seasonLabel, today } from '@/lib/format';
-import { isEarlier, membersForSession } from '@/lib/roster';
+import { isEarlier, membersForSession, sessionForNewGames } from '@/lib/roster';
 import { headcount, isRosterStatus, suspendedIds } from '@/lib/team-logic';
 
 export function SchedulePage() {
@@ -111,9 +110,8 @@ export function SchedulePage() {
     </section>
   );
 
-  const defaultSession = sessions[0]
-    ? { year: sessions[0].year, session: sessions[0].session }
-    : { year: dayjs().year(), session: 1 };
+  // New games go in the session being asked about ahead, the newest one on the schedule, or the next one.
+  const defaultSession = sessionForNewGames(data.games, todayIso, data.roster?.asks);
 
   return (
     <div className="space-y-6">
@@ -204,6 +202,7 @@ export function SchedulePage() {
         onOpenChange={setImportOpen}
         settings={data.settings}
         existingGames={data.games || []}
+        defaultSession={defaultSession}
         onDone={async (count) => {
           await data.reload();
           toast({ title: `${count} game${count === 1 ? '' : 's'} imported` });

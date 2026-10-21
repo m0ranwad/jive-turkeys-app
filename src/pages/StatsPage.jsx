@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { SESSIONS } from '@/lib/constants';
+import { seasonName } from '@/lib/format';
 
 const TAB_CLASS = 'text-[11px] font-bold uppercase tracking-[0.08em]';
 
@@ -36,7 +37,7 @@ export function StatsPage() {
             <SelectItem value="all">All seasons</SelectItem>
             {years.map((y) => (
               <SelectItem key={y} value={String(y)}>
-                {y}
+                {seasonName(y)}
               </SelectItem>
             ))}
           </SelectContent>
