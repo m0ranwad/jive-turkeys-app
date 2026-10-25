@@ -16,8 +16,9 @@ export function useDues() {
         api.entities.PlayerProfile.list(),
         api.entities.TeamGuest.list('display_name'),
         api.entities.Game.list('-date'),
-        // Who was on each session. Before the database has session lists, today's statuses count for every session.
-        api.entities.SessionRoster.list().catch(() => null),
+        // Who was on each session. No fallback: guessing with today's statuses would ask
+        // players to pay for sessions they didn't play, so a failed read fails the page.
+        api.entities.SessionRoster.list(),
         // What moved each session's split (fee, custom amounts, roster), once the database keeps it.
         api.entities.DuesChange.list('-created_date').catch(() => []),
       ]);

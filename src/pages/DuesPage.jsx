@@ -3,6 +3,7 @@ import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionStepper } from '@/components/dues/DuesParts';
 import { MyDues } from '@/components/dues/MyDues';
 import { TeamDues } from '@/components/dues/TeamDues';
+import { Button } from '@/components/ui/button';
 import { CARD } from '@/lib/constants';
 import { currentSession, stepSession } from '@/lib/dues';
 import { today } from '@/lib/format';
@@ -21,14 +22,28 @@ export function DuesPage() {
   const dues = useDues();
   const [picked, setPicked] = useState(null);
   const [period, setPeriod] = useState(null);
+  const [retrying, setRetrying] = useState(false);
 
   if (teamLoading || dues.loading || !user) return <PageSpinner />;
   if (dues.failed) {
+    // Nothing to pay or mark from until everything loads: a share worked out from part of it could be wrong.
+    const retry = async () => {
+      setRetrying(true);
+      await dues.reload();
+      setRetrying(false);
+    };
     return (
       <div className="space-y-5">
         <PageHeader title="Dues" />
-        <section className={cn(CARD, 'text-center')}>
-          <p className="text-sm font-medium text-zinc-500">The dues didn't load. Try again in a minute.</p>
+        <section className={cn(CARD, 'text-center')} data-testid="dues-failed">
+          <p className="text-sm font-medium text-zinc-500">The dues didn't load. Check your signal and try again.</p>
+          <Button
+            onClick={retry}
+            disabled={retrying}
+            className="mt-4 h-11 rounded-xl bg-lime-400 px-6 font-bold text-black hover:bg-lime-300"
+          >
+            {retrying ? 'Trying again…' : 'Try again'}
+          </Button>
         </section>
       </div>
     );

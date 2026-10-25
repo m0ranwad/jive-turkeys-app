@@ -115,3 +115,49 @@ test('players cannot correct past sessions', async ({ page }) => {
   await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
   await expect(page.getByRole('button', { name: /Change who was on session/ })).toHaveCount(0);
 });
+
+// The demo backend acts out one kind of data not loading when jt_demo_fail_reads names its table.
+const failRosterReads = (page) => page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'session_roster'));
+const restoreRosterReads = (page) => page.evaluate(() => localStorage.removeItem('jt_demo_fail_reads'));
+
+test("if who was on each session doesn't load, Dues says so and offers nothing to pay until it does", async ({ page }) => {
+  // Chris joined in session 2, so he owes nothing for session 1.
+  await signIn(page, 'chris@demo.test');
+  await openTab(page, '/dues', 'Dues');
+  await page.getByRole('button', { name: 'Previous session' }).click();
+  await expect(page.getByTestId('my-dues')).toContainText('Not on the roster');
+
+  await failRosterReads(page);
+  await openTab(page, '/', 'Schedule');
+  await openTab(page, '/dues', 'Dues');
+  await expect(page.getByTestId('dues-failed')).toContainText("The dues didn't load");
+  // Not worked out from today's roster instead: no share, no pay links, nothing to mark.
+  await expect(page.getByTestId('my-dues')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Mark (me|us) paid/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByTestId('dues-failed')).toBeVisible();
+
+  await restoreRosterReads(page);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
+  await page.getByRole('button', { name: 'Previous session' }).click();
+  await expect(page.getByTestId('my-dues')).toContainText('Not on the roster');
+});
+
+test("if who's on each session doesn't load, Playing session N? waits, and the next screen tries again", async ({ page }) => {
+  await signIn(page);
+  await expect(prompt(page)).toContainText('Playing session 2?');
+
+  await failRosterReads(page);
+  await openTab(page, '/team', 'Team');
+  await expect(page.getByTestId('session-answers')).toHaveCount(0);
+  await openTab(page, '/', 'Schedule');
+  await expect(prompt(page)).toHaveCount(0);
+
+  await restoreRosterReads(page);
+  await openTab(page, '/team', 'Team');
+  await expect(page.getByTestId('session-answers')).toContainText('Playing session 2? · 8 of 14 answered');
+  await openTab(page, '/', 'Schedule');
+  await expect(prompt(page)).toContainText('Playing session 2?');
+});

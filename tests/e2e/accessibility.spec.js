@@ -74,6 +74,11 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'My dues');
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await expectAccessible(page, 'Team dues');
+  await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'session_roster'));
+  await visit(page, '/dues', 'Dues');
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expectAccessible(page, "Dues that didn't load");
+  await page.evaluate(() => localStorage.removeItem('jt_demo_fail_reads'));
 
   await visit(page, '/announcements', 'Announcements');
   await expectAccessible(page, 'Announcements');

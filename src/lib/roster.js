@@ -8,7 +8,7 @@ import { seasonOf } from './format';
 
 const sameSession = (row, period) => row.season_year === Number(period.year) && row.session === Number(period.session);
 
-/** One session's entries. `rows` is every session_roster row, or null before the lists exist. */
+/** One session's entries. `rows` is every session_roster row, or null when they didn't load (useTeam()). */
 export function sessionRows(rows, period) {
   return (rows || []).filter((r) => sameSession(r, period));
 }
