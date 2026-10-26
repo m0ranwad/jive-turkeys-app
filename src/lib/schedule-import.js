@@ -83,7 +83,7 @@ export function normalizeTime(value) {
     return `${pad(Math.floor(minutes / 60) % 24)}:${pad(minutes % 60)}`;
   }
   const text = String(value);
-  let m = text.match(/(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m?\.?(?![a-z])/i);
+  let m = text.match(/(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*([ap])\.?\s*m?\.?(?![a-z])/i);
   if (m) {
     let hours = Number(m[1]) % 12;
     if (m[3].toLowerCase() === 'p') hours += 12;
@@ -198,7 +198,9 @@ function rowsByShape(rows, season) {
 export async function parseScheduleFile(file, season) {
   // The spreadsheet reader is large, so it's only loaded when someone imports.
   const XLSX = await import('xlsx');
-  const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  // raw: a .csv's cells come through as written. Otherwise the reader turns "10/15" into October 15, 2001
+  // before the season can give it a year. Date cells in a spreadsheet are still dates.
+  const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: true, raw: true });
   for (const name of workbook.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: '' });
     const header = findHeader(rows);
