@@ -1437,6 +1437,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
     async setPartner(userId, partnerId) {
       requireUser();
+      failIfOffline();
       const ids = [userId, partnerId].filter(Boolean);
       // Everyone whose partner changes, for the session lists that follow it.
       const changed = [];

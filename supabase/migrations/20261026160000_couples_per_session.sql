@@ -525,6 +525,22 @@ update public.session_roster r
   where r.guest_id = g.id and g.linked_user_id is null
     and (g.pays_with_user is not null or g.pays_with_guest is not null);
 
+-- A roster name picked before this update already has moved_roster, but its
+-- new moved_partners starts empty. The snapshots above point its partner at
+-- the account. Record those references too, so undoing an old pick restores
+-- both sides in past sessions, where the profile-following triggers won't run.
+update public.team_guest_links l
+  set moved_partners = array(
+    select r.id from public.session_roster r
+    where r.pays_with_user = l.user_id
+      and exists (
+        select 1 from public.session_roster moved
+        where moved.id = any (l.moved_roster) and moved.user_id = l.user_id
+          and moved.season_year = r.season_year and moved.session = r.session
+      )
+  )
+  where l.unlinked_at is null;
+
 revoke execute on function public.roster_follows_couples(integer, integer) from public, anon, authenticated;
 revoke execute on function public.session_roster_couple() from public, anon, authenticated;
 revoke execute on function public.roster_follow_couple() from public, anon, authenticated;

@@ -96,6 +96,8 @@ test('captains fix who paid together in a past session, for that session only', 
   await previousSession(page);
   await row(page, 'Sam Okafor').click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
+  await expect(sheet.getByLabel('Paid together in session 1')).toBeHidden();
+  await sheet.getByRole('button', { name: 'Edit who paid together' }).click();
   await expect(sheet).toContainText("Fixes session 1 only. Other sessions don't change.");
   await sheet.getByLabel('Paid together in session 1').selectOption({ label: 'Jordan Rivera' });
   await expect(page.getByText('Linked as paying together in session 1')).toBeVisible();
@@ -107,6 +109,93 @@ test('captains fix who paid together in a past session, for that session only', 
   await expect(row(page, 'Sam Okafor')).not.toContainText('with Jordan R.');
 });
 
+test('players set up a second couple from My dues and pay without changing the first couple', async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page, 'chris@demo.test');
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Pay together', exact: true }).getByLabel('Pays together with').selectOption({ label: 'Kelly Moss' });
+  await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('my-dues')).toContainText('$122');
+  await expect(page.getByTestId('my-dues')).toContainText('$61 each for you and Kelly Moss');
+  await expect(page.getByRole('link', { name: 'Pay $122 with Venmo' })).toHaveAttribute('href', /amount=122&/);
+
+  await page.reload();
+  await expect(page.getByTestId('my-dues')).toContainText('$122');
+  await page.getByRole('button', { name: 'Mark us paid', exact: true }).click();
+  await expect(page.getByText("You're both paid up", { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(page.getByTestId('dues-paid')).toContainText('Chris Dunn');
+  await expect(page.getByTestId('dues-paid')).toContainText('Kelly Moss');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Alex Chen');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Riley Novak');
+  await expect(row(page, 'Alex Chen')).toContainText('with Riley N.');
+  await previousSession(page);
+  await page.getByRole('tab', { name: 'My dues' }).click();
+  await expect(page.getByTestId('pay-together')).toHaveCount(0);
+});
+
+test('Pay together is available before the session fee is set', async ({ page }) => {
+  await signIn(page, JORDAN);
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    db.session_dues = db.session_dues.filter((d) => d.session !== 2);
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await expect(page.getByText('No fee yet', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await page.getByLabel('Pays together with', { exact: true }).selectOption({ label: 'Casey Captain' });
+  await expect(page.getByTestId('pay-together')).toContainText('With Casey Captain');
+  await expect(page.getByText('No fee yet', { exact: true })).toBeVisible();
+});
+
+test('My dues can set next session’s couple while the finished session keeps its payment', async ({ page }) => {
+  await signIn(page, JORDAN);
+  await betweenSessions(page);
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toContainText('From next session on.');
+  await page.getByLabel('Pays together with', { exact: true }).selectOption({ label: 'Casey Captain' });
+  await expect(page.getByTestId('pay-together')).toContainText('With Casey Captain');
+  await expect(page.getByTestId('my-dues')).toContainText('Your share');
+  await expect(page.getByTestId('my-dues')).toContainText('$61');
+  await expect(page.getByTestId('my-dues')).not.toContainText('You + Casey');
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(row(page, 'Jordan Rivera')).not.toContainText('with Casey C.');
+});
+
+test('relinking two couples names both displaced partners, supports cancellation, and keeps errors recoverable', async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page, 'chris@demo.test');
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await page.getByLabel('Pays together with', { exact: true }).selectOption({ label: 'Kelly Moss' });
+  await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Change who you pay with' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Pay together', exact: true });
+  await dialog.getByLabel('Pays together with').selectOption({ label: 'Riley Novak' });
+  await expect(dialog.getByRole('alert')).toContainText('Alex Chen and Kelly Moss will pay on their own.');
+  await dialog.getByRole('button', { name: 'Keep as is' }).click();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(dialog.getByLabel('Pays together with').locator('option:checked')).toHaveText('Kelly Moss');
+
+  await dialog.getByLabel('Pays together with').selectOption({ label: 'Riley Novak' });
+  await page.evaluate(() => localStorage.setItem('jt_demo_offline', '1'));
+  await dialog.getByRole('button', { name: 'Link them' }).click();
+  await expect(page.getByText("That didn't save", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('alert')).toContainText('Alex Chen and Kelly Moss will pay on their own.');
+  await page.evaluate(() => localStorage.removeItem('jt_demo_offline'));
+  await dialog.getByRole('button', { name: 'Link them' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('pay-together')).toContainText('With Riley Novak');
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(row(page, 'Alex Chen')).not.toContainText('with Riley N.');
+  await expect(row(page, 'Kelly Moss')).not.toContainText('with Chris D.');
+});
+
 test('between sessions, a couple is linked from the next session and the one that ended keeps how it was paid', async ({ page }) => {
   await signIn(page);
   await betweenSessions(page);
@@ -114,10 +203,11 @@ test('between sessions, a couple is linked from the next session and the one tha
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
   await row(page, 'Sam Okafor').click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
-  await expect(sheet.getByLabel('Paid together in session 2')).toBeVisible();
+  await expect(sheet.getByLabel('Paid together in session 2')).toBeHidden();
   await expect(sheet).toContainText('Session 2 keeps who paid together then.');
   await sheet.getByLabel('Pays together from next session').selectOption({ label: 'Morgan Lee' });
   await expect(page.getByText('Linked from next session')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Edit who paid together' }).click();
   await expect(sheet.getByLabel('Paid together in session 2')).toHaveValue('');
   await page.keyboard.press('Escape');
   await expect(row(page, 'Sam Okafor')).not.toContainText('with Morgan L.');

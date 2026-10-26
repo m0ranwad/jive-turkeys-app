@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Database tests: builds a scratch database from every migration, then runs
-# each supabase/tests/*.test.sql file against it.
+# each supabase/tests/*.test.sql file against it, plus the couples upgrade test.
 #
 # Needs a Postgres 15+ server and psql. Connection comes from the usual PG*
 # variables (PGHOST, PGPORT, PGUSER, PGPASSWORD); the user must be able to
@@ -36,6 +36,7 @@ done
 if [ "$status" -ne 0 ]; then
   echo "Database tests FAILED"
 else
+  bash scripts/test-couples-upgrade.sh
   echo "Database tests passed"
 fi
 exit "$status"

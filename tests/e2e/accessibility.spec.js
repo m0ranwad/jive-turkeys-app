@@ -71,7 +71,12 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'Field Rules');
 
   await visit(page, '/dues', 'Dues');
+  await page.getByRole('tab', { name: 'My dues' }).click();
   await expectAccessible(page, 'My dues');
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toBeVisible();
+  await expectAccessible(page, 'Pay together from My dues');
+  await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await expectAccessible(page, 'Team dues');
   await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();
@@ -81,8 +86,11 @@ test("the captain's screens", async ({ page }) => {
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Previous session' }).click();
   await page.getByRole('button', { name: 'Details for Alex Chen' }).click();
-  await expect(page.getByLabel('Paid together in session 1')).toBeVisible();
+  await expect(page.getByLabel('Paid together in session 1')).toBeHidden();
   await expectAccessible(page, "A past session's player dues");
+  await page.getByRole('button', { name: 'Edit who paid together' }).click();
+  await expect(page.getByLabel('Paid together in session 1')).toBeVisible();
+  await expectAccessible(page, "Editing a past session's couple");
   await page.keyboard.press('Escape');
   await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'session_roster'));
   await visit(page, '/dues', 'Dues');
