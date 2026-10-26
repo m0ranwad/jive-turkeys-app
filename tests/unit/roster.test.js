@@ -424,6 +424,37 @@ describe('"Playing session N?" asked ahead', () => {
       expect(await api.entities.DuesChange.list()).toHaveLength(changes);
     });
 
+    it('brings the list up to date when its schedule goes up after captains stopped asking, and the answers count', async () => {
+      const api = await signedIn();
+      const year = (await api.entities.SessionDues.list())[0].season_year;
+      const sam = await profileOf(api, 'Sam Okafor');
+      const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+      await api.roster.ask({ year, session: 3, startsOn: null });
+      // While captains aren't asking: Sam (still to answer) sits out, Mike is taken off the team, and Nia joins.
+      await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
+      await api.entities.TeamGuest.update(mike.id, { removed: true });
+      await api.auth.signUp('newbie@demo.test', 'demo1234');
+      const newbie = await api.auth.me();
+      await api.entities.PlayerProfile.create({ user_id: newbie.id, display_name: 'Nia New', gender: 'F', status: 'active' });
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'active', answered_at: null });
+      expect(await rosterOf(api, 3, newbie.id)).toBeUndefined();
+      const changes = (await api.entities.DuesChange.list()).length;
+
+      // Session 2 is played out and session 3's first game goes on the schedule.
+      await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+      for (const g of await api.entities.Game.filter({ session: 2 })) await api.entities.Game.update(g.id, { date: '2000-01-01' });
+      await api.entities.Game.create({ season_year: year, session: 3, date: '2999-01-01', opponent: 'Net Ninjas' });
+      expect(await api.roster.start()).toEqual({ season_year: year, session: 3, over: false });
+      expect((await api.entities.SessionAsk.list())[0].applied_at).not.toBeNull();
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+      expect(await rosterOf(api, 3, newbie.id)).toMatchObject({ status: 'active', answered_at: null });
+      expect(await rosterOf(api, 3, mike.id)).toMatchObject({ status: 'off' });
+      // Jamie said she's back for session 3 and Riley sub only, before captains stopped asking.
+      expect(await profileOf(api, 'Jamie Fox')).toMatchObject({ status: 'active' });
+      expect(await profileOf(api, 'Riley Novak')).toMatchObject({ status: 'sub_pool' });
+      expect(await api.entities.DuesChange.list()).toHaveLength(changes);
+    });
+
     it('puts a player added back on the session asked about ahead again, to be asked again', async () => {
       const api = await signedIn();
       // Riley said sub only for session 3.

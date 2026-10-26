@@ -90,7 +90,7 @@ the schedule or while this session still has games left.
 | Asked again after captains stopped, the session's list catches up with what changed in between (statuses of anyone still to answer, new players, anyone removed) and keeps the answers given. | `[db]` `[unit]` |
 | An answer given for a roster name ahead (by a captain) goes with the name: the new player who picks it has that answer, not a fresh "still to answer". Undoing the pick gives the name its answer back and puts the account back on the list, still to answer. | `[db]` `[unit]` |
 | Between sessions, the question is the **Next up** card at the top of Schedule, with the answers so far (in, women, subs, sitting out, still to answer). Status changes made then (My Profile, Team page) count for that session, not the one that just ended. | `[db]` `[browser]` |
-| When an asked session becomes the current one, the answers given ahead become everyone's status right now, once, without being recorded again as dues changes. | `[db]` `[unit]` |
+| When an asked session becomes the current one, the answers given ahead become everyone's status right now, once, without being recorded again as dues changes. Its list is checked first (statuses of anyone still to answer, new players, anyone removed). Both happen even if captains stopped asking before its schedule went up. | `[db]` `[unit]` |
 | Captains see how many have answered and who hasn't on the Team page, and can answer for anyone, roster names included. Players don't see that list. Between sessions that session is the current one, so a captain's answer is that player's status right now, as when tapping a status on the Team page. | `[browser]` |
 | Answers stop once the session's first game is played. | `[db]` |
 

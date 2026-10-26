@@ -1471,9 +1471,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
 
   // Same as the database's roster_apply_asked(): an asked session that has just become
   // the current one is checked once more (above), and the answers given ahead become
-  // everyone's status. None of it is recorded as a dues change.
+  // everyone's status, also when captains stopped asking. None of it is recorded as a dues change.
   const applyAsked = (period) => {
-    const ask = db.session_asks.find((a) => samePeriod({ year: a.season_year, session: a.session }, period) && a.starts_on && !a.applied_at);
+    const ask = db.session_asks.find((a) => samePeriod({ year: a.season_year, session: a.session }, period) && !a.applied_at);
     if (!ask) return;
     Object.assign(ask, { applied_at: now(), updated_date: now() });
     refreshAsked(period);
