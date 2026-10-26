@@ -56,7 +56,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | A league sheet with Home and Away columns keeps only Jive Turkeys games, with the other team as the opponent. If our name isn't in it at all, every game is kept. | `[unit]` |
 | Without headers, each cell's role is guessed from what it looks like. | `[unit]` |
 | A date with no time gets no time (not 12:00 AM). | `[unit]` |
-| A date with no year takes it from the season being imported: November and December are its first year, January to April the next ("Sat Jan 2" in 2026–27 is January 2, 2027). A year in the sheet always wins. | `[unit]` `[browser]` |
+| A date with no year takes it from the season being imported: November and December are its first year, January to April the next ("Sat Jan 2" or "1/2" in 2026–27 is January 2, 2027, in a `.csv` too). A year in the sheet always wins, and so does a spreadsheet's own date cell. | `[unit]` `[browser]` |
 
 ## 5. Game reminders
 

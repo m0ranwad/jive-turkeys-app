@@ -266,6 +266,57 @@ describe('importing a league schedule', () => {
     expect(games.map((g) => g.date)).toEqual(['2027-01-02', '2027-01-09']);
   });
 
+  it("gives month/day dates in a .csv the season's years, not 2001", async () => {
+    expect(await parseScheduleFile(csvFile('Date,Time,Opponent\n10/15,7:00 PM,Net Ninjas\n'), 2027)).toEqual([
+      { date: '2027-10-15', time: '19:00', field_number: '', opponent: 'Net Ninjas' },
+    ]);
+    // A whole 2027–28 season written as month/day, with other separators too.
+    const season = ['11/6', '11/20', '12/4', '12/18', '1/8', '1/22', '2/5', '2-19', '3/4', '3.18', '4/1', '4/15'];
+    const games = await parseScheduleFile(
+      csvFile(['Date,Time,Opponent', ...season.map((date, i) => `${date},7:00:00 PM,Team ${i + 1}`)].join('\n')),
+      2027,
+    );
+    expect(games.map((g) => g.date)).toEqual([
+      '2027-11-06', '2027-11-20', '2027-12-04', '2027-12-18',
+      '2028-01-08', '2028-01-22', '2028-02-05', '2028-02-19',
+      '2028-03-04', '2028-03-18', '2028-04-01', '2028-04-15',
+    ]);
+    expect(new Set(games.map((g) => g.time))).toEqual(new Set(['19:00']));
+    // Without headers too, and a field number in front isn't taken for a date.
+    expect(await parseScheduleFile(csvFile('2,1/8,7:00 PM,Ball Busters\n'), 2027)).toEqual([
+      { date: '2028-01-08', time: '19:00', field_number: '2', opponent: 'Ball Busters' },
+    ]);
+    // A year written in the file still wins.
+    const dated = await parseScheduleFile(
+      csvFile('Date,Time,Opponent\n1/8/2028,7:00 PM,Net Ninjas\n10/15/26,7:00 PM,Goal Diggers\n2026-12-04 20:10,,FC Lightning\n'),
+      2027,
+    );
+    expect(dated.map((g) => [g.date, g.time])).toEqual([
+      ['2028-01-08', '19:00'],
+      ['2026-10-15', '19:00'],
+      ['2026-12-04', '20:10'],
+    ]);
+  });
+
+  it("keeps a spreadsheet's date cells as they are, and gives month/day text the season's years", async () => {
+    const games = await parseScheduleFile(
+      xlsxFile([
+        ['Date', 'Time', 'Opponent'],
+        [new Date(2026, 9, 15), '7:00 PM', 'Net Ninjas'],
+        [new Date(2028, 0, 8, 20, 10), '', 'Goal Diggers'],
+        ['11/6', '8:10 PM', 'Ball Busters'],
+        ['1/22', '9:20 PM', 'FC Lightning'],
+      ]),
+      2027,
+    );
+    expect(games.map((g) => [g.date, g.time])).toEqual([
+      ['2026-10-15', '19:00'],
+      ['2028-01-08', '20:10'],
+      ['2027-11-06', '20:10'],
+      ['2028-01-22', '21:20'],
+    ]);
+  });
+
   it('finds the date, time, field and opponent columns by name in a spreadsheet', async () => {
     const games = await parseScheduleFile(
       xlsxFile([
