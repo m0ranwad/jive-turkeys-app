@@ -134,6 +134,13 @@ export function TeamPage() {
 
   // Before a new session's first game, captains see who hasn't said if they're playing.
   const current = data.roster?.current;
+  // Which session a status change counts for. Once a session's games are all played, it keeps its list.
+  const over = !!data.roster?.over;
+  const countsFor = !current
+    ? ''
+    : over
+    ? ` — session ${current.session} is over, so it counts from the next session`
+    : ` — it counts for session ${current.session}`;
   const asking = !!current && data.isCaptain && beforeFirstGame(data.games, current, today());
   const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
   const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
@@ -397,7 +404,7 @@ export function TeamPage() {
     <div className="space-y-5">
       <PageHeader
         title="Team"
-        subtitle={`${current ? `Session ${current.session} · ` : ''}${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)${
+        subtitle={`${current && !over ? `Session ${current.session} · ` : ''}${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)${
           totals.notJoined ? ` · ${totals.notJoined} not joined yet` : ''
         }`}
       >
@@ -492,7 +499,7 @@ export function TeamPage() {
       <Formation players={roster.filter((p) => !p.guest || p.position)} />
 
       <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
-        Set your own roster status anytime{current ? ` — it counts for session ${current.session}` : ''}. On Break puts
+        Set your own roster status anytime{countsFor}. On Break puts
         you in the sub pool for call-ups. Captains can adjust anyone's status too, including teammates who haven't joined
         yet. Active players split the dues.
       </p>

@@ -18,6 +18,21 @@ async function openTab(page, path, heading) {
 
 const prompt = (page) => page.getByTestId('session-prompt');
 const paidHeading = (page, text) => page.getByRole('heading', { name: text, exact: true });
+const playerCard = (page, name) =>
+  page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
+
+/** Session 2's games are all played, captains stopped asking about session 3, and nothing else is on the schedule. */
+async function offSeason(page) {
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const year = new Date().getFullYear();
+    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-10-0${i + 2}`));
+    db.session_asks.forEach((a) => (a.starts_on = null));
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+}
 
 test('a new session asks who is playing, and the last session keeps its dues', async ({ page }) => {
   await signIn(page);
@@ -105,6 +120,36 @@ test('captains can correct who was on a past session, and only that session chan
   await page.getByRole('button', { name: 'Set the fee' }).click();
   await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
   await expect(page.getByTestId('dues-not-started')).toContainText("Session 3 hasn't started, so this uses today's roster.");
+});
+
+test('once a session is over, status changes count from the next one and its dues stay put; captains can correct it', async ({ page }) => {
+  await signIn(page);
+  await offSeason(page);
+  await openTab(page, '/team', 'Team');
+  await expect(page.getByText(/^12 active · 2 subs/)).toBeVisible();
+  await expect(page.getByText(/session 2 is over, so it counts from the next session/)).toBeVisible();
+  // A captain marks Kelly sitting out. Session 2's split doesn't change.
+  await playerCard(page, 'Kelly Moss').getByRole('button', { name: 'On Break' }).click();
+  await expect(page.getByText('Kelly Moss marked On Break')).toBeVisible();
+  await expect(page.getByText(/^11 active · 3 subs/)).toBeVisible();
+
+  await openTab(page, '/dues', 'Dues');
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
+  await expect(paidHeading(page, '6 of 12 paid')).toBeVisible();
+  await expect(page.getByText('$61 each')).toBeVisible();
+  // Adding players on the Team page doesn't change it any more; correcting it does.
+  await expect(page.getByRole('link', { name: /Add players to the roster on the Team page/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Change who was on session 2' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Who was on session 2' });
+  await expect(dialog.getByLabel('Kelly Moss in session 2')).toHaveValue('active');
+  await dialog.getByLabel('Kelly Moss in session 2').selectOption('on_break');
+  await dialog.getByRole('button', { name: 'Save 1 change' }).click();
+  await expect(page.getByText('Session 2 updated')).toBeVisible();
+  await expect(paidHeading(page, '6 of 11 paid')).toBeVisible();
+  await expect(page.getByText('$66 each')).toBeVisible();
+
+  await openTab(page, '/profile', 'Casey Captain');
+  await expect(page.getByText('Session 2 is over, so it counts from the next session')).toBeVisible();
 });
 
 test('players cannot correct past sessions', async ({ page }) => {

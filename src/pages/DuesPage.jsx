@@ -5,7 +5,7 @@ import { MyDues } from '@/components/dues/MyDues';
 import { TeamDues } from '@/components/dues/TeamDues';
 import { Button } from '@/components/ui/button';
 import { CARD } from '@/lib/constants';
-import { currentSession, stepSession } from '@/lib/dues';
+import { currentSession, openSession, stepSession } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { useDues } from '@/hooks/useDues';
 import { useTeam } from '@/hooks/useTeam';
@@ -53,6 +53,8 @@ export function DuesPage() {
   const view = picked ?? (isCaptain ? 'team' : 'mine');
   // Opens on the current session: the next game's, a session asked about between sessions, or the latest one.
   const current = currentSession(dues.games, today(), roster?.asks);
+  // Its games are all played and nothing else is on the schedule: it keeps its list, and captains correct it.
+  const over = !openSession(dues.games, today(), roster?.asks);
   const shown = period ?? current;
   const isCurrent = shown.year === current.year && shown.session === current.session;
   const hasFee = dues.dues.some((d) => d.season_year === Number(shown.year) && d.session === Number(shown.session));
@@ -86,6 +88,7 @@ export function DuesPage() {
       {view === 'team' ? (
         <TeamDues
           {...shared}
+          over={over}
           isCaptain={isCaptain}
           onSettingsSaved={async () => {
             await reloadTeam();

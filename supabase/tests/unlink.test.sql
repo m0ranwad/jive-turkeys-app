@@ -377,6 +377,48 @@ select unlink_test.ok(
     and (select count(*) = 1 from public.dues_payments where user_id = unlink_test.id('vet')),
   'and Vic Vet stays with Vic');
 
+-- ---------------------------------------------------------------------------
+-- Dee picked "Dot D" during session 3. Session 4 started while the name was
+-- picked, its game was yesterday, and nothing else is on the schedule. Undoing
+-- the pick now leaves session 4's list as it was: it's over.
+-- ---------------------------------------------------------------------------
+
+insert into unlink_test.people values
+  ('dee', '00000000-0000-4000-8000-0000000000d1'),
+  ('dot', '00000000-0000-4000-8000-0000000000d2');
+insert into auth.users (id, email) values (unlink_test.id('dee'), 'dee@unlink.test');
+update public.users set joined_team_at = now() where id = unlink_test.id('dee');
+insert into public.team_guests (id, display_name, gender, status) values (unlink_test.id('dot'), 'Dot D', 'F', 'active');
+select unlink_test.sign_in('dee');
+insert into public.player_profiles (user_id, display_name, gender, status) values (auth.uid(), 'Dot Dee', 'F', 'active');
+select public.claim_team_guest(unlink_test.id('dot'));
+reset role;
+
+update public.games set date = unlink_test.today() - 10 where session in (2, 3);
+insert into public.games (season_year, session, date, opponent) values (unlink_test.year(), 4, unlink_test.today() + 5, 'Grass Kickers');
+select unlink_test.sign_in('dee');
+select public.roster_start_current();
+reset role;
+update public.games set date = unlink_test.today() - 1 where session = 4;
+select unlink_test.ok(
+  exists (select 1 from public.session_roster where session = 4 and user_id = unlink_test.id('dee'))
+    and not exists (select 1 from public.session_roster where session = 4 and guest_id = unlink_test.id('dot'))
+    and (select open_year is null from public.roster_open_session()),
+  'session 4 started with the account on it, and is over');
+
+create temp table session_4_before as select * from public.session_roster where session = 4;
+create temp table changes_before as select * from public.dues_changes where session = 4;
+select unlink_test.sign_in('kim');
+select public.unlink_team_guest(unlink_test.id('dot'));
+reset role;
+select unlink_test.ok((select linked_user_id is null from public.team_guests where id = unlink_test.id('dot')),
+  'a captain undoes the pick');
+select unlink_test.ok(
+  not exists (select * from session_4_before except select * from public.session_roster where session = 4)
+    and not exists (select * from public.session_roster where session = 4 except select * from session_4_before)
+    and not exists (select * from public.dues_changes where session = 4 except select * from changes_before),
+  'the grey card isn''t put on session 4, which keeps its list and split');
+
 set role anon;
 select unlink_test.refused($$select public.unlink_team_guest(unlink_test.id('cory'))$$, 'signed-out visitors cannot undo a pick');
 select unlink_test.refused($$select count(*) from public.team_guest_links$$, 'or read the records');

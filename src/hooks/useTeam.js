@@ -12,7 +12,9 @@ let cache = { at: 0, promise: null, data: null };
 /**
  * Who's on the team each session: starts the current session's list if it
  * hasn't been yet, then reads every session's, and the sessions captains asked
- * about ahead ("Playing session N?"). Null if any of that fails: headcounts use
+ * about ahead ("Playing session N?"). `over`: the current session's games have
+ * all been played and nothing else is on the schedule, so status changes count
+ * from the next session, not that one. Null if any of that fails: headcounts use
  * today's statuses and "Playing session N?" isn't asked until it loads. Nothing
  * here asks anyone to pay; the Dues page reads the lists itself (useDues()).
  */
@@ -20,7 +22,7 @@ async function loadRoster() {
   try {
     const current = await api.roster.start();
     const [rows, asks] = await Promise.all([api.entities.SessionRoster.list(), api.entities.SessionAsk.list()]);
-    return { current: { year: current.season_year, session: current.session }, rows, asks };
+    return { current: { year: current.season_year, session: current.session }, over: !!current.over, rows, asks };
   } catch {
     return null;
   }
