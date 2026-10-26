@@ -52,6 +52,11 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
   branch, PR, merge, deploy, migration, build or repo; say "preview", "publish" and "undo".
 - Never ask him to run commands, edit files, click around GitHub or Cloudflare, or read code.
 - If a request is ambiguous, ask one short question before building.
+- When asked to work a bug or issue from the backlog, always ask questions rather than make
+  assumptions. Read the issue and its discussion, then ask focused questions to confirm the expected
+  behavior, scope, and any unresolved choices before implementing a fix. Wait for the answers to
+  questions that affect the fix. While waiting, inspect the code and reproduce the reported behavior
+  without deciding those choices on the user's behalf.
 - The other co-owner (whose GitHub account holds the repo) also makes changes and may use technical
   language; match whoever you're talking to.
 
