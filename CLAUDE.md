@@ -196,7 +196,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   a session that's over keeps its own, and captains fix it with `set_session_partner()`. Linking someone who already pays
   with somebody else asks first (`PartnerPicker`), naming every partner left paying alone. My dues has **Pay together**
   (also before a fee is set, and for the next session between sessions); captains' past-session pairing corrections
-  are behind **Edit who paid together** in the player's sheet. The couples migration also fills `moved_partners`
+  are behind **More options → Edit who paid together** in the player's sheet. The default sheet shows the amount,
+  payment status and payment action. More options offers partial payments, pairing and captain-only custom amounts,
+  one form at a time. History is shown on request only when there are events; roster-name explanations aren't
+  part of the payment sheet. My dues keeps Pay together as a small secondary link below the payment actions. The couples migration also fills `moved_partners`
   for existing roster-name picks, so undo restores past couples (`scripts/test-couples-upgrade.sh`).
   Only captains set fees, custom amounts and payment links. Neither can be below $0 (database checks,
   and `feeProblem()` in the fee box); the fee box asks before saving $0 or more than double the fee before it

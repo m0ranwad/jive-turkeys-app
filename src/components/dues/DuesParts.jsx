@@ -247,8 +247,8 @@ export function PayButtons({ amount, note, settings }) {
  * later). Anyone can, for anyone. `max` is what's still owed (for both, when
  * `both`); `onSave(amount)` resolves true once it's saved.
  */
-export function PartPayment({ max, both, busy, onSave }) {
-  const [open, setOpen] = useState(false);
+export function PartPayment({ max, both, busy, onSave, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [value, setValue] = useState('');
   const amount = Number(value);
   const over = Math.round(amount * 100) > Math.round(max * 100);

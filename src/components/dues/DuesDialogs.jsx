@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -379,7 +380,7 @@ export function PlayerSheet({
   const [confirming, setConfirming] = useState(false);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
-  const [editingPartner, setEditingPartner] = useState(false);
+  const [view, setView] = useState('summary');
 
   const share = player ? team.shareOf(player.user_id) : null;
   const out = player && !share ? team.notPlayingOf(player.user_id) : null;
@@ -390,7 +391,7 @@ export function PlayerSheet({
   useEffect(() => {
     if (open) {
       setConfirming(false);
-      setEditingPartner(false);
+      setView('summary');
       setAmount(share?.custom ? String(share.amount) : '');
     }
   }, [open, player?.user_id]);
@@ -480,6 +481,28 @@ export function PlayerSheet({
     );
   const events = history.filter((e) => e.user_id === player.user_id);
   const markedBy = payment?.paid_by && payment.paid_by !== player.user_id ? ` by ${nameOf(payment.paid_by).split(' ')[0]}` : '';
+  const canPair = !!share && !past;
+  const canPairNext = between && player.status === 'active' && !player.removed;
+  const canCorrectPair = !!share && past && isCaptain && started;
+  const canSetAmount = isCaptain && !!share;
+  const hasOptions = stillOwed > 0 || canPair || canPairNext || canCorrectPair || canSetAmount || (player.guest && isCaptain);
+  const summary = view === 'summary' || view === 'options';
+  const totalShare = share ? share.amount + (partner ? team.shareOf(partner.user_id).amount : 0) : null;
+  const hasPayment = share && ids.some((id) => team.shareOf(id).paid);
+  const openOption = (next) => {
+    if (next === 'amount') setAmount(share.custom ? String(share.amount) : '');
+    setView(next);
+  };
+  const finish = async (saving) => {
+    const saved = await saving;
+    if (saved) setView('summary');
+    return saved;
+  };
+  const optionButton = (label, next) => (
+    <Button variant="ghost" onClick={() => openOption(next)} disabled={busy} className="h-11 w-full justify-start rounded-xl font-semibold">
+      {label}
+    </Button>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -489,9 +512,9 @@ export function PlayerSheet({
         </DialogHeader>
 
         <div className="-mt-2 flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-zinc-500">
+          <span className="text-sm font-semibold text-zinc-500" data-testid="player-sheet-amount">
             {share
-              ? `${dollars(share.amount)} · ${share.custom ? 'custom amount' : 'even split'}`
+              ? `${dollars(totalShare)}${share.custom && !partner ? ' · custom amount' : ''}`
               : `Not playing · ${notPlayingLabel(out)}`}
             {player.guest && ' · not joined yet'}
           </span>
@@ -505,23 +528,13 @@ export function PlayerSheet({
           </p>
         )}
 
-        {share && !share.paid && (
+        {summary && share && stillOwed > 0 && !confirming && (
           <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
-            {partner ? `Mark both paid` : 'Mark paid'}
+            {hasPayment ? `Mark ${dollars(stillOwed)} more paid` : partner ? 'Mark both paid' : 'Mark paid'}
           </Button>
         )}
-        {balance > 0 && !confirming && (
-          <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
-            Mark {dollars(balance)} more paid
-          </Button>
-        )}
-        {stillOwed > 0 && !confirming && (
-          <div className="-mt-1">
-            <PartPayment key={player.user_id} max={stillOwed} both={owing.length > 1} busy={busy} onSave={payPart} />
-          </div>
-        )}
-        {isPaid && !confirming && (
-          <Button variant="outline" onClick={() => setConfirming(true)} disabled={busy} className={BIG_BUTTON}>
+        {summary && isPaid && !confirming && (
+          <Button variant="ghost" onClick={() => setConfirming(true)} disabled={busy} className="h-11 justify-start rounded-xl px-0 text-xs font-semibold text-zinc-500">
             Mark as not paid
           </Button>
         )}
@@ -546,49 +559,86 @@ export function PlayerSheet({
           </p>
         )}
 
-        {share && !past && (
-          <PartnerPicker
-            id="pays-with"
-            label="Pays together with"
-            hint={`For couples who send one payment for both. ${
-              fromHere ? 'From this session on' : `Counts from session ${from.session} on`
-            }; earlier sessions keep who paid together then.`}
-            player={player}
-            current={nowPartnerOf(player.user_id)}
-            away="not playing this session"
-            options={playing}
-            partnerOf={nowPartnerOf}
-            busy={busy}
-            onPick={(id) => setPartner(id, 'Linked as paying together')}
-          />
+        {!confirming && summary && (hasOptions || events.length > 0) && (
+          <div className="border-t border-zinc-100 pt-1">
+            <div className="flex items-center gap-2">
+              {hasOptions && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setView(view === 'options' ? 'summary' : 'options')}
+                  disabled={busy}
+                  aria-expanded={view === 'options'}
+                  aria-controls="dues-options"
+                  className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500"
+                >
+                  More options
+                  <ChevronDown className={cn('h-4 w-4', view === 'options' && 'rotate-180')} />
+                </Button>
+              )}
+              {events.length > 0 && (
+                <Button variant="ghost" onClick={() => setView('history')} disabled={busy} className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500">
+                  History
+                </Button>
+              )}
+            </div>
+            <div id="dues-options" hidden={view !== 'options'} className="space-y-1 rounded-2xl bg-zinc-50 p-1">
+              {stillOwed > 0 && optionButton('Record part payment', 'partial')}
+              {canPair && optionButton(nowPartnerOf(player.user_id) ? 'Change who pays together' : 'Pay together', 'partner')}
+              {canPairNext && optionButton('Pay together from next session', 'next')}
+              {canCorrectPair && optionButton('Edit who paid together', 'past')}
+              {canSetAmount && optionButton(share.custom ? 'Change custom amount' : 'Set custom amount', 'amount')}
+              {player.guest && isCaptain && (
+                <Link to="/team" className="flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold hover:bg-zinc-100">View on Team</Link>
+              )}
+            </div>
+          </div>
         )}
-        {between && player.status === 'active' && !player.removed && (
-          <PartnerPicker
-            id="pays-with-next"
-            label="Pays together from next session"
-            hint={`For couples who send one payment for both. Session ${period.session} keeps who paid together then.`}
-            player={player}
-            current={nowPartnerOf(player.user_id)}
-            away="not playing next session"
-            options={playingNext}
-            partnerOf={nowPartnerOf}
-            busy={busy}
-            onPick={(id) => setPartner(id, 'Linked from next session')}
-          />
-        )}
-        {share && past && isCaptain && started && (
+
+        {!confirming && !summary && (
           <div className={SECTION}>
             <Button
-              variant="outline"
-              onClick={() => setEditingPartner((editing) => !editing)}
+              variant="ghost"
+              onClick={() => setView(hasOptions ? 'options' : 'summary')}
               disabled={busy}
-              aria-expanded={editingPartner}
-              aria-controls="past-partner"
-              className="h-11 rounded-xl font-bold"
+              className="-ml-2 h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500"
             >
-              Edit who paid together
+              <ChevronLeft className="h-4 w-4" />
+              {hasOptions ? 'Back to options' : 'Back'}
             </Button>
-            <div id="past-partner" hidden={!editingPartner}>
+            {view === 'partial' && share && stillOwed > 0 && (
+              <PartPayment key={player.user_id} defaultOpen max={stillOwed} both={owing.length > 1} busy={busy} onSave={(paid) => finish(payPart(paid))} />
+            )}
+            {view === 'partner' && canPair && (
+              <PartnerPicker
+                id="pays-with"
+                label="Pays together with"
+                hint={`For couples who send one payment for both. ${
+                  fromHere ? 'From this session on' : `Counts from session ${from.session} on`
+                }; earlier sessions keep who paid together then.`}
+                player={player}
+                current={nowPartnerOf(player.user_id)}
+                away="not playing this session"
+                options={playing}
+                partnerOf={nowPartnerOf}
+                busy={busy}
+                onPick={(id) => finish(setPartner(id, 'Linked as paying together'))}
+              />
+            )}
+            {view === 'next' && canPairNext && (
+              <PartnerPicker
+                id="pays-with-next"
+                label="Pays together from next session"
+                hint={`For couples who send one payment for both. Session ${period.session} keeps who paid together then.`}
+                player={player}
+                current={nowPartnerOf(player.user_id)}
+                away="not playing next session"
+                options={playingNext}
+                partnerOf={nowPartnerOf}
+                busy={busy}
+                onPick={(id) => finish(setPartner(id, 'Linked from next session'))}
+              />
+            )}
+            {view === 'past' && canCorrectPair && (
               <PartnerPicker
                 id="paid-with"
                 label={`Paid together in session ${period.session}`}
@@ -598,78 +648,42 @@ export function PlayerSheet({
                 options={playing}
                 partnerOf={(id) => team.partnerOf(id)}
                 busy={busy}
-                onPick={setSessionPartner}
+                onPick={(id) => finish(setSessionPartner(id))}
               />
-            </div>
-          </div>
-        )}
-
-        {isCaptain && share && (
-          <div className={SECTION}>
-            <Label htmlFor="custom-amount" className={FIELD_LABEL}>
-              Custom amount
-            </Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
-                <Input
-                  id="custom-amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder={`${team.perPlayer} (even split)`}
-                  className="h-11 rounded-xl pl-7 font-bold"
-                />
+            )}
+            {view === 'amount' && canSetAmount && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-amount" className={FIELD_LABEL}>Custom amount</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
+                    <Input
+                      id="custom-amount"
+                      type="number"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder={`${team.perPlayer} (even split)`}
+                      className="h-11 rounded-xl pl-7 font-bold"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    disabled={busy || amount.trim() === '' || !Number.isFinite(Number(amount)) || Number(amount) < 0}
+                    onClick={() => finish(saveAmount(Number(amount)))}
+                    className="h-11 rounded-xl font-bold"
+                  >Save</Button>
+                </div>
+                {share.custom && (
+                  <button type="button" onClick={() => finish(saveAmount(null))} disabled={busy} className="min-h-11 text-xs font-bold text-zinc-500 underline underline-offset-2">
+                    Use the even split ({dollars(team.perPlayer)}) instead
+                  </button>
+                )}
               </div>
-              <Button
-                variant="outline"
-                disabled={busy || amount.trim() === '' || Number.isNaN(Number(amount)) || Number(amount) < 0}
-                onClick={() => saveAmount(Number(amount))}
-                className="h-11 rounded-xl font-bold"
-              >
-                Save
-              </Button>
-            </div>
-            {share.custom && (
-              <button
-                type="button"
-                onClick={() => saveAmount(null)}
-                disabled={busy}
-                className="text-xs font-bold text-zinc-500 underline underline-offset-2"
-              >
-                Use the even split ({dollars(team.perPlayer)}) instead
-              </button>
             )}
+            {view === 'history' && <HistoryList events={events} nameOf={nameOf} meId={meId} />}
           </div>
         )}
-
-        {player.guest && (
-          <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500">
-            {player.display_name} hasn't joined the app yet. When they sign up and pick their name, their payments
-            come with them.{' '}
-            {isCaptain ? (
-              <>
-                Change their name or status on the{' '}
-                <Link to="/team" className="font-bold text-zinc-800 underline underline-offset-2">
-                  Team page
-                </Link>
-                .
-              </>
-            ) : (
-              'Anyone can mark them paid.'
-            )}
-          </p>
-        )}
-
-        <div className={SECTION}>
-          <span className={cn(FIELD_LABEL, 'block')}>History</span>
-          {events.length ? (
-            <HistoryList events={events} nameOf={nameOf} meId={meId} />
-          ) : (
-            <p className="text-sm text-zinc-500">No changes yet this session.</p>
-          )}
-        </div>
       </DialogContent>
     </Dialog>
   );

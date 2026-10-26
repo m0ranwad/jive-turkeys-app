@@ -148,3 +148,9 @@ export async function enterTeamCode(page, code = 'TURKEY') {
   await page.getByLabel('Team code').fill(code);
   await page.getByRole('button', { name: 'Join the team' }).click();
 }
+
+/** A rare dues action, reached from the player's compact payment sheet. */
+export async function duesOption(sheet, name) {
+  await sheet.getByRole('button', { name: 'More options', exact: true }).click();
+  await sheet.getByRole('button', { name, exact: true }).click();
+}

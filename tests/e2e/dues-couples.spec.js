@@ -5,7 +5,7 @@
 //
 // Sample data: Alex Chen and Riley Novak paid session 1 on their own and pay
 // together from session 2. Session 2 starts Saturday; Jamie Fox is sitting it out.
-import { expect, signIn, test } from './helpers';
+import { duesOption, expect, signIn, test } from './helpers';
 
 const JORDAN = 'jordan@demo.test';
 
@@ -64,6 +64,7 @@ test('a link counts from this session on, only offers its players, and asks befo
   await openTeamDues(page);
   await row(page, 'Sam Okafor').click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
+  await duesOption(sheet, 'Pay together');
   const picker = sheet.getByLabel('Pays together with');
   await expect(sheet).toContainText('From this session on; earlier sessions keep who paid together then.');
   // Jamie is sitting out session 2.
@@ -79,6 +80,7 @@ test('a link counts from this session on, only offers its players, and asks befo
   await expect(row(page, 'Alex Chen')).toContainText('with Riley N.');
 
   await row(page, 'Sam Okafor').click();
+  await duesOption(sheet, 'Pay together');
   await picker.selectOption({ label: 'Riley Novak' });
   await sheet.getByRole('button', { name: 'Link them' }).click();
   await expect(page.getByText('Linked as paying together')).toBeVisible();
@@ -97,7 +99,7 @@ test('captains fix who paid together in a past session, for that session only', 
   await row(page, 'Sam Okafor').click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
   await expect(sheet.getByLabel('Paid together in session 1')).toBeHidden();
-  await sheet.getByRole('button', { name: 'Edit who paid together' }).click();
+  await duesOption(sheet, 'Edit who paid together');
   await expect(sheet).toContainText("Fixes session 1 only. Other sessions don't change.");
   await sheet.getByLabel('Paid together in session 1').selectOption({ label: 'Jordan Rivera' });
   await expect(page.getByText('Linked as paying together in session 1')).toBeVisible();
@@ -204,10 +206,11 @@ test('between sessions, a couple is linked from the next session and the one tha
   await row(page, 'Sam Okafor').click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
   await expect(sheet.getByLabel('Paid together in session 2')).toBeHidden();
+  await duesOption(sheet, 'Pay together from next session');
   await expect(sheet).toContainText('Session 2 keeps who paid together then.');
   await sheet.getByLabel('Pays together from next session').selectOption({ label: 'Morgan Lee' });
   await expect(page.getByText('Linked from next session')).toBeVisible();
-  await sheet.getByRole('button', { name: 'Edit who paid together' }).click();
+  await duesOption(sheet, 'Edit who paid together');
   await expect(sheet.getByLabel('Paid together in session 2')).toHaveValue('');
   await page.keyboard.press('Escape');
   await expect(row(page, 'Sam Okafor')).not.toContainText('with Morgan L.');

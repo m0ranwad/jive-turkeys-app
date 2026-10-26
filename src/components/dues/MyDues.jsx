@@ -162,23 +162,17 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   const pairingPlayers = over ? data.profiles : sessionSlice(data, current).members;
   const canPair = !isEarlier(period, current) && pairingPlayers.some((p) => p.user_id === user.id && p.status === 'active' && !p.removed);
   const pairing = canPair && (
-    <section className={CARD} data-testid="pay-together">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className={HEADING}>{partnerNow ? `With ${partnerNow.display_name}` : 'Paying for two?'}</h3>
-          <p className="mt-1 text-xs font-medium text-zinc-500">
-            {over ? 'Choose who you pay with from next session.' : 'Choose once. Send one payment for both shares.'}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => setPairingOpen(true)}
-          aria-label={partnerNow ? 'Change who you pay with' : 'Pay together'}
-          className="h-11 shrink-0 rounded-xl font-bold"
-        >
-          {partnerNow ? 'Change' : 'Pay together'}
-        </Button>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500" data-testid="pay-together">
+      {partnerNow && <span className="font-medium">{over ? 'Next session: ' : ''}With {partnerNow.display_name}</span>}
+      <Button
+        variant="ghost"
+        onClick={() => setPairingOpen(true)}
+        aria-label={partnerNow ? 'Change who you pay with' : 'Pay together'}
+        className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-600 underline underline-offset-4"
+      >
+        {partnerNow ? 'Change' : 'Pay together'}
+      </Button>
+      {over && !partnerNow && <span>From next session</span>}
       <PayTogetherDialog
         open={pairingOpen}
         onOpenChange={setPairingOpen}
@@ -189,7 +183,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
         between={over}
         onChanged={onChanged}
       />
-    </section>
+    </div>
   );
 
   const others = [...data.dues]
@@ -288,7 +282,6 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   return (
     <div className="space-y-4">
       <ShareCard mine={mine} />
-      {pairing}
 
       {mine.paid && mine.changed && mine.why.length > 0 && (
         <section className={CARD} data-testid="why-share-changed">
@@ -357,6 +350,8 @@ export function MyDues({ data, period, current, over = false, user, settings, on
           </button>
         </section>
       )}
+
+      {pairing}
 
       <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 
