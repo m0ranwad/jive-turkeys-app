@@ -613,4 +613,13 @@ test('marking paid has a compact sheet, and rare actions reveal only the chosen 
   await sheet.getByRole('button', { name: 'Record part payment' }).click();
   await expect(sheet.getByLabel('Amount paid', { exact: true })).toBeVisible();
   await expect(sheet.getByRole('combobox')).toHaveCount(0);
+
+  // A waived share still has a paid/not-paid record.
+  await sheet.getByRole('button', { name: 'Back to options' }).click();
+  await sheet.getByRole('button', { name: 'Set custom amount' }).click();
+  await sheet.getByLabel('Custom amount').fill('0');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sheet.getByTestId('player-sheet-amount')).toContainText('$0');
+  await sheet.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await expect(sheet).toContainText('Paid Oct 8');
 });

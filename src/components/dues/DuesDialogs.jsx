@@ -528,9 +528,9 @@ export function PlayerSheet({
           </p>
         )}
 
-        {summary && share && stillOwed > 0 && !confirming && (
+        {summary && share && (!ids.every((id) => team.shareOf(id).paid) || stillOwed > 0) && !confirming && (
           <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
-            {hasPayment ? `Mark ${dollars(stillOwed)} more paid` : partner ? 'Mark both paid' : 'Mark paid'}
+            {hasPayment && stillOwed > 0 ? `Mark ${dollars(stillOwed)} more paid` : partner ? 'Mark both paid' : 'Mark paid'}
           </Button>
         )}
         {summary && isPaid && !confirming && (
