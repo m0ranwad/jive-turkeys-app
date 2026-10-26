@@ -336,6 +336,16 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('set_dues_partner', { p_user_id: userId, p_partner_id: partnerId });
       if (error) fail(error);
     },
+    /** Captains: who paid together in a session that's over, that session only; a null partner unlinks. */
+    async setSessionPartner({ year, session }, userId, partnerId) {
+      const { error } = await supabase.rpc('set_session_partner', {
+        p_year: Number(year),
+        p_session: Number(session),
+        p_id: userId,
+        p_partner_id: partnerId,
+      });
+      if (error) fail(error);
+    },
   };
 
   const games = {

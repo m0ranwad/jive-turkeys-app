@@ -250,6 +250,11 @@ describe('dues', () => {
     ]);
   });
 
+  it("fixes who paid together in a past session through the database function", async () => {
+    await api.dues.setSessionPartner({ year: '2026', session: '1' }, 'a', 'b');
+    expect(calls).toEqual([['rpc', 'set_session_partner', { p_year: 2026, p_session: 1, p_id: 'a', p_partner_id: 'b' }]]);
+  });
+
   it('reports database errors', async () => {
     result = { data: null, error: { message: 'nope' } };
     await expect(api.dues.markPaid({ year: 2026, session: 2, userIds: ['a'], paid: true })).rejects.toThrow('nope');

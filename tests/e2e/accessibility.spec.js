@@ -74,6 +74,16 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'My dues');
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await expectAccessible(page, 'Team dues');
+  await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();
+  await page.getByRole('dialog', { name: 'Sam Okafor' }).getByLabel('Pays together with').selectOption({ label: 'Riley Novak' });
+  await expect(page.getByRole('button', { name: 'Link them' })).toBeVisible();
+  await expectAccessible(page, "A player's dues, asking before breaking up a couple");
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Previous session' }).click();
+  await page.getByRole('button', { name: 'Details for Alex Chen' }).click();
+  await expect(page.getByLabel('Paid together in session 1')).toBeVisible();
+  await expectAccessible(page, "A past session's player dues");
+  await page.keyboard.press('Escape');
   await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'session_roster'));
   await visit(page, '/dues', 'Dues');
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();

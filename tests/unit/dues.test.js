@@ -410,6 +410,35 @@ describe('couples who pay together', () => {
     const oneMarked = teamDues(400, profiles, [{ user_id: 'riley', paid: true }]);
     expect(oneMarked.stillToPay.map((p) => p.name)).toEqual(['Alex', 'Casey', 'Morgan']);
   });
+
+  it('count only when each pays with the other', () => {
+    const oneSided = [profile('Alex', { pays_with: 'riley' }), profile('Riley', { pays_with: 'sam' }), profile('Sam')];
+    const team = teamDues(300, oneSided, []);
+    expect(['alex', 'riley', 'sam'].map((id) => team.partnerOf(id))).toEqual([null, null, null]);
+  });
+
+  it('are kept per session: linking in session 2 leaves session 1 as it was', () => {
+    // Alex and Riley paid session 1 on their own and pay together from session 2.
+    const today = [profile('Alex', { pays_with: 'riley' }), profile('Riley', { pays_with: 'alex' }), profile('Morgan')];
+    const entry = (session, user_id, pays_with_user = null) => ({ season_year: 2026, session, user_id, status: 'active', pays_with_user });
+    const rows = [
+      entry(1, 'alex'),
+      entry(1, 'riley'),
+      entry(1, 'morgan'),
+      entry(2, 'alex', 'riley'),
+      entry(2, 'riley', 'alex'),
+      entry(2, 'morgan'),
+    ];
+    const paid = [{ user_id: 'alex', paid: true }, { user_id: 'riley', paid: true }];
+    const session1 = teamDues(300, membersForSession(today, rows, { year: 2026, session: 1 }), paid);
+    expect(session1.partnerOf('alex')).toBeNull();
+    expect(session1.owingTogether('alex')).toEqual([{ user_id: 'alex', due: 0 }]);
+    const session2 = teamDues(300, membersForSession(today, rows, { year: 2026, session: 2 }), []);
+    expect(session2.partnerOf('alex').display_name).toBe('Riley');
+    expect(session2.stillToPay[0]).toEqual({ name: 'Alex & Riley', amount: 200, more: false });
+    // A session that hasn't started uses today's couples.
+    expect(teamDues(300, membersForSession(today, rows, { year: 2026, session: 3 }), []).partnerOf('riley').display_name).toBe('Alex');
+  });
 });
 
 describe('teammates who are not on the app', () => {

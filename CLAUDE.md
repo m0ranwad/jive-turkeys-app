@@ -190,7 +190,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
   can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
-  always asks first. Only captains set fees, custom amounts and payment links. Neither can be below $0 (database checks,
+  always asks first. Couples are kept per session (`session_roster.pays_with_user` / `pays_with_guest`, read by
+  `membersForSession()`; a couple counts only when each points at the other): `set_dues_partner()` sets who pays together
+  now, which a session's list starts with and the session being played and later ones follow (`roster_follow_couple()`);
+  a session that's over keeps its own, and captains fix it with `set_session_partner()`. Linking someone who already pays
+  with somebody else asks first (`PartnerPicker`). Only captains set fees, custom amounts and payment links. Neither can be below $0 (database checks,
   and `feeProblem()` in the fee box); the fee box asks before saving $0 or more than double the fee before it
   (`feeWarning()`). Marking paid records the share at that
   moment (`paid_amount`). Payments marked before that were given the share they showed when it went live

@@ -167,9 +167,11 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
   const name = (p) => p.display_name || '';
   const active = profiles.filter((p) => p.status === 'active');
   const byUser = new Map(active.map((p) => [p.user_id, p]));
-  // Couples count only while both are on the active roster.
+  // Couples count only while both are on the active roster, each paying with the other.
   const partners = new Map(
-    active.filter((p) => p.pays_with && p.pays_with !== p.user_id && byUser.has(p.pays_with)).map((p) => [p.user_id, p.pays_with]),
+    active
+      .filter((p) => p.pays_with && p.pays_with !== p.user_id && byUser.get(p.pays_with)?.pays_with === p.user_id)
+      .map((p) => [p.user_id, p.pays_with]),
   );
   const groupName = (p) => {
     const partner = byUser.get(partners.get(p.user_id));

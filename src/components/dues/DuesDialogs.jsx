@@ -227,12 +227,98 @@ export function PaySettingsDialog({ open, onOpenChange, settings, onSaved }) {
 }
 
 /**
+ * Who a player pays together with, picked from `options` (the players of the
+ * session it's for). `current` is their partner there, also when they aren't
+ * one of the options (`away` says why). Picking someone who pays with somebody
+ * else (`partnerOf`) asks first, since that somebody then pays on their own.
+ */
+function PartnerPicker({ id, label, hint, player, current, away, options, partnerOf, busy, onPick }) {
+  const [asking, setAsking] = useState(null);
+
+  useEffect(() => setAsking(null), [player.user_id, current?.user_id]);
+
+  const pick = (partnerId) => {
+    const picked = options.find((p) => p.user_id === partnerId);
+    const theirs = picked && partnerOf(partnerId);
+    if (theirs && theirs.user_id !== player.user_id) setAsking({ picked, theirs });
+    else onPick(partnerId || null);
+  };
+  const first = (p) => p.display_name.split(' ')[0];
+
+  return (
+    <div className={SECTION}>
+      <Label htmlFor={id} className={FIELD_LABEL}>
+        {label}
+      </Label>
+      <select
+        id={id}
+        value={current?.user_id ?? ''}
+        onChange={(e) => pick(e.target.value)}
+        disabled={busy || !!asking}
+        className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
+      >
+        <option value="">Nobody (pays on their own)</option>
+        {current && !options.some((p) => p.user_id === current.user_id) && (
+          <option value={current.user_id} disabled>
+            {current.display_name} ({away})
+          </option>
+        )}
+        {options.map((p) => (
+          <option key={p.user_id} value={p.user_id}>
+            {p.display_name}
+          </option>
+        ))}
+      </select>
+      {asking && (
+        <div className="space-y-3 rounded-2xl bg-amber-50 p-4" role="alert">
+          <p className="text-sm text-amber-900">
+            {asking.picked.display_name} pays together with {asking.theirs.display_name}. Link {first(asking.picked)} with{' '}
+            {first(player)} instead? {asking.theirs.display_name} will pay on their own.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setAsking(null)} className="h-11 rounded-xl bg-white font-bold">
+              Keep as is
+            </Button>
+            <Button onClick={() => onPick(asking.picked.user_id).then(() => setAsking(null))} disabled={busy} className="h-11 rounded-xl font-bold">
+              Link them
+            </Button>
+          </div>
+        </div>
+      )}
+      <p className="text-[11px] font-medium text-zinc-500">{hint}</p>
+    </div>
+  );
+}
+
+/**
  * One player's dues for the session: status, what they paid, history, who they
  * pay with, and (captains) a custom amount. Marking someone not paid takes a
  * second tap. Also opens for someone who paid and isn't on the session's active
  * roster, so they can be marked not paid.
+ *
+ * Who pays together is kept per session. A session that's over (`past`) keeps
+ * who paid together then, and only captains change it, for that session only.
+ * Otherwise a link counts from the session being played on (`from`). Between
+ * sessions (`between`: this is the session that just ended) anyone can link a
+ * couple from the next session.
  */
-export function PlayerSheet({ open, onOpenChange, player, team, payments, history, profiles, period, meId, isCaptain, onChanged }) {
+export function PlayerSheet({
+  open,
+  onOpenChange,
+  player,
+  team,
+  payments,
+  history,
+  profiles,
+  period,
+  past = false,
+  started = true,
+  between = false,
+  from = period,
+  meId,
+  isCaptain,
+  onChanged,
+}) {
   const { toast } = useToast();
   const [confirming, setConfirming] = useState(false);
   const [amount, setAmount] = useState('');
@@ -319,13 +405,21 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
       }
     }, value == null ? 'Back on the even split' : 'Custom amount saved');
 
-  const setPartner = (partnerId) =>
-    run(() => api.dues.setPartner(player.user_id, partnerId || null), partnerId ? 'Linked as paying together' : 'Unlinked');
+  // Who pays together now, and who's playing: this session's players, or for the next one, today's.
+  const profileOf = (userId) => profiles.find((p) => p.user_id === userId) || null;
+  const nowPartnerOf = (userId) => profileOf(profileOf(userId)?.pays_with);
+  const byName = (a, b) => a.display_name.localeCompare(b.display_name);
+  const playing = team.active.filter((p) => p.user_id !== player.user_id).sort(byName);
+  const playingNext = profiles.filter((p) => p.user_id !== player.user_id && p.status === 'active' && !p.removed).sort(byName);
+  const fromHere = Number(from.year) === Number(period.year) && Number(from.session) === Number(period.session);
 
-  // Anyone to pay with, except guests who no longer count.
-  const roster = profiles
-    .filter((p) => p.user_id !== player.user_id && !p.removed && !(p.guest && p.status !== 'active'))
-    .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const setPartner = (partnerId, done) =>
+    run(() => api.dues.setPartner(player.user_id, partnerId), partnerId ? done : 'Unlinked');
+  const setSessionPartner = (partnerId) =>
+    run(
+      () => api.dues.setSessionPartner(period, player.user_id, partnerId),
+      partnerId ? `Linked as paying together in session ${period.session}` : `Unlinked in session ${period.session}`,
+    );
   const events = history.filter((e) => e.user_id === player.user_id);
   const markedBy = payment?.paid_by && payment.paid_by !== player.user_id ? ` by ${nameOf(payment.paid_by).split(' ')[0]}` : '';
 
@@ -388,28 +482,55 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
             </div>
           </div>
         )}
-        {partner && <p className="-mt-2 text-xs font-medium text-zinc-500">Pays together with {partner.display_name}, so both change together.</p>}
+        {partner && (
+          <p className="-mt-2 text-xs font-medium text-zinc-500">
+            {past ? 'Paid' : 'Pays'} together with {partner.display_name}, so both change together.
+          </p>
+        )}
 
-        <div className={SECTION}>
-          <Label htmlFor="pays-with" className={FIELD_LABEL}>
-            Pays together with
-          </Label>
-          <select
+        {share && !past && (
+          <PartnerPicker
             id="pays-with"
-            value={player.pays_with && profiles.some((p) => p.user_id === player.pays_with) ? player.pays_with : ''}
-            onChange={(e) => setPartner(e.target.value)}
-            disabled={busy}
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
-          >
-            <option value="">Nobody (pays on their own)</option>
-            {roster.map((p) => (
-              <option key={p.user_id} value={p.user_id}>
-                {p.display_name}
-              </option>
-            ))}
-          </select>
-          <p className="text-[11px] font-medium text-zinc-500">For couples who send one payment for both.</p>
-        </div>
+            label="Pays together with"
+            hint={`For couples who send one payment for both. ${
+              fromHere ? 'From this session on' : `Counts from session ${from.session} on`
+            }; earlier sessions keep who paid together then.`}
+            player={player}
+            current={nowPartnerOf(player.user_id)}
+            away="not playing this session"
+            options={playing}
+            partnerOf={nowPartnerOf}
+            busy={busy}
+            onPick={(id) => setPartner(id, 'Linked as paying together')}
+          />
+        )}
+        {share && past && isCaptain && started && (
+          <PartnerPicker
+            id="paid-with"
+            label={`Paid together in session ${period.session}`}
+            hint={`Fixes session ${period.session} only. Other sessions don't change.`}
+            player={player}
+            current={partner}
+            options={playing}
+            partnerOf={(id) => team.partnerOf(id)}
+            busy={busy}
+            onPick={setSessionPartner}
+          />
+        )}
+        {between && player.status === 'active' && !player.removed && (
+          <PartnerPicker
+            id="pays-with-next"
+            label="Pays together from next session"
+            hint={`For couples who send one payment for both. Session ${period.session} keeps who paid together then.`}
+            player={player}
+            current={nowPartnerOf(player.user_id)}
+            away="not playing next session"
+            options={playingNext}
+            partnerOf={nowPartnerOf}
+            busy={busy}
+            onPick={(id) => setPartner(id, 'Linked from next session')}
+          />
+        )}
 
         {isCaptain && share && (
           <div className={SECTION}>

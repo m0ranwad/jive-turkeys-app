@@ -9,7 +9,7 @@ import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v27';
+const DB_KEY = 'jt_demo_db_v28';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -249,7 +249,7 @@ function seed() {
 
   // Dues: last session all paid; this session half paid, the captain included
   // among those still to pay, so the pay buttons show on "My dues". Alex and
-  // Riley are a couple who pay together. Drew was in the sub pool last session
+  // Riley paid session 1 on their own and pay together from session 2. Drew was in the sub pool last session
   // and Chris only joined this one, so neither paid for session 1. Everyone
   // paid the $61 share, except Sam, who paid $50 before the ref fees were added
   // (so he has $11 more to pay), and Morgan, who gave the captain $30 cash and
@@ -329,7 +329,8 @@ function seed() {
   const entry = (session, who, status, answered) => ({
     id: uid(), season_year: year, session, user_id: who.user_id ?? null, guest_id: who.guest_id ?? null, status,
     answered_at: answered ? dayjs().subtract(answeredDaysAgo[session], 'day').toISOString() : null,
-    changed_by: answered ? (who.user_id ?? captainId) : null, created_date: now(), updated_date: now(),
+    changed_by: answered ? (who.user_id ?? captainId) : null, pays_with_user: null, pays_with_guest: null,
+    created_date: now(), updated_date: now(),
   });
   const answeredSession2 = [1, 3, 4, 6, 8, 9, 10];
   const sessionRoster = [
@@ -344,6 +345,11 @@ function seed() {
     }),
     ...teamGuests.map((g) => entry(3, { guest_id: g.id }, 'active', false)),
   ];
+  // Alex and Riley pay together from session 2 (each session keeps who paid with whom).
+  for (const row of sessionRoster.filter((r) => r.session > 1)) {
+    if (row.user_id === profiles[4].user_id) row.pays_with_user = profiles[7].user_id;
+    if (row.user_id === profiles[7].user_id) row.pays_with_user = profiles[4].user_id;
+  }
   const lastGame = games.filter((g) => g.season_year === year && g.session === 2).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
   const sessionAsks = [
     {
@@ -369,7 +375,8 @@ function seed() {
     {
       id: uid(), guest_id: kellyName.id, user_id: kelly.user_id, moved_payments: kellys(duesPayments),
       moved_history: kellys(duesHistory), moved_roster: kellys(sessionRoster), moved_rsvps: [], moved_stats: [],
-      moved_votes: [], moved_changes: [], merged_payments: [], merged_roster: [], filled: {}, status_before: 'active', status_after: 'active',
+      moved_votes: [], moved_changes: [], moved_partners: [], merged_payments: [], merged_roster: [], filled: {}, status_before: 'active',
+      status_after: 'active',
       guest_partner: null, user_partner: null, rebuilt: false, linked_by: kelly.user_id, created_date: kellyJoined,
       unlinked_by: null, unlinked_at: null,
     },
@@ -613,10 +620,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const sessionOf = (row) => `${row.season_year}-${row.session}`;
   const startSession = ({ year, session }) => {
     if (db.session_roster.some((r) => sessionOf(r) === `${year}-${session}`)) return;
-    const entry = (who, status) => ({
-      id: uid(), season_year: Number(year), session: Number(session), user_id: null, guest_id: null, ...who, status,
-      answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
-    });
+    const entry = (who, status) =>
+      withCouple({
+        id: uid(), season_year: Number(year), session: Number(session), user_id: null, guest_id: null, ...who, status,
+        answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
+      });
     db.session_roster.push(
       ...db.player_profiles.filter((p) => !p.removed).map((p) => entry({ user_id: p.user_id }, p.status)),
       ...db.team_guests.filter((g) => !g.removed && !g.linked_user_id).map((g) => entry({ guest_id: g.id }, g.status)),
@@ -627,6 +635,39 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const open = () => openSession(db.games, today(), db.session_asks);
   const samePeriod = (a, b) => Number(a.year) === Number(b.year) && Number(a.session) === Number(b.session);
   const started = (period) => db.games.some((g) => samePeriod({ year: g.season_year, session: g.session }, period) && g.date < today());
+
+  // Same as the database's roster_follows_couples(): the session status changes count for
+  // and any later one follow who pays together now. Not a session that's over, or before.
+  const followsCouples = (period) => isEarlier(current(), period) || (!!open() && samePeriod(open(), period));
+  // Who someone pays with now, as a session list entry's columns.
+  const coupleNow = (who) => {
+    const p = who.user_id && db.player_profiles.find((x) => x.user_id === who.user_id);
+    const g = who.guest_id && db.team_guests.find((x) => x.id === who.guest_id && !x.linked_user_id);
+    if (p) return { pays_with_user: p.pays_with ?? null, pays_with_guest: p.pays_with_guest ?? null };
+    if (g) return { pays_with_user: g.pays_with_user ?? null, pays_with_guest: g.pays_with_guest ?? null };
+    return { pays_with_user: null, pays_with_guest: null };
+  };
+  // Same as the database's session_roster_couple(): an entry added to a session that follows
+  // who pays together now starts with the player's partner. A captain adding someone to a past
+  // session doesn't.
+  const withCouple = (row) => {
+    if (row.pays_with_user || row.pays_with_guest) return row;
+    const follow = followsCouples({ year: row.season_year, session: row.session });
+    return Object.assign(row, follow ? coupleNow(row) : { pays_with_user: null, pays_with_guest: null });
+  };
+  // Same as the database's roster_follow_couple(): linking or unlinking a couple changes who
+  // they pay with in the sessions that follow who pays together now.
+  const followCouple = (who) => {
+    if (who.guest_id && db.team_guests.some((g) => g.id === who.guest_id && g.linked_user_id)) return;
+    const couple = coupleNow(who);
+    db.session_roster
+      .filter((r) => (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id))
+      .filter((r) => followsCouples({ year: r.season_year, session: r.session }))
+      .forEach((r) => Object.assign(r, couple, { updated_date: now() }));
+  };
+  const couples = (table, fields) =>
+    (table === 'player_profiles' && ('pays_with' in fields || 'pays_with_guest' in fields)) ||
+    (table === 'team_guests' && ('pays_with_user' in fields || 'pays_with_guest' in fields));
 
   // Same as the database's roster_follow_profile() and roster_follow_guest(): a
   // status set while a session is current counts for that session, as an answer.
@@ -656,10 +697,12 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           Object.assign(row, { status, answered_at: status === 'off' ? null : row.answered_at, updated_date: now() });
         }
       } else if (status !== 'off') {
-        db.session_roster.push({
-          id: uid(), season_year: ask.season_year, session: ask.session, user_id: null, guest_id: null, ...who, status,
-          answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
-        });
+        db.session_roster.push(
+          withCouple({
+            id: uid(), season_year: ask.season_year, session: ask.session, user_id: null, guest_id: null, ...who, status,
+            answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
+          }),
+        );
       }
     }
   };
@@ -674,10 +717,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       Object.assign(row, patch);
       trackChange('session_roster', before, row);
     } else {
-      const added = {
+      const added = withCouple({
         id: uid(), season_year: Number(period.year), session: Number(period.session), user_id: null, guest_id: null, ...who,
         created_date: now(), ...patch,
-      };
+      });
       db.session_roster.push(added);
       trackChange('session_roster', null, added);
     }
@@ -835,6 +878,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         checkAmounts(table, row);
         const record = { id: uid(), created_date: now(), updated_date: now(), ...(table === 'chat_threads' && { visibility: 'team' }), ...row };
         if (table === 'messages') cleanMentions(record);
+        if (table === 'session_roster') withCouple(record);
         db[table].push(record);
         trackChange(table, null, record);
         if (table === 'player_profiles' || table === 'team_guests') followStatus(table, record);
@@ -868,6 +912,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         if (table === 'messages') cleanMentions(record);
         if (opensVoting) openVoting(record);
         if (follows(table, patch)) followStatus(table, record);
+        if (couples(table, patch)) followCouple(table === 'team_guests' ? { guest_id: record.id } : { user_id: record.user_id });
         write();
         notify(table, 'onUpdate', record);
         return delay(record);
@@ -988,7 +1033,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     const profile = db.player_profiles.find((p) => p.user_id === userId);
     const link = {
       id: uid(), guest_id: guestId, user_id: userId, moved_payments: [], moved_history: [], moved_roster: [], moved_rsvps: [],
-      moved_stats: [], moved_votes: [], moved_changes: [], merged_payments: [], merged_roster: [], filled: {}, status_before: profile?.status ?? null,
+      moved_stats: [], moved_votes: [], moved_changes: [], moved_partners: [], merged_payments: [], merged_roster: [], filled: {},
+      status_before: profile?.status ?? null,
       status_after: null, guest_partner: null, user_partner: null, rebuilt: false, linked_by: currentUser()?.id ?? null,
       created_date: now(), unlinked_by: null, unlinked_at: null,
     };
@@ -1043,6 +1089,15 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     for (const row of db.session_roster.filter((r) => r.guest_id === guestId)) {
       if (!db.session_roster.some((r) => r.user_id === userId && sessionOf(r) === sessionOf(row))) move('moved_roster', row);
     }
+    // Whoever paid with the name pays with the account: in the sessions whose entry for the
+    // name just moved, and in the ones that follow who pays together now.
+    const movedTo = new Set(db.session_roster.filter((r) => link.moved_roster.includes(r.id)).map(sessionOf));
+    db.session_roster
+      .filter((r) => r.pays_with_guest === guestId && (movedTo.has(sessionOf(r)) || followsCouples({ year: r.season_year, session: r.session })))
+      .forEach((r) => {
+        Object.assign(r, { pays_with_user: userId, pays_with_guest: null });
+        link.moved_partners.push(r.id);
+      });
     if (profile) {
       if (!profile.gender && guest.gender) link.filled.gender = guest.gender;
       if (!profile.position && guest.position) link.filled.position = guest.position;
@@ -1139,6 +1194,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       db.potm_votes
         .filter((v) => link.moved_votes.includes(v.id) && v.voted_for_id === userId)
         .forEach((v) => Object.assign(v, { voted_for_id: null, voted_for_guest_id: guestId }));
+      // Whoever paid with the name in those sessions, unless they've been paired up since.
+      db.session_roster
+        .filter((r) => (link.moved_partners || []).includes(r.id) && r.pays_with_user === userId)
+        .forEach((r) => Object.assign(r, { pays_with_user: null, pays_with_guest: guestId }));
       // The account's entries that took the name's answer, unless changed since.
       for (const { id, before, after } of link.merged_roster) {
         const row = db.session_roster.find((r) => r.id === id && r.user_id === userId);
@@ -1379,11 +1438,19 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     async setPartner(userId, partnerId) {
       requireUser();
       const ids = [userId, partnerId].filter(Boolean);
+      // Everyone whose partner changes, for the session lists that follow it.
+      const changed = [];
       db.player_profiles.forEach((p) => {
-        if ([p.user_id, p.pays_with, p.pays_with_guest].some((id) => ids.includes(id))) Object.assign(p, { pays_with: null, pays_with_guest: null });
+        if ([p.user_id, p.pays_with, p.pays_with_guest].some((id) => ids.includes(id))) {
+          Object.assign(p, { pays_with: null, pays_with_guest: null });
+          changed.push({ user_id: p.user_id });
+        }
       });
       db.team_guests.forEach((g) => {
-        if ([g.id, g.pays_with_user, g.pays_with_guest].some((id) => ids.includes(id))) Object.assign(g, { pays_with_user: null, pays_with_guest: null });
+        if ([g.id, g.pays_with_user, g.pays_with_guest].some((id) => ids.includes(id))) {
+          Object.assign(g, { pays_with_user: null, pays_with_guest: null });
+          changed.push({ guest_id: g.id });
+        }
       });
       if (partnerId && partnerId !== userId) {
         const point = (self, other) => {
@@ -1392,6 +1459,35 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           db.player_profiles.filter((p) => p.user_id === self).forEach((p) => Object.assign(p, { pays_with: user, pays_with_guest: guest }));
           db.team_guests.filter((g) => g.id === self).forEach((g) => Object.assign(g, { pays_with_user: user, pays_with_guest: guest }));
         };
+        point(userId, partnerId);
+        point(partnerId, userId);
+      }
+      changed.forEach(followCouple);
+      save(db);
+      return delay(null);
+    },
+    // Same as the database's set_session_partner(): captains fix who paid together in a
+    // session that's over (or before), that session only.
+    async setSessionPartner({ year, session }, userId, partnerId) {
+      requireUser();
+      failIfOffline();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can change who paid together in a past session');
+      const period = { year: Number(year), session: Number(session) };
+      if (followsCouples(period)) throw new Error("That session isn't over: who pays together there follows who pays together now");
+      const list = db.session_roster.filter((r) => sessionOf(r) === `${period.year}-${period.session}`);
+      const entryOf = (id) => list.find((r) => (r.user_id ?? r.guest_id) === id);
+      if (!entryOf(userId) || (partnerId && !entryOf(partnerId))) throw new Error(`They weren't on session ${period.session}`);
+      const ids = [userId, partnerId].filter(Boolean);
+      list
+        .filter((r) => [r.user_id, r.guest_id, r.pays_with_user, r.pays_with_guest].some((id) => id && ids.includes(id)))
+        .forEach((r) => Object.assign(r, { pays_with_user: null, pays_with_guest: null, updated_date: now() }));
+      if (partnerId && partnerId !== userId) {
+        const point = (self, other) =>
+          Object.assign(entryOf(self), {
+            pays_with_user: isGuest(other) ? null : other,
+            pays_with_guest: isGuest(other) ? other : null,
+            updated_date: now(),
+          });
         point(userId, partnerId);
         point(partnerId, userId);
       }
@@ -1454,10 +1550,12 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const nowStatus = record.removed ? 'off' : record.status;
       if (!row) {
         if (!record.removed) {
-          db.session_roster.push({
-            id: uid(), season_year: Number(period.year), session: Number(period.session), user_id: null, guest_id: null, ...who,
-            status: record.status, answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
-          });
+          db.session_roster.push(
+            withCouple({
+              id: uid(), season_year: Number(period.year), session: Number(period.session), user_id: null, guest_id: null, ...who,
+              status: record.status, answered_at: null, changed_by: null, created_date: now(), updated_date: now(),
+            }),
+          );
         }
       } else if ((!row.answered_at || record.removed) && (row.status !== nowStatus || row.answered_at)) {
         Object.assign(row, { status: nowStatus, answered_at: record.removed ? null : row.answered_at, updated_date: now() });
