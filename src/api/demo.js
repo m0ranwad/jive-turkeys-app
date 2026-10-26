@@ -570,6 +570,17 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     }
     if (offline) throw new TypeError('Failed to fetch');
   };
+  // And this (table names, comma-separated) to act out one kind of data not
+  // loading: reading those tables fails the way a dropped connection does.
+  const failIfUnreadable = (table) => {
+    let tables = '';
+    try {
+      tables = localStorage.getItem('jt_demo_fail_reads') || '';
+    } catch {
+      // Private mode.
+    }
+    if (tables.split(',').includes(table)) throw new TypeError('Failed to fetch');
+  };
   // And this to act out live updates that broke off (a phone asleep): changes still
   // save, but none arrive live. The browser's online event acts out the reconnect.
   const liveOff = () => {
@@ -799,11 +810,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     return {
       async list(sort, limit) {
         requireUser();
+        failIfUnreadable(table);
         const rows = sortRows(visibleRows(table, db[table]), sort);
         return delay(limit ? rows.slice(0, limit) : rows);
       },
       async filter(where, sort, limit) {
         requireUser();
+        failIfUnreadable(table);
         const rows = sortRows(visibleRows(table, db[table].filter((r) => matches(r, where))), sort);
         return delay(limit ? rows.slice(0, limit) : rows);
       },
