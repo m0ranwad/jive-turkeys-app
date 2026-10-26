@@ -147,6 +147,21 @@ begin
 end;
 $$;
 
+-- Jordan and Sam pay their dues together (once couples exist).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'player_profiles' and column_name = 'pays_with'
+  ) then
+    update public.player_profiles set pays_with = '33333333-3333-4333-8333-333333333333'
+      where user_id = '22222222-2222-4222-8222-222222222222';
+    update public.player_profiles set pays_with = '22222222-2222-4222-8222-222222222222'
+      where user_id = '33333333-3333-4333-8333-333333333333';
+  end if;
+end;
+$$;
+
 -- A roster name's RSVP, stat line and a vote for them (once those exist).
 do $$
 begin

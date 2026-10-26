@@ -3,7 +3,7 @@
 // kept in the history; couples pay together; captains set the fee, custom
 // amounts and payment links. The database enforces who can change what
 // (supabase/tests/dues.test.sql).
-import { expect, signIn, test } from './helpers';
+import { duesOption, expect, signIn, test } from './helpers';
 
 // Alex Chen and Riley Novak are a couple who pay together and haven't paid this session in the sample data.
 const ALEX = 'alex@demo.test';
@@ -34,7 +34,9 @@ async function switchPlayer(page, email, { returning = false } = {}) {
 async function linkPartners(page, player, partner) {
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await page.getByRole('button', { name: `Details for ${player}` }).click();
-  await page.getByRole('dialog', { name: player }).getByLabel('Pays together with').selectOption({ label: partner });
+  const sheet = page.getByRole('dialog', { name: player });
+  await duesOption(sheet, 'Pay together');
+  await sheet.getByLabel('Pays together with').selectOption({ label: partner });
   await expect(page.getByText('Linked as paying together')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'My dues' }).click();
@@ -160,6 +162,7 @@ test('anyone can mark teammates paid in one tap, but undoing one takes two taps 
   await sheet.getByRole('button', { name: 'Mark as not paid' }).click();
   await sheet.getByRole('button', { name: 'Mark not paid' }).click();
   await expect(sheet.getByRole('button', { name: 'Mark paid', exact: true })).toBeVisible();
+  await sheet.getByRole('button', { name: 'History', exact: true }).click();
   await expect(sheet).toContainText('You marked Kelly M. not paid');
   await expect(sheet).toContainText('You marked Kelly M. paid');
   await page.keyboard.press('Escape');
@@ -178,6 +181,7 @@ test('a couple are marked paid together, and anyone can link a couple', async ({
 
   await page.getByRole('button', { name: 'Details for Chris Dunn' }).click();
   const sheet = page.getByRole('dialog', { name: 'Chris Dunn' });
+  await duesOption(sheet, 'Pay together');
   await sheet.getByLabel('Pays together with').selectOption({ label: 'Kelly Moss' });
   await expect(page.getByText('Linked as paying together')).toBeVisible();
   await expect(sheet.getByRole('button', { name: 'Mark both paid' })).toBeVisible();
@@ -330,6 +334,7 @@ test('players keep what they paid when the fee changes, and the difference can b
   await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();
   const sheet = page.getByRole('dialog', { name: 'Sam Okafor' });
   await expect(sheet).toContainText('Paid $50 of $62 · $12 more to pay.');
+  await sheet.getByRole('button', { name: 'History', exact: true }).click();
   await expect(sheet).toContainText('Sam O. marked themselves paid $50');
   await page.keyboard.press('Escape');
 
@@ -414,13 +419,14 @@ test("anyone can record part of a couple's payment, split between them by their 
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await page.getByRole('button', { name: 'Details for Alex Chen' }).click();
   const sheet = page.getByRole('dialog', { name: 'Alex Chen' });
-  await sheet.getByRole('button', { name: 'Paid part of it?' }).click();
+  await duesOption(sheet, 'Record part payment');
   await sheet.getByLabel('Amount paid for both').fill('80');
   await expect(sheet).toContainText("Split by each one's share.");
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText('$80 marked paid for Alex Chen & Riley Novak')).toBeVisible();
   await expect(sheet).toContainText('Paid $40 of $61 · $42 more to pay.');
   await expect(sheet.getByRole('button', { name: 'Mark $42 more paid' })).toBeVisible();
+  await sheet.getByRole('button', { name: 'History', exact: true }).click();
   await expect(sheet).toContainText('You marked Alex C. paid $40');
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Amount for Alex Chen')).toHaveText('$40');
@@ -501,17 +507,21 @@ test('a captain gives one player a custom amount, and the rest split what is lef
   await openDues(page);
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
   const sheet = page.getByRole('dialog', { name: 'Kelly Moss' });
+  await duesOption(sheet, 'Set custom amount');
   await sheet.getByLabel('Custom amount').fill('40');
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(sheet).toContainText('$40 · custom amount');
+  await sheet.getByRole('button', { name: 'History', exact: true }).click();
   await expect(sheet).toContainText('You gave Kelly M. a custom amount of $40');
   await page.keyboard.press('Escape');
   // $721 - $40 = $681 across the other 11: $61.91, rounded up.
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$62');
 
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
+  await duesOption(sheet, 'Change custom amount');
   await sheet.getByRole('button', { name: 'Use the even split ($62) instead' }).click();
-  await expect(sheet).toContainText('$61 · even split');
+  await expect(sheet.getByTestId('player-sheet-amount')).toHaveText('$61');
+  await sheet.getByRole('button', { name: 'History', exact: true }).click();
   await expect(sheet).toContainText('You put Kelly M. back on the even split');
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$61');
@@ -554,7 +564,9 @@ test('roster players who have not joined count in the split, and anyone can mark
 
   // A couple can be one who has joined and one who hasn't.
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
-  await page.getByRole('dialog', { name: 'Kelly Moss' }).getByLabel('Pays together with').selectOption({ label: 'Mike Russo' });
+  const sheet = page.getByRole('dialog', { name: 'Kelly Moss' });
+  await duesOption(sheet, 'Pay together');
+  await sheet.getByLabel('Pays together with').selectOption({ label: 'Mike Russo' });
   await expect(page.getByText('Linked as paying together')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('dues-paid')).toContainText('with Kelly M.');
@@ -569,6 +581,45 @@ test('the Dues page sends captains to the Team page to add players', async ({ pa
   await openDues(page);
   await page.getByRole('button', { name: 'Details for Mike Russo' }).click();
   const sheet = page.getByRole('dialog', { name: 'Mike Russo' });
-  await expect(sheet).toContainText("Mike Russo hasn't joined the app yet.");
-  await expect(sheet.getByRole('link', { name: 'Team page' })).toBeVisible();
+  await expect(sheet).toContainText('not joined yet');
+  await sheet.getByRole('button', { name: 'More options' }).click();
+  await sheet.getByRole('link', { name: 'View on Team' }).click();
+  await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
+});
+
+
+test('marking paid has a compact sheet, and rare actions reveal only the chosen form', async ({ page }) => {
+  await signIn(page);
+  await openDues(page);
+  await page.getByRole('button', { name: 'Details for Mike Russo' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Mike Russo' });
+  await expect(sheet.getByTestId('player-sheet-amount')).toContainText('$61');
+  await expect(sheet.getByRole('button', { name: 'Mark paid', exact: true })).toBeVisible();
+  await expect(sheet.getByRole('combobox')).toHaveCount(0);
+  await expect(sheet.getByRole('spinbutton')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'History', exact: true })).toHaveCount(0);
+  await expect(sheet).not.toContainText('No changes yet');
+  await expect(sheet).not.toContainText('When they sign up');
+
+  await duesOption(sheet, 'Set custom amount');
+  await expect(sheet.getByLabel('Custom amount')).toBeVisible();
+  await expect(sheet.getByRole('combobox')).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'Mark paid', exact: true })).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Back to options' }).click();
+  await sheet.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await expect(sheet.getByLabel('Pays together with')).toBeVisible();
+  await expect(sheet.getByLabel('Custom amount')).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Back to options' }).click();
+  await sheet.getByRole('button', { name: 'Record part payment' }).click();
+  await expect(sheet.getByLabel('Amount paid', { exact: true })).toBeVisible();
+  await expect(sheet.getByRole('combobox')).toHaveCount(0);
+
+  // A waived share still has a paid/not-paid record.
+  await sheet.getByRole('button', { name: 'Back to options' }).click();
+  await sheet.getByRole('button', { name: 'Set custom amount' }).click();
+  await sheet.getByLabel('Custom amount').fill('0');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sheet.getByTestId('player-sheet-amount')).toContainText('$0');
+  await sheet.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await expect(sheet).toContainText('Paid Oct 8');
 });

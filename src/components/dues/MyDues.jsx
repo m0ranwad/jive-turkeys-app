@@ -8,6 +8,8 @@ import { CARD } from '@/lib/constants';
 import { dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues } from '@/lib/dues';
 import { seasonName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { isEarlier } from '@/lib/roster';
+import { PayTogetherDialog } from './DuesDialogs';
 import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip, shortDate } from './DuesParts';
 
 const round = (value) => Math.round(value * 100) / 100;
@@ -147,13 +149,42 @@ function TeamProgress({ team, onShowTeam }) {
 }
 
 /** The signed-in player's dues for the chosen session, ways to pay, and their other sessions. */
-export function MyDues({ data, period, user, settings, onChanged, onPickSession, onShowTeam }) {
+export function MyDues({ data, period, current, over = false, user, settings, onChanged, onPickSession, onShowTeam }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [pairingOpen, setPairingOpen] = useState(false);
 
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
   const mine = myShare(data, period, user.id);
+  const me = data.profiles.find((p) => p.user_id === user.id);
+  const partnerNow = data.profiles.find((p) => p.user_id === me?.pays_with);
+  const pairingPlayers = over ? data.profiles : sessionSlice(data, current).members;
+  const canPair = !isEarlier(period, current) && pairingPlayers.some((p) => p.user_id === user.id && p.status === 'active' && !p.removed);
+  const pairing = canPair && (
+    <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500" data-testid="pay-together">
+      {partnerNow && <span className="font-medium">{over ? 'Next session: ' : ''}With {partnerNow.display_name}</span>}
+      <Button
+        variant="ghost"
+        onClick={() => setPairingOpen(true)}
+        aria-label={partnerNow ? 'Change who you pay with' : 'Pay together'}
+        className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-600 underline underline-offset-4"
+      >
+        {partnerNow ? 'Change' : 'Pay together'}
+      </Button>
+      {over && !partnerNow && <span>From next session</span>}
+      <PayTogetherDialog
+        open={pairingOpen}
+        onOpenChange={setPairingOpen}
+        player={me}
+        profiles={data.profiles}
+        options={pairingPlayers.filter((p) => p.status === 'active' && !p.removed)}
+        from={current}
+        between={over}
+        onChanged={onChanged}
+      />
+    </div>
+  );
 
   const others = [...data.dues]
     .filter((d) => !(d.season_year === Number(period.year) && d.session === Number(period.session)))
@@ -238,6 +269,7 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
           <p className="font-display text-lg font-extrabold uppercase tracking-tight">No fee yet</p>
           <p className="mt-1 text-sm text-zinc-500">The fee for this session hasn't been set. It'll show up here.</p>
         </section>
+        {pairing}
         {otherSessions}
       </div>
     );
@@ -318,6 +350,8 @@ export function MyDues({ data, period, user, settings, onChanged, onPickSession,
           </button>
         </section>
       )}
+
+      {pairing}
 
       <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 

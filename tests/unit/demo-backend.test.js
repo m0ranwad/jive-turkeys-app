@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v27';
+const DB_KEY = 'jt_demo_db_v28';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -636,6 +636,85 @@ describe('dues', () => {
     await api.dues.setPartner(riley, null);
     expect([await partner('Sam Okafor'), await partner('Riley Novak')]).toEqual([null, null]);
     expect(alex).toBeTruthy();
+  });
+
+  // Who someone pays with in a session's list: an id, null for nobody, undefined if they aren't on it.
+  const partnerIn = async (api, session, id) => {
+    const row = (await api.entities.SessionRoster.filter({ session })).find((r) => (r.user_id ?? r.guest_id) === id);
+    return row && (row.pays_with_user ?? row.pays_with_guest ?? null);
+  };
+
+  it('keeps couples per session: Alex and Riley paid session 1 on their own and pay together from session 2', async () => {
+    const { api } = await signedIn();
+    const id = async (name) => (await api.entities.PlayerProfile.filter({ display_name: name }))[0].user_id;
+    const [alex, riley, sam] = [await id('Alex Chen'), await id('Riley Novak'), await id('Sam Okafor')];
+    expect([await partnerIn(api, 1, alex), await partnerIn(api, 1, riley)]).toEqual([null, null]);
+    expect([await partnerIn(api, 2, alex), await partnerIn(api, 3, riley)]).toEqual([riley, alex]);
+
+    // Linking now counts for session 2 (being played) and session 3 (asked about ahead), never session 1.
+    await api.dues.setPartner(sam, riley);
+    expect([await partnerIn(api, 2, sam), await partnerIn(api, 2, riley), await partnerIn(api, 2, alex)]).toEqual([riley, sam, null]);
+    expect([await partnerIn(api, 3, sam), await partnerIn(api, 3, alex)]).toEqual([riley, null]);
+    expect([await partnerIn(api, 1, sam), await partnerIn(api, 1, riley)]).toEqual([null, null]);
+  });
+
+  it('lets only captains fix who paid together in a past session, that session only', async () => {
+    const player = createDemoBackend();
+    await player.auth.signIn(DEMO_PLAYER_LOGIN.email, DEMO_PLAYER_LOGIN.password);
+    const id = async (name) => (await player.entities.PlayerProfile.filter({ display_name: name }))[0].user_id;
+    const [alex, riley, sam] = [await id('Alex Chen'), await id('Riley Novak'), await id('Sam Okafor')];
+    const year = (await player.entities.SessionDues.list())[0].season_year;
+    await expect(player.dues.setSessionPartner({ year, session: 1 }, alex, riley)).rejects.toThrow('Only captains');
+
+    const { api } = await signedIn();
+    await expect(api.dues.setSessionPartner({ year, session: 2 }, alex, sam)).rejects.toThrow("isn't over");
+    await expect(api.dues.setSessionPartner({ year, session: 3 }, alex, sam)).rejects.toThrow("isn't over");
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    await expect(api.dues.setSessionPartner({ year, session: 1 }, alex, chris.user_id)).rejects.toThrow("weren't on session 1");
+
+    await api.dues.setSessionPartner({ year, session: 1 }, alex, riley);
+    expect([await partnerIn(api, 1, alex), await partnerIn(api, 1, riley)]).toEqual([riley, alex]);
+    await api.dues.setSessionPartner({ year, session: 1 }, sam, riley);
+    expect([await partnerIn(api, 1, sam), await partnerIn(api, 1, riley), await partnerIn(api, 1, alex)]).toEqual([riley, sam, null]);
+    // Session 2 and who pays together now don't change.
+    expect([await partnerIn(api, 2, alex), await partnerIn(api, 2, sam)]).toEqual([riley, null]);
+    expect((await api.entities.PlayerProfile.filter({ user_id: sam }))[0].pays_with ?? null).toBeNull();
+
+    // A captain adding someone to a past session doesn't bring their couple from now.
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await api.dues.setPartner(chris.user_id, kelly.user_id);
+    await api.entities.SessionRoster.create({ season_year: year, session: 1, user_id: chris.user_id, guest_id: null, status: 'active' });
+    expect(await partnerIn(api, 1, chris.user_id)).toBeNull();
+  });
+
+  it("gives a roster name's couple to the account that picks it, in the sessions that follow, and an undo gives it back", async () => {
+    const { api } = await signedIn();
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    const [chris] = await api.entities.PlayerProfile.filter({ display_name: 'Chris Dunn' });
+    const [kelly] = await api.entities.PlayerProfile.filter({ display_name: 'Kelly Moss' });
+    await api.dues.setPartner(kelly.user_id, mike.id);
+    expect([await partnerIn(api, 2, kelly.user_id), await partnerIn(api, 2, mike.id), await partnerIn(api, 1, kelly.user_id)]).toEqual([
+      mike.id,
+      kelly.user_id,
+      null,
+    ]);
+
+    await api.users.linkGuest(mike.id, chris.user_id);
+    expect([await partnerIn(api, 2, kelly.user_id), await partnerIn(api, 2, chris.user_id), await partnerIn(api, 3, kelly.user_id)]).toEqual([
+      chris.user_id,
+      kelly.user_id,
+      chris.user_id,
+    ]);
+    const [link] = await api.entities.TeamGuestLink.filter({ guest_id: mike.id });
+    expect(link.moved_partners).toHaveLength(2);
+
+    await api.users.unlinkGuest(mike.id);
+    expect([await partnerIn(api, 2, kelly.user_id), await partnerIn(api, 2, mike.id), await partnerIn(api, 2, chris.user_id)]).toEqual([
+      mike.id,
+      kelly.user_id,
+      null,
+    ]);
+    expect(await partnerIn(api, 3, kelly.user_id)).toBe(mike.id);
   });
 
   it('marks teammates who are not on the app paid, with their own payment and history rows', async () => {

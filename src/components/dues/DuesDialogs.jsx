@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -227,16 +228,159 @@ export function PaySettingsDialog({ open, onOpenChange, settings, onSaved }) {
 }
 
 /**
+ * Who a player pays together with, picked from `options` (the players of the
+ * session it's for). `current` is their partner there, also when they aren't
+ * one of the options (`away` says why). Picking someone who pays with somebody
+ * else (`partnerOf`) asks first, since that somebody then pays on their own.
+ */
+function PartnerPicker({ id, label, hint, player, current, away, options, partnerOf, busy, onPick }) {
+  const [asking, setAsking] = useState(null);
+
+  useEffect(() => setAsking(null), [player.user_id, current?.user_id]);
+
+  const pick = (partnerId) => {
+    const picked = options.find((p) => p.user_id === partnerId);
+    const theirs = picked && partnerOf(partnerId);
+    const displaced = [theirs, current].filter(
+      (p, i, all) => p && p.user_id !== player.user_id && p.user_id !== partnerId && all.findIndex((other) => other?.user_id === p.user_id) === i,
+    );
+    if (picked && displaced.length) setAsking({ picked, theirs, displaced });
+    else onPick(partnerId || null);
+  };
+  const first = (p) => p.display_name.split(' ')[0];
+
+  return (
+    <div className={SECTION}>
+      <Label htmlFor={id} className={FIELD_LABEL}>
+        {label}
+      </Label>
+      <select
+        id={id}
+        value={current?.user_id ?? ''}
+        onChange={(e) => pick(e.target.value)}
+        disabled={busy || !!asking}
+        className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
+      >
+        <option value="">Nobody (pays on their own)</option>
+        {current && !options.some((p) => p.user_id === current.user_id) && (
+          <option value={current.user_id} disabled>
+            {current.display_name} ({away})
+          </option>
+        )}
+        {options.map((p) => (
+          <option key={p.user_id} value={p.user_id}>
+            {p.display_name}
+          </option>
+        ))}
+      </select>
+      {asking && (
+        <div className="space-y-3 rounded-2xl bg-amber-50 p-4" role="alert">
+          <p className="text-sm text-amber-900">
+            {asking.theirs && asking.theirs.user_id !== player.user_id &&
+              `${asking.picked.display_name} pays together with ${asking.theirs.display_name}. `}
+            {current && current.user_id !== asking.picked.user_id && `${player.display_name} pays together with ${current.display_name}. `}
+            Link {first(asking.picked)} with {first(player)} instead?{' '}
+            {asking.displaced.map((p) => p.display_name).join(' and ')} will pay on their own.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setAsking(null)} disabled={busy} className="h-11 rounded-xl bg-white font-bold">
+              Keep as is
+            </Button>
+            <Button onClick={() => onPick(asking.picked.user_id).then((saved) => saved !== false && setAsking(null))} disabled={busy} className="h-11 rounded-xl font-bold">
+              Link them
+            </Button>
+          </div>
+        </div>
+      )}
+      <p className="text-[11px] font-medium text-zinc-500">{hint}</p>
+    </div>
+  );
+}
+
+/** A player's usual pairing, without payment history or captain-only corrections. */
+export function PayTogetherDialog({ open, onOpenChange, player, profiles, options, from, between, onChanged }) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const partnerOf = (id) => profiles.find((p) => p.user_id === profiles.find((p) => p.user_id === id)?.pays_with) || null;
+
+  if (!player) return null;
+
+  const save = async (partnerId) => {
+    setBusy(true);
+    try {
+      await api.dues.setPartner(player.user_id, partnerId);
+      await onChanged();
+      onOpenChange(false);
+      toast({ title: partnerId ? 'Linked as paying together' : 'Unlinked' });
+      return true;
+    } catch (err) {
+      toast({ title: "That didn't save", description: err.message });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={DIALOG}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>Pay together</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-zinc-500">Choose a teammate. One payment covers both shares, and either of you can mark it paid.</p>
+        <PartnerPicker
+          id="my-pays-with"
+          label="Pays together with"
+          hint={between
+            ? 'From next session on. The session that just ended keeps who paid together then.'
+            : `From session ${from.session} on. Earlier sessions keep who paid together then.`}
+          player={player}
+          current={partnerOf(player.user_id)}
+          away={between ? 'not playing next session' : 'not playing this session'}
+          options={options.filter((p) => p.user_id !== player.user_id).sort((a, b) => a.display_name.localeCompare(b.display_name))}
+          partnerOf={partnerOf}
+          busy={busy}
+          onPick={save}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * One player's dues for the session: status, what they paid, history, who they
  * pay with, and (captains) a custom amount. Marking someone not paid takes a
  * second tap. Also opens for someone who paid and isn't on the session's active
  * roster, so they can be marked not paid.
+ *
+ * Who pays together is kept per session. A session that's over (`past`) keeps
+ * who paid together then, and only captains change it, for that session only.
+ * Otherwise a link counts from the session being played on (`from`). Between
+ * sessions (`between`: this is the session that just ended) anyone can link a
+ * couple from the next session.
  */
-export function PlayerSheet({ open, onOpenChange, player, team, payments, history, profiles, period, meId, isCaptain, onChanged }) {
+export function PlayerSheet({
+  open,
+  onOpenChange,
+  player,
+  team,
+  payments,
+  history,
+  profiles,
+  period,
+  past = false,
+  started = true,
+  between = false,
+  from = period,
+  meId,
+  isCaptain,
+  onChanged,
+}) {
   const { toast } = useToast();
   const [confirming, setConfirming] = useState(false);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState('summary');
 
   const share = player ? team.shareOf(player.user_id) : null;
   const out = player && !share ? team.notPlayingOf(player.user_id) : null;
@@ -247,6 +391,7 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
   useEffect(() => {
     if (open) {
       setConfirming(false);
+      setView('summary');
       setAmount(share?.custom ? String(share.amount) : '');
     }
   }, [open, player?.user_id]);
@@ -319,15 +464,45 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
       }
     }, value == null ? 'Back on the even split' : 'Custom amount saved');
 
-  const setPartner = (partnerId) =>
-    run(() => api.dues.setPartner(player.user_id, partnerId || null), partnerId ? 'Linked as paying together' : 'Unlinked');
+  // Who pays together now, and who's playing: this session's players, or for the next one, today's.
+  const profileOf = (userId) => profiles.find((p) => p.user_id === userId) || null;
+  const nowPartnerOf = (userId) => profileOf(profileOf(userId)?.pays_with);
+  const byName = (a, b) => a.display_name.localeCompare(b.display_name);
+  const playing = team.active.filter((p) => p.user_id !== player.user_id).sort(byName);
+  const playingNext = profiles.filter((p) => p.user_id !== player.user_id && p.status === 'active' && !p.removed).sort(byName);
+  const fromHere = Number(from.year) === Number(period.year) && Number(from.session) === Number(period.session);
 
-  // Anyone to pay with, except guests who no longer count.
-  const roster = profiles
-    .filter((p) => p.user_id !== player.user_id && !p.removed && !(p.guest && p.status !== 'active'))
-    .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const setPartner = (partnerId, done) =>
+    run(() => api.dues.setPartner(player.user_id, partnerId), partnerId ? done : 'Unlinked');
+  const setSessionPartner = (partnerId) =>
+    run(
+      () => api.dues.setSessionPartner(period, player.user_id, partnerId),
+      partnerId ? `Linked as paying together in session ${period.session}` : `Unlinked in session ${period.session}`,
+    );
   const events = history.filter((e) => e.user_id === player.user_id);
   const markedBy = payment?.paid_by && payment.paid_by !== player.user_id ? ` by ${nameOf(payment.paid_by).split(' ')[0]}` : '';
+  const canPair = !!share && !past;
+  const canPairNext = between && player.status === 'active' && !player.removed;
+  const canCorrectPair = !!share && past && isCaptain && started;
+  const canSetAmount = isCaptain && !!share;
+  const hasOptions = stillOwed > 0 || canPair || canPairNext || canCorrectPair || canSetAmount || (player.guest && isCaptain);
+  const summary = view === 'summary' || view === 'options';
+  const totalShare = share ? share.amount + (partner ? team.shareOf(partner.user_id).amount : 0) : null;
+  const hasPayment = share && ids.some((id) => team.shareOf(id).paid);
+  const openOption = (next) => {
+    if (next === 'amount') setAmount(share.custom ? String(share.amount) : '');
+    setView(next);
+  };
+  const finish = async (saving) => {
+    const saved = await saving;
+    if (saved) setView('summary');
+    return saved;
+  };
+  const optionButton = (label, next) => (
+    <Button variant="ghost" onClick={() => openOption(next)} disabled={busy} className="h-11 w-full justify-start rounded-xl font-semibold">
+      {label}
+    </Button>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -337,9 +512,9 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
         </DialogHeader>
 
         <div className="-mt-2 flex items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-zinc-500">
+          <span className="text-sm font-semibold text-zinc-500" data-testid="player-sheet-amount">
             {share
-              ? `${dollars(share.amount)} · ${share.custom ? 'custom amount' : 'even split'}`
+              ? `${dollars(totalShare)}${share.custom && !partner ? ' · custom amount' : ''}`
               : `Not playing · ${notPlayingLabel(out)}`}
             {player.guest && ' · not joined yet'}
           </span>
@@ -353,23 +528,13 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
           </p>
         )}
 
-        {share && !share.paid && (
+        {summary && share && (!ids.every((id) => team.shareOf(id).paid) || stillOwed > 0) && !confirming && (
           <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
-            {partner ? `Mark both paid` : 'Mark paid'}
+            {hasPayment && stillOwed > 0 ? `Mark ${dollars(stillOwed)} more paid` : partner ? 'Mark both paid' : 'Mark paid'}
           </Button>
         )}
-        {balance > 0 && !confirming && (
-          <Button onClick={() => mark(true)} disabled={busy} className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300')}>
-            Mark {dollars(balance)} more paid
-          </Button>
-        )}
-        {stillOwed > 0 && !confirming && (
-          <div className="-mt-1">
-            <PartPayment key={player.user_id} max={stillOwed} both={owing.length > 1} busy={busy} onSave={payPart} />
-          </div>
-        )}
-        {isPaid && !confirming && (
-          <Button variant="outline" onClick={() => setConfirming(true)} disabled={busy} className={BIG_BUTTON}>
+        {summary && isPaid && !confirming && (
+          <Button variant="ghost" onClick={() => setConfirming(true)} disabled={busy} className="h-11 justify-start rounded-xl px-0 text-xs font-semibold text-zinc-500">
             Mark as not paid
           </Button>
         )}
@@ -388,95 +553,137 @@ export function PlayerSheet({ open, onOpenChange, player, team, payments, histor
             </div>
           </div>
         )}
-        {partner && <p className="-mt-2 text-xs font-medium text-zinc-500">Pays together with {partner.display_name}, so both change together.</p>}
-
-        <div className={SECTION}>
-          <Label htmlFor="pays-with" className={FIELD_LABEL}>
-            Pays together with
-          </Label>
-          <select
-            id="pays-with"
-            value={player.pays_with && profiles.some((p) => p.user_id === player.pays_with) ? player.pays_with : ''}
-            onChange={(e) => setPartner(e.target.value)}
-            disabled={busy}
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
-          >
-            <option value="">Nobody (pays on their own)</option>
-            {roster.map((p) => (
-              <option key={p.user_id} value={p.user_id}>
-                {p.display_name}
-              </option>
-            ))}
-          </select>
-          <p className="text-[11px] font-medium text-zinc-500">For couples who send one payment for both.</p>
-        </div>
-
-        {isCaptain && share && (
-          <div className={SECTION}>
-            <Label htmlFor="custom-amount" className={FIELD_LABEL}>
-              Custom amount
-            </Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
-                <Input
-                  id="custom-amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder={`${team.perPlayer} (even split)`}
-                  className="h-11 rounded-xl pl-7 font-bold"
-                />
-              </div>
-              <Button
-                variant="outline"
-                disabled={busy || amount.trim() === '' || Number.isNaN(Number(amount)) || Number(amount) < 0}
-                onClick={() => saveAmount(Number(amount))}
-                className="h-11 rounded-xl font-bold"
-              >
-                Save
-              </Button>
-            </div>
-            {share.custom && (
-              <button
-                type="button"
-                onClick={() => saveAmount(null)}
-                disabled={busy}
-                className="text-xs font-bold text-zinc-500 underline underline-offset-2"
-              >
-                Use the even split ({dollars(team.perPlayer)}) instead
-              </button>
-            )}
-          </div>
-        )}
-
-        {player.guest && (
-          <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-xs font-medium text-zinc-500">
-            {player.display_name} hasn't joined the app yet. When they sign up and pick their name, their payments
-            come with them.{' '}
-            {isCaptain ? (
-              <>
-                Change their name or status on the{' '}
-                <Link to="/team" className="font-bold text-zinc-800 underline underline-offset-2">
-                  Team page
-                </Link>
-                .
-              </>
-            ) : (
-              'Anyone can mark them paid.'
-            )}
+        {partner && (
+          <p className="-mt-2 text-xs font-medium text-zinc-500">
+            {past ? 'Paid' : 'Pays'} together with {partner.display_name}, so both change together.
           </p>
         )}
 
-        <div className={SECTION}>
-          <span className={cn(FIELD_LABEL, 'block')}>History</span>
-          {events.length ? (
-            <HistoryList events={events} nameOf={nameOf} meId={meId} />
-          ) : (
-            <p className="text-sm text-zinc-500">No changes yet this session.</p>
-          )}
-        </div>
+        {!confirming && summary && (hasOptions || events.length > 0) && (
+          <div className="border-t border-zinc-100 pt-1">
+            <div className="flex items-center gap-2">
+              {hasOptions && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setView(view === 'options' ? 'summary' : 'options')}
+                  disabled={busy}
+                  aria-expanded={view === 'options'}
+                  aria-controls="dues-options"
+                  className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500"
+                >
+                  More options
+                  <ChevronDown className={cn('h-4 w-4', view === 'options' && 'rotate-180')} />
+                </Button>
+              )}
+              {events.length > 0 && (
+                <Button variant="ghost" onClick={() => setView('history')} disabled={busy} className="h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500">
+                  History
+                </Button>
+              )}
+            </div>
+            <div id="dues-options" hidden={view !== 'options'} className="space-y-1 rounded-2xl bg-zinc-50 p-1">
+              {stillOwed > 0 && optionButton('Record part payment', 'partial')}
+              {canPair && optionButton(nowPartnerOf(player.user_id) ? 'Change who pays together' : 'Pay together', 'partner')}
+              {canPairNext && optionButton('Pay together from next session', 'next')}
+              {canCorrectPair && optionButton('Edit who paid together', 'past')}
+              {canSetAmount && optionButton(share.custom ? 'Change custom amount' : 'Set custom amount', 'amount')}
+              {player.guest && isCaptain && (
+                <Link to="/team" className="flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold hover:bg-zinc-100">View on Team</Link>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!confirming && !summary && (
+          <div className={SECTION}>
+            <Button
+              variant="ghost"
+              onClick={() => setView(hasOptions ? 'options' : 'summary')}
+              disabled={busy}
+              className="-ml-2 h-11 rounded-xl px-2 text-xs font-semibold text-zinc-500"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {hasOptions ? 'Back to options' : 'Back'}
+            </Button>
+            {view === 'partial' && share && stillOwed > 0 && (
+              <PartPayment key={player.user_id} defaultOpen max={stillOwed} both={owing.length > 1} busy={busy} onSave={(paid) => finish(payPart(paid))} />
+            )}
+            {view === 'partner' && canPair && (
+              <PartnerPicker
+                id="pays-with"
+                label="Pays together with"
+                hint={`For couples who send one payment for both. ${
+                  fromHere ? 'From this session on' : `Counts from session ${from.session} on`
+                }; earlier sessions keep who paid together then.`}
+                player={player}
+                current={nowPartnerOf(player.user_id)}
+                away="not playing this session"
+                options={playing}
+                partnerOf={nowPartnerOf}
+                busy={busy}
+                onPick={(id) => finish(setPartner(id, 'Linked as paying together'))}
+              />
+            )}
+            {view === 'next' && canPairNext && (
+              <PartnerPicker
+                id="pays-with-next"
+                label="Pays together from next session"
+                hint={`For couples who send one payment for both. Session ${period.session} keeps who paid together then.`}
+                player={player}
+                current={nowPartnerOf(player.user_id)}
+                away="not playing next session"
+                options={playingNext}
+                partnerOf={nowPartnerOf}
+                busy={busy}
+                onPick={(id) => finish(setPartner(id, 'Linked from next session'))}
+              />
+            )}
+            {view === 'past' && canCorrectPair && (
+              <PartnerPicker
+                id="paid-with"
+                label={`Paid together in session ${period.session}`}
+                hint={`Fixes session ${period.session} only. Other sessions don't change.`}
+                player={player}
+                current={partner}
+                options={playing}
+                partnerOf={(id) => team.partnerOf(id)}
+                busy={busy}
+                onPick={(id) => finish(setSessionPartner(id))}
+              />
+            )}
+            {view === 'amount' && canSetAmount && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-amount" className={FIELD_LABEL}>Custom amount</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
+                    <Input
+                      id="custom-amount"
+                      type="number"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder={`${team.perPlayer} (even split)`}
+                      className="h-11 rounded-xl pl-7 font-bold"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    disabled={busy || amount.trim() === '' || !Number.isFinite(Number(amount)) || Number(amount) < 0}
+                    onClick={() => finish(saveAmount(Number(amount)))}
+                    className="h-11 rounded-xl font-bold"
+                  >Save</Button>
+                </div>
+                {share.custom && (
+                  <button type="button" onClick={() => finish(saveAmount(null))} disabled={busy} className="min-h-11 text-xs font-bold text-zinc-500 underline underline-offset-2">
+                    Use the even split ({dollars(team.perPlayer)}) instead
+                  </button>
+                )}
+              </div>
+            )}
+            {view === 'history' && <HistoryList events={events} nameOf={nameOf} meId={meId} />}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

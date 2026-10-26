@@ -18,9 +18,10 @@ export const hasSessionList = (rows, period) => sessionRows(rows, period).length
 
 /**
  * The team in one session: `members` (player profiles, and roster names shaped
- * by guestAsPlayer(), all keyed by `user_id`) with each one's status for that
- * session. Anyone not on that session's list, or off it, is left out. A session
- * without a list uses today's statuses, as `members` already have them.
+ * by guestAsPlayer(), all keyed by `user_id`) with each one's status and who
+ * they paid with (`pays_with`) for that session. Anyone not on that session's
+ * list, or off it, is left out. A session without a list uses today's, as
+ * `members` already have them.
  */
 export function membersForSession(members, rows, period) {
   const list = sessionRows(rows, period);
@@ -31,7 +32,7 @@ export function membersForSession(members, rows, period) {
     if (m.guest && m.linked_user_id) return [];
     const entry = byMember.get(m.user_id);
     if (!entry || entry.status === 'off') return [];
-    return [{ ...m, status: entry.status }];
+    return [{ ...m, status: entry.status, pays_with: entry.pays_with_user ?? entry.pays_with_guest ?? null }];
   });
 }
 

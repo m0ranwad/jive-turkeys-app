@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
-import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, teamDues } from '@/lib/dues';
+import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
@@ -95,6 +95,10 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
   // A later session hasn't started. It has a list already only if captains asked who's playing it ahead.
   const notStarted = !!current && isEarlier(current, period);
   const askedAhead = notStarted && started;
+  // Between sessions: this is the session that just ended, and couples linked now count from the next one.
+  const between = past && !isEarlier(period, current);
+  // The session a couple linked now counts from: the one being played, else the next one.
+  const couplesFrom = !current ? period : over ? stepSession(current, 1) : current;
   const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid);
   const paid = team.active.filter((p) => team.shareOf(p.user_id).paid);
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
@@ -290,6 +294,10 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         history={events}
         profiles={data.profiles}
         period={period}
+        past={past}
+        started={started}
+        between={between}
+        from={couplesFrom}
         meId={user.id}
         isCaptain={isCaptain}
         onChanged={onChanged}
@@ -399,7 +407,9 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           </button>
         )}
         <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
-          Tap a player to see their history, link a couple who pay together, or fix a mistake.
+          {past && !between && !isCaptain
+            ? 'Tap a player to see their history or fix a mistake.'
+            : 'Tap a player to see their history, link a couple who pay together, or fix a mistake.'}
         </p>
       </section>
 

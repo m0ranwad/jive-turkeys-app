@@ -2,7 +2,7 @@
 // accessibility basics (WCAG 2.1 A and AA): text contrast, names on buttons and
 // fields, and so on. A new screen or dialog should get a line here.
 import AxeBuilder from '@axe-core/playwright';
-import { expect, PLAYER, signIn, test } from './helpers';
+import { duesOption, expect, PLAYER, signIn, test } from './helpers';
 
 async function expectAccessible(page, screen) {
   // Check what's on screen once it has settled (not halfway through fading in).
@@ -71,9 +71,29 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'Field Rules');
 
   await visit(page, '/dues', 'Dues');
+  await page.getByRole('tab', { name: 'My dues' }).click();
   await expectAccessible(page, 'My dues');
+  await page.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toBeVisible();
+  await expectAccessible(page, 'Pay together from My dues');
+  await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await expectAccessible(page, 'Team dues');
+  await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();
+  const sam = page.getByRole('dialog', { name: 'Sam Okafor' });
+  await duesOption(sam, 'Pay together');
+  await sam.getByLabel('Pays together with').selectOption({ label: 'Riley Novak' });
+  await expect(page.getByRole('button', { name: 'Link them' })).toBeVisible();
+  await expectAccessible(page, "A player's dues, asking before breaking up a couple");
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Previous session' }).click();
+  await page.getByRole('button', { name: 'Details for Alex Chen' }).click();
+  await expect(page.getByLabel('Paid together in session 1')).toBeHidden();
+  await expectAccessible(page, "A past session's player dues");
+  await duesOption(page.getByRole('dialog', { name: 'Alex Chen' }), 'Edit who paid together');
+  await expect(page.getByLabel('Paid together in session 1')).toBeVisible();
+  await expectAccessible(page, "Editing a past session's couple");
+  await page.keyboard.press('Escape');
   await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'session_roster'));
   await visit(page, '/dues', 'Dues');
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
@@ -205,4 +225,21 @@ test('with reduce motion turned on, the menu, dialogs and game cards stay still'
   await card.click();
   await page.getByRole('button', { name: /^(Enter|Edit) result$/ }).click();
   expect(await animation(page.getByRole('dialog', { name: 'Game result' }))).toBe('none');
+});
+
+
+test('a compact payment sheet and its optional forms', async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page);
+  await visit(page, '/dues', 'Dues');
+  await page.getByRole('button', { name: 'Details for Mike Russo' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Mike Russo' });
+  await expectAccessible(page, 'Compact payment sheet');
+  await sheet.getByRole('button', { name: 'More options' }).click();
+  await expectAccessible(page, 'Payment options');
+  await sheet.getByRole('button', { name: 'Set custom amount' }).click();
+  await expectAccessible(page, 'Custom amount editor');
+  await sheet.getByRole('button', { name: 'Back to options' }).click();
+  await sheet.getByRole('button', { name: 'Record part payment' }).click();
+  await expectAccessible(page, 'Partial payment editor');
 });

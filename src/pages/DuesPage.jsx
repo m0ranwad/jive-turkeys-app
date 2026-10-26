@@ -58,7 +58,7 @@ export function DuesPage() {
   const shown = period ?? current;
   const isCurrent = shown.year === current.year && shown.session === current.session;
   const hasFee = dues.dues.some((d) => d.season_year === Number(shown.year) && d.session === Number(shown.session));
-  const shared = { data: dues, period: shown, current, user, settings, onChanged: dues.reload };
+  const shared = { data: dues, period: shown, current, over, user, settings, onChanged: dues.reload };
 
   return (
     <div className="space-y-4">
@@ -88,7 +88,6 @@ export function DuesPage() {
       {view === 'team' ? (
         <TeamDues
           {...shared}
-          over={over}
           isCaptain={isCaptain}
           onSettingsSaved={async () => {
             await reloadTeam();
