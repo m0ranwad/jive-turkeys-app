@@ -395,6 +395,71 @@ select ask_test.refused($$select public.roster_ask(ask_test.year(), 2, ask_test.
   'and captains can''t ask about it anymore');
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Captains ask about session 3 while session 2 is under way, Pat says he's
+-- in, and they stop asking. Then Lee goes back to Active, Ivy joins and Gus is
+-- taken off the team. When session 3's schedule goes up, its list is brought
+-- up to date and Pat's answer still counts.
+-- ---------------------------------------------------------------------------
+
+insert into ask_test.people values ('ivy', '00000000-0000-4000-8000-0000000000fa');
+insert into auth.users (id, email) values (ask_test.id('ivy'), 'ivy@ask.test');
+update public.users set joined_team_at = now() where id = ask_test.id('ivy');
+
+select ask_test.sign_in('kim');
+select public.roster_ask(ask_test.year(), 3, ask_test.today() + 40);
+reset role;
+select ask_test.sign_in('pat');
+select public.roster_answer(ask_test.year(), 3, 'active');
+reset role;
+select ask_test.sign_in('kim');
+select public.roster_ask(ask_test.year(), 3, null);
+reset role;
+create temp table session_3_changes as select ask_test.changes(3) as n;
+
+select ask_test.sign_in('lee');
+select ask_test.touches($$update public.player_profiles set status = 'active' where user_id = auth.uid()$$, 1,
+  'a player still to answer session 3 goes back to Active while captains aren''t asking');
+reset role;
+select ask_test.sign_in('ivy');
+insert into public.player_profiles (user_id, display_name, gender, status) values (auth.uid(), 'Ivy New', 'F', 'active');
+reset role;
+select ask_test.sign_in('kim');
+select ask_test.touches($$update public.team_guests set removed = true where id = ask_test.id('gus')$$, 1,
+  'and a captain takes a roster name off the team');
+reset role;
+select ask_test.ok(
+  ask_test.status('lee', 3) = 'on_break' and ask_test.status('ivy', 3) = 'none' and ask_test.status('gus', 3) = 'sub_pool',
+  'session 3''s list doesn''t follow them while captains aren''t asking');
+
+-- Session 2's last game is played and session 3's schedule goes up.
+update public.games set date = ask_test.today() - 2 where season_year = ask_test.year() and session = 2;
+insert into public.games (season_year, session, date, opponent) values (ask_test.year(), 3, ask_test.today() + 4, 'Net Ninjas');
+select ask_test.sign_in('ivy');
+select ask_test.ok(public.roster_start_current() = ask_test.session(3) || '{"over": false}',
+  'session 3 is the current session once its schedule is up');
+reset role;
+select ask_test.ok(
+  (select applied_at is not null from public.session_asks where season_year = ask_test.year() and session = 3),
+  'it''s brought up to date, though captains stopped asking');
+select ask_test.ok(ask_test.status('lee', 3) = 'active' and not ask_test.answered('lee', 3),
+  'anyone still to answer has their status right now');
+select ask_test.ok(ask_test.status('ivy', 3) = 'active' and not ask_test.answered('ivy', 3),
+  'a player who joined since is on it, still to answer');
+select ask_test.ok(ask_test.status('gus', 3) = 'off', 'a roster name taken off the team since is off it');
+select ask_test.ok(ask_test.profile('pat') = 'active' and ask_test.status('pat', 3) = 'active' and ask_test.answered('pat', 3),
+  'the answer given before captains stopped becomes the player''s status right now');
+select ask_test.ok(ask_test.changes(3) = (select n from session_3_changes),
+  'bringing it up to date isn''t recorded as anyone changing their status');
+
+select ask_test.sign_in('pat');
+select ask_test.touches($$update public.player_profiles set status = 'on_break' where user_id = auth.uid()$$, 1,
+  'the player changes their mind');
+select public.roster_start_current();
+reset role;
+select ask_test.ok(ask_test.profile('pat') = 'on_break' and ask_test.status('pat', 3) = 'on_break',
+  'and opening the site again keeps it: the answers are applied once');
+
 set role anon;
 select ask_test.refused($$select count(*) from public.session_asks$$, 'signed-out visitors cannot see what was asked');
 select ask_test.refused($$select public.roster_answer(ask_test.year(), 2, 'active')$$, 'signed-out visitors cannot answer');
