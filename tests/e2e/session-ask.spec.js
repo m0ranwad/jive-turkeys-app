@@ -95,6 +95,34 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await expect(card).toContainText('5 of 14 answered');
 });
 
+test('stopping the question keeps future dues current and preserves explicit answers', async ({ page }) => {
+  await signIn(page);
+  await openTab(page, '/team', 'Team');
+  await page.getByTestId('session-ask').getByRole('button', { name: 'Change date' }).click();
+  await page.getByRole('dialog', { name: "Ask who's playing session 3" }).getByRole('button', { name: 'Stop asking' }).click();
+  await expect(page.getByText('Stopped asking about session 3')).toBeVisible();
+
+  // Casey hasn't answered session 3; Priya explicitly said she's in.
+  await playerCard(page, 'Casey Captain').getByRole('button', { name: 'On Break' }).click();
+  await expect(page.getByText('Casey Captain marked On Break')).toBeVisible();
+  await playerCard(page, 'Priya Shah').getByRole('button', { name: 'On Break' }).click();
+  await expect(page.getByText('Priya Shah marked On Break')).toBeVisible();
+
+  await openTab(page, '/dues', 'Dues');
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: 'Next session' }).click();
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
+  await page.getByRole('button', { name: 'Set the fee' }).click();
+  await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Casey Captain');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: 'Next session' }).click();
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Casey Captain');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
+});
+
 test('players cannot ask, and do not see the captains\' list', async ({ page }) => {
   await signIn(page, PLAYER);
   await openTab(page, '/team', 'Team');

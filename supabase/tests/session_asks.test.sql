@@ -398,8 +398,8 @@ reset role;
 -- ---------------------------------------------------------------------------
 -- Captains ask about session 3 while session 2 is under way, Pat says he's
 -- in, and they stop asking. Then Lee goes back to Active, Ivy joins and Gus is
--- taken off the team. When session 3's schedule goes up, its list is brought
--- up to date and Pat's answer still counts.
+-- taken off the team. Its list stays current before its schedule goes up,
+-- and Pat's answer still counts.
 -- ---------------------------------------------------------------------------
 
 insert into ask_test.people values ('ivy', '00000000-0000-4000-8000-0000000000fa');
@@ -407,6 +407,8 @@ insert into auth.users (id, email) values (ask_test.id('ivy'), 'ivy@ask.test');
 update public.users set joined_team_at = now() where id = ask_test.id('ivy');
 
 select ask_test.sign_in('kim');
+-- Finish applying the current session before testing a future-list refresh.
+select public.roster_start_current();
 select public.roster_ask(ask_test.year(), 3, ask_test.today() + 40);
 reset role;
 select ask_test.sign_in('pat');
@@ -429,8 +431,42 @@ select ask_test.touches($$update public.team_guests set removed = true where id 
   'and a captain takes a roster name off the team');
 reset role;
 select ask_test.ok(
-  ask_test.status('lee', 3) = 'on_break' and ask_test.status('ivy', 3) = 'none' and ask_test.status('gus', 3) = 'sub_pool',
-  'session 3''s list doesn''t follow them while captains aren''t asking');
+  ask_test.status('lee', 3) = 'active' and ask_test.status('ivy', 3) = 'active' and ask_test.status('gus', 3) = 'off',
+  'session 3''s list follows current statuses, joins and removals after captains stop asking');
+select ask_test.ok(not ask_test.answered('lee', 3) and not ask_test.answered('ivy', 3),
+  'following current statuses does not count as an explicit answer');
+select ask_test.ok(ask_test.status('pat', 3) = 'active' and ask_test.answered('pat', 3),
+  'the explicit answer given before captains stopped is kept');
+select ask_test.ok(ask_test.changes(3) = (select n from session_3_changes),
+  'following a stopped question does not add dues history');
+
+-- Act out a list saved by the older version, before stopped questions followed
+-- today's statuses. Opening the site repairs it without applying future answers.
+select set_config('jive.roster_applying', 'on', true);
+update public.session_roster set status = 'on_break'
+  where season_year = ask_test.year() and session = 3 and user_id = ask_test.id('lee');
+delete from public.session_roster
+  where season_year = ask_test.year() and session = 3 and user_id = ask_test.id('ivy');
+select set_config('jive.roster_applying', 'off', true);
+create temp table stopped_refresh_before as select
+  (select jsonb_agg(to_jsonb(r) order by r.id) from public.session_roster r
+    where r.season_year = ask_test.year() and r.session < 3) as earlier,
+  (select jsonb_agg(to_jsonb(p) order by p.id) from public.player_profiles p) as profiles;
+select ask_test.sign_in('ivy');
+select public.roster_start_current();
+reset role;
+select ask_test.ok(ask_test.status('lee', 3) = 'active' and ask_test.status('ivy', 3) = 'active',
+  'opening the site repairs an older stopped list and adds missing teammates');
+select ask_test.ok(ask_test.status('pat', 3) = 'active' and ask_test.answered('pat', 3),
+  'refreshing a stopped list preserves explicit answers');
+select ask_test.ok(
+  (select jsonb_agg(to_jsonb(r) order by r.id) from public.session_roster r
+    where r.season_year = ask_test.year() and r.session < 3) = (select earlier from stopped_refresh_before)
+  and (select jsonb_agg(to_jsonb(p) order by p.id) from public.player_profiles p) = (select profiles from stopped_refresh_before),
+  'refreshing a future list leaves current profiles and earlier lists alone');
+select ask_test.ok(
+  (select starts_on is null and applied_at is null from public.session_asks where season_year = ask_test.year() and session = 3),
+  'refreshing does not reopen the question or apply its answers early');
 
 -- Session 2's last game is played and session 3's schedule goes up.
 update public.games set date = ask_test.today() - 2 where season_year = ask_test.year() and session = 2;
