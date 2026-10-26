@@ -277,8 +277,8 @@ describe('roster names', () => {
 
 describe('session lists', () => {
   it("starts the current session's list through the database function", async () => {
-    result = { data: { season_year: 2026, session: 2 }, error: null };
-    expect(await api.roster.start()).toEqual({ season_year: 2026, session: 2 });
+    result = { data: { season_year: 2026, session: 2, over: false }, error: null };
+    expect(await api.roster.start()).toEqual({ season_year: 2026, session: 2, over: false });
     expect(calls).toEqual([['rpc', 'roster_start_current', undefined]]);
   });
 

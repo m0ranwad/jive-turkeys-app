@@ -322,7 +322,7 @@ update public.games set date = ask_test.today() - 1 where opponent = 'Goal Digge
 select ask_test.ok(ask_test.current() = ask_test.session(2), 'between sessions, the asked session is the current one');
 
 select ask_test.sign_in('lee');
-select ask_test.ok(public.roster_start_current() = ask_test.session(2), 'the site opens on session 2');
+select ask_test.ok(public.roster_start_current() = ask_test.session(2) || '{"over": false}', 'the site opens on session 2, which status changes count for');
 reset role;
 select ask_test.ok(
   (select applied_at is not null from public.session_asks where season_year = ask_test.year() and session = 2),

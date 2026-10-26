@@ -75,7 +75,7 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
 }
 
 /** The whole team's dues for one session. Anyone can mark players paid; captains also set the fee and amounts. */
-export function TeamDues({ data, period, current, user, isCaptain, settings, onChanged, onSettingsSaved }) {
+export function TeamDues({ data, period, current, over = false, user, isCaptain, settings, onChanged, onSettingsSaved }) {
   const { toast } = useToast();
   const [sheetFor, setSheetFor] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
@@ -89,7 +89,9 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
   const events = duesEvents(history, changes);
   const total = row ? Number(row.total_fee) || 0 : 0;
   const team = teamDues(total, members, payments, data.profiles);
-  const past = !!current && isEarlier(period, current);
+  // Over: an earlier session, or the current one once its games are all played and nothing else is on the
+  // schedule (`over`). Status changes don't reach them, so captains correct them here.
+  const past = !!current && (isEarlier(period, current) || (over && !isEarlier(current, period)));
   // A later session hasn't started. It has a list already only if captains asked who's playing it ahead.
   const notStarted = !!current && isEarlier(current, period);
   const askedAhead = notStarted && started;
@@ -377,7 +379,7 @@ export function TeamDues({ data, period, current, user, isCaptain, settings, onC
         {team.active.length === 0 && (
           <p className="py-3 text-sm text-zinc-500">No active players yet. Set roster statuses on the Team page.</p>
         )}
-        {isCaptain && (
+        {isCaptain && !past && (
           <Link
             to="/team"
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"

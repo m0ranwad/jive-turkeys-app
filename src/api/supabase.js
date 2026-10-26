@@ -353,7 +353,11 @@ export function createSupabaseBackend(url, key) {
   };
 
   const roster = {
-    /** Starts the current session's list if it hasn't been yet. Resolves to { season_year, session }. */
+    /**
+     * Starts the current session's list if it hasn't been yet. Resolves to { season_year, session, over }:
+     * `over` once its games have all been played and nothing else is on the schedule (status changes
+     * don't count for it).
+     */
     async start() {
       const { data, error } = await supabase.rpc('roster_start_current');
       if (error) fail(error);

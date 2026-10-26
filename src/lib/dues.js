@@ -446,6 +446,21 @@ export function currentSession(games, today, asks = []) {
   return latest ? { year: latest.season_year, session: latest.session } : { year: Number(today.slice(0, 4)), session: 1 };
 }
 
+/**
+ * The session status changes count for: the current session, unless it's over
+ * (its games have all been played, nothing else is on the schedule and captains
+ * haven't asked about the next one), then null. A session that's over keeps its
+ * list; the next one starts from everyone's status. Same as the database's
+ * roster_open_session().
+ */
+export function openSession(games, today, asks = []) {
+  const cur = currentSession(games, today, asks);
+  const over =
+    games.some((g) => Number(g.season_year) === Number(cur.year) && Number(g.session) === Number(cur.session)) &&
+    !games.some((g) => g.date >= today);
+  return over ? null : cur;
+}
+
 /** The session before (-1) or after (+1) this one. */
 export function stepSession({ year, session }, delta) {
   const perYear = SESSIONS.length;

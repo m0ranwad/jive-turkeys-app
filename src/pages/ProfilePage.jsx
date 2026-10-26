@@ -54,6 +54,13 @@ export function ProfilePage() {
   };
 
   const name = profile?.display_name || user?.full_name || 'Player';
+  // Which session a status change counts for. Once a session's games are all played, it keeps its list.
+  const session = roster?.current?.session;
+  const statusCounts = !session
+    ? ''
+    : roster.over
+    ? `. Session ${session} is over, so it counts from the next session`
+    : `. It counts for session ${session}`;
 
   return (
     <div className="space-y-5">
@@ -112,8 +119,7 @@ export function ProfilePage() {
         <section className={CARD}>
           <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Roster status</h2>
           <p className="mb-3 mt-1 text-xs font-medium text-zinc-500">
-            Set this anytime{roster?.current ? `. It counts for session ${roster.current.session}` : ''}. On Break puts you in
-            the sub pool for call-ups.
+            Set this anytime{statusCounts}. On Break puts you in the sub pool for call-ups.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((opt) => (

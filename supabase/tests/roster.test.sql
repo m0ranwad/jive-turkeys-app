@@ -83,8 +83,8 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- Kim is a captain, Pat and Lee play, and Gus and Val are on the roster but
--- haven't joined the app. Session 1 is under way: its game was three weeks ago
--- and nothing else is on the schedule yet.
+-- haven't joined the app. Session 1 is under way: its first game was three
+-- weeks ago and its last is today.
 -- ---------------------------------------------------------------------------
 
 insert into roster_test.people values
@@ -94,17 +94,21 @@ insert into roster_test.people values
   ('neo', '00000000-0000-4000-8000-0000000000e4'),
   ('vic', '00000000-0000-4000-8000-0000000000e5'),
   ('gus', '00000000-0000-4000-8000-0000000000e6'),
-  ('val', '00000000-0000-4000-8000-0000000000e7');
+  ('val', '00000000-0000-4000-8000-0000000000e7'),
+  ('ida', '00000000-0000-4000-8000-0000000000e8'),
+  ('max', '00000000-0000-4000-8000-0000000000e9'),
+  ('ivy', '00000000-0000-4000-8000-0000000000ea');
 
 insert into auth.users (id, email)
-  select id, name || '@roster.test' from roster_test.people where name in ('kim', 'pat', 'lee', 'neo', 'vic');
+  select id, name || '@roster.test' from roster_test.people where name in ('kim', 'pat', 'lee', 'neo', 'vic', 'ida');
 update public.users set role = case when id = roster_test.id('kim') then 'admin' else 'user' end
   where id in (select id from roster_test.people);
 -- Everyone here has joined the team with its code (membership.test.sql covers who hasn't).
 update public.users set joined_team_at = now();
 
-insert into public.games (season_year, session, date, opponent)
-  values (roster_test.year(), 1, roster_test.today() - 20, 'Net Ninjas');
+insert into public.games (season_year, session, date, opponent) values
+  (roster_test.year(), 1, roster_test.today() - 20, 'Net Ninjas'),
+  (roster_test.year(), 1, roster_test.today(), 'Grass Kickers');
 
 insert into public.player_profiles (user_id, display_name, gender, status) values
   (roster_test.id('kim'), 'Kim Captain', 'F', 'active'),
@@ -122,16 +126,17 @@ select roster_test.ok(
 select roster_test.ok((select count(*) = 5 from public.session_roster), 'once each');
 
 -- ---------------------------------------------------------------------------
--- Session 2 goes on the schedule, so it's next.
+-- Session 1's last game is played and session 2 goes on the schedule, so it's next.
 -- ---------------------------------------------------------------------------
 
+update public.games set date = roster_test.today() - 5 where opponent = 'Grass Kickers';
 insert into public.games (season_year, session, date, opponent) values
   (roster_test.year(), 2, roster_test.today() + 3, 'Goal Diggers'),
   (roster_test.year(), 2, roster_test.today() + 10, 'Ball Busters');
 
 select roster_test.sign_in('pat');
 select roster_test.ok(
-  public.roster_start_current() = jsonb_build_object('season_year', roster_test.year(), 'session', 2),
+  public.roster_start_current() = jsonb_build_object('season_year', roster_test.year(), 'session', 2, 'over', false),
   'the next game decides the current session');
 select roster_test.ok(
   roster_test.status('kim', 2) = 'active' and roster_test.status('pat', 2) = 'active'
@@ -216,6 +221,91 @@ select roster_test.ok(
   (select count(*) = 1 from public.session_roster where session = 1 and user_id = roster_test.id('pat'))
     and roster_test.status('pat', 1) = 'active' and roster_test.status('gus', 1) = 'active',
   'session 1 is still exactly as it was');
+
+-- ---------------------------------------------------------------------------
+-- Session 2's games are played and nothing else is on the schedule: the months
+-- between seasons. Session 2 keeps its list (and so its dues) whatever changes
+-- now; the next session starts from everyone's status then.
+-- ---------------------------------------------------------------------------
+
+select roster_test.sign_in('kim');
+insert into public.team_guests (id, display_name, gender, status) values (roster_test.id('max'), 'Max Guest', 'M', 'active');
+reset role;
+select roster_test.ok(roster_test.status('max', 2) = 'active', 'a roster name added during session 2 is on it');
+
+update public.games set date = roster_test.today() - 2 where session = 2;
+select roster_test.ok(
+  (select cur_year = roster_test.year() and cur_session = 2 from public.roster_current_session()),
+  'the session that just ended is still the one the site opens on');
+select roster_test.ok((select open_year is null and open_session is null from public.roster_open_session()),
+  'but status changes count for no session');
+select roster_test.sign_in('pat');
+select roster_test.ok(
+  public.roster_start_current() = jsonb_build_object('season_year', roster_test.year(), 'session', 2, 'over', true),
+  'the site is told session 2 is over');
+reset role;
+
+create temp table session_2_before as select * from public.session_roster where session = 2;
+create temp table changes_before as select * from public.dues_changes;
+grant select on session_2_before, changes_before to authenticated;
+
+select roster_test.sign_in('lee');
+select roster_test.touches($$update public.player_profiles set status = 'active' where user_id = auth.uid()$$, 1,
+  'a sub says they''re playing from now on');
+reset role;
+select roster_test.sign_in('kim');
+select roster_test.touches($$update public.player_profiles set status = 'on_break' where user_id = roster_test.id('neo')$$, 1,
+  'a captain marks a player sitting out');
+select roster_test.touches($$update public.team_guests set removed = true where id = roster_test.id('max')$$, 1,
+  'and takes a roster name off the team');
+insert into public.team_guests (id, display_name, gender, status) values (roster_test.id('ivy'), 'Ivy Guest', 'F', 'active');
+reset role;
+select roster_test.sign_in('ida');
+insert into public.player_profiles (user_id, display_name, gender, status) values (auth.uid(), 'Ida New', 'F', 'active');
+reset role;
+
+select roster_test.ok(
+  (select status from public.player_profiles where user_id = roster_test.id('lee')) = 'active'
+    and (select status from public.player_profiles where user_id = roster_test.id('neo')) = 'on_break',
+  'their statuses right now change');
+select roster_test.ok(
+  not exists (select * from session_2_before except select * from public.session_roster where session = 2)
+    and not exists (select * from public.session_roster where session = 2 except select * from session_2_before),
+  'session 2''s list is exactly as it was: no status changed, nobody added or taken off');
+select roster_test.ok(roster_test.status('ida', 2) = 'none' and roster_test.status('ivy', 2) = 'none',
+  'a new player and a new roster name aren''t on it');
+select roster_test.ok(
+  not exists (select * from public.dues_changes except select * from changes_before),
+  'and nothing moved its split');
+select roster_test.sign_in('kim');
+select roster_test.touches(
+  $$update public.session_roster set status = 'on_break' where session = 2 and user_id = roster_test.id('neo')$$, 1,
+  'a captain can still correct it');
+reset role;
+
+-- Next season's first game goes on the schedule.
+insert into public.games (season_year, session, date, opponent) values (roster_test.year() + 1, 1, roster_test.today() + 200, 'Net Ninjas');
+select roster_test.sign_in('pat');
+select roster_test.ok(
+  public.roster_start_current() = jsonb_build_object('season_year', roster_test.year() + 1, 'session', 1, 'over', false),
+  'the next session is the current one');
+reset role;
+select roster_test.ok(
+  (select count(*) = 0 from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and answered_at is not null)
+    and (select status from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and user_id = roster_test.id('lee')) = 'active'
+    and (select status from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and user_id = roster_test.id('neo')) = 'on_break'
+    and (select status from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and user_id = roster_test.id('ida')) = 'active'
+    and (select status from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and guest_id = roster_test.id('ivy')) = 'active'
+    and not exists (select 1 from public.session_roster where season_year = roster_test.year() + 1 and session = 1 and guest_id = roster_test.id('max')),
+  'its list starts from everyone''s status, including what changed in between');
+select roster_test.sign_in('ida');
+select roster_test.touches($$update public.player_profiles set status = 'sub_pool' where user_id = auth.uid()$$, 1,
+  'a player changes their status');
+reset role;
+select roster_test.ok(
+  (select status = 'sub_pool' and answered_at is not null from public.session_roster
+   where season_year = roster_test.year() + 1 and session = 1 and user_id = roster_test.id('ida')),
+  'and it counts for the new session again');
 
 set role anon;
 select roster_test.refused($$select count(*) from public.session_roster$$, 'signed-out visitors cannot see the session lists');

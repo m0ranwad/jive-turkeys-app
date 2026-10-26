@@ -15,6 +15,7 @@ import {
   feeTotal,
   feeWarning,
   notPlayingLabel,
+  openSession,
   partPayment,
   payNote,
   payOptions,
@@ -593,5 +594,36 @@ describe('which session the captains see first', () => {
     });
     // With no games yet at all.
     expect(currentSession([], '2026-12-01', asks)).toEqual({ year: 2026, session: 3 });
+  });
+});
+
+describe('which session status changes count for', () => {
+  const games = [
+    { date: '2026-09-01', season_year: 2026, session: 1 },
+    { date: '2026-10-15', season_year: 2026, session: 2 },
+    { date: '2026-10-22', season_year: 2026, session: 2 },
+  ];
+
+  it("is the current session while it has a game to come, the game's day included", () => {
+    expect(openSession(games, '2026-10-10')).toEqual({ year: 2026, session: 2 });
+    expect(openSession(games, '2026-10-22')).toEqual({ year: 2026, session: 2 });
+    expect(openSession(games, '2026-08-01')).toEqual({ year: 2026, session: 1 });
+  });
+
+  it("is none once the current session's games are all played and nothing else is on the schedule (same as roster_open_session())", () => {
+    // The Dues page still opens on it; it just keeps its list.
+    expect(currentSession(games, '2026-10-23')).toEqual({ year: 2026, session: 2 });
+    expect(openSession(games, '2026-10-23')).toBeNull();
+    expect(openSession(games, '2027-06-01')).toBeNull();
+    // Captains asking about the next session: that one, before its schedule is out.
+    const asks = [{ season_year: 2026, session: 3, starts_on: '2027-01-03' }];
+    expect(openSession(games, '2026-12-01', asks)).toEqual({ year: 2026, session: 3 });
+    expect(openSession(games, '2026-12-01', [{ ...asks[0], starts_on: null }])).toBeNull();
+    // The next session's first game on the schedule.
+    expect(openSession([...games, { date: '2027-01-03', season_year: 2026, session: 3 }], '2026-12-01')).toEqual({ year: 2026, session: 3 });
+  });
+
+  it("is this year's first with no games yet: there's nothing to keep", () => {
+    expect(openSession([], '2026-10-01')).toEqual({ year: 2026, session: 1 });
   });
 });

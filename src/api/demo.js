@@ -3,7 +3,7 @@
 // so the app can be tried (and developed) before the real backend exists.
 import dayjs from 'dayjs';
 import { canManageRoom } from '@/lib/chat';
-import { currentSession } from '@/lib/dues';
+import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
@@ -623,17 +623,22 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     );
   };
   const current = () => currentSession(db.games, today(), db.session_asks);
+  // Same as the database's roster_open_session(): the current session, unless it's over.
+  const open = () => openSession(db.games, today(), db.session_asks);
   const samePeriod = (a, b) => Number(a.year) === Number(b.year) && Number(a.session) === Number(b.session);
   const started = (period) => db.games.some((g) => samePeriod({ year: g.season_year, session: g.session }, period) && g.date < today());
 
   // Same as the database's roster_follow_profile() and roster_follow_guest(): a
   // status set while a session is current counts for that session, as an answer.
+  // Once it's over (nothing else on the schedule), it goes on no session's list.
   const followStatus = (table, record) => {
     if (table === 'team_guests' && record.linked_user_id) return;
-    const period = current();
-    startSession(period);
+    const period = open();
     const who = table === 'player_profiles' ? { user_id: record.user_id } : { guest_id: record.id };
-    setEntry(period, who, record.removed ? 'off' : record.status);
+    if (period) {
+      startSession(period);
+      setEntry(period, who, record.removed ? 'off' : record.status);
+    }
     followAhead(who, record.removed ? 'off' : record.status);
   };
   // Same as the database's roster_follow_ahead(): until they start, sessions asked about
@@ -1160,9 +1165,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       }
       if (link.user_partner && free(userId) && free(link.user_partner)) await dues.setPartner(userId, link.user_partner);
 
-      // Back on the current session's list, if it started while the name was linked.
-      const period = current();
-      const started = db.session_roster.some((r) => sessionOf(r) === `${period.year}-${period.session}`);
+      // Back on the current session's list, if it started while the name was linked. A session that's over keeps its list.
+      const period = open();
+      const started = !!period && db.session_roster.some((r) => sessionOf(r) === `${period.year}-${period.session}`);
       if (started && !nameHas('session_roster', (r) => sessionOf(r) === `${period.year}-${period.session}`)) followStatus('team_guests', guest);
       // Both keep up with their status in sessions asked about ahead, where they haven't answered.
       followAhead({ guest_id: guestId }, guest.removed ? 'off' : guest.status);
@@ -1489,7 +1494,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       startSession(period);
       applyAsked(period);
       save(db);
-      return delay({ season_year: Number(period.year), session: Number(period.session) });
+      return delay({ season_year: Number(period.year), session: Number(period.session), over: !open() });
     },
     // Captains ask "Playing session N?" about a session that hasn't started, with its
     // first game's date (again: a new date; none: stop asking). Its list starts now;

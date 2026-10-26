@@ -213,8 +213,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the
   current one (the next game's session; `roster_start_current()`, called as the site loads) and follows status
-  changes made on the Team page or My Profile while it's current (database triggers). `player_profiles.status` and
-  `team_guests.status` stay each player's status right now. Dues and headcounts read the session's list
+  changes made on the Team page or My Profile while it's current (database triggers). Once its games are all played
+  and nothing else is on the schedule it's over and keeps its list: status changes count for no session until the
+  next one starts (`roster_open_session()` = `openSession()`). `player_profiles.status` and `team_guests.status`
+  stay each player's status right now. Dues and headcounts read the session's list
   (`membersForSession()`); a session that hasn't started uses today's statuses. Before a new session's first game,
   players are asked **Playing session N?** on Schedule (`src/components/SessionPrompt.jsx`) and captains see who
   hasn't answered on Team. Captains can also ask ahead, before the schedule is out or with games still left

@@ -2,7 +2,7 @@
 // change in one session never rewrites another's dues. The database's rules are
 // tested in supabase/tests/roster.test.sql; these check the shared logic and
 // the demo backend (previews), which must behave the same way.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
@@ -19,6 +19,7 @@ import {
   unanswered,
 } from '@/lib/roster';
 
+const DAY = 24 * 60 * 60 * 1000;
 const S1 = { year: 2026, session: 1 };
 const S2 = { year: 2026, session: 2 };
 const entry = (period, who, status, answered = true) => ({
@@ -153,7 +154,7 @@ describe('the demo backend', () => {
   it('says which session is current and keeps its list', async () => {
     const api = await signedIn();
     const year = (await api.entities.SessionDues.list())[0].season_year;
-    expect(await api.roster.start()).toEqual({ season_year: year, session: 2 });
+    expect(await api.roster.start()).toEqual({ season_year: year, session: 2, over: false });
     const before = (await api.entities.SessionRoster.list()).length;
     await api.roster.start();
     expect(await api.entities.SessionRoster.list()).toHaveLength(before);
@@ -214,12 +215,97 @@ describe('the demo backend', () => {
     // about ahead in the sample data, so its list started then.)
     for (const g of await api.entities.Game.filter({ session: 2 })) await api.entities.Game.update(g.id, { date: '2000-01-01' });
     await api.entities.Game.create({ season_year: year + 1, session: 1, date: '2999-01-01', opponent: 'Net Ninjas' });
-    expect(await api.roster.start()).toEqual({ season_year: year + 1, session: 1 });
+    expect(await api.roster.start()).toEqual({ season_year: year + 1, session: 1, over: false });
     const three = (await api.entities.SessionRoster.list()).filter((r) => r.season_year === year + 1 && r.session === 1);
     expect(three.every((r) => r.answered_at === null)).toBe(true);
     expect(three.some((r) => r.guest_id === mike.id)).toBe(false);
     const jamie = await profileOf(api, 'Jamie Fox');
     expect(three.find((r) => r.user_id === jamie.user_id)).toMatchObject({ status: 'on_break' });
+  });
+});
+
+describe('a session that is over', () => {
+  afterEach(() => vi.useRealTimers());
+
+  // Session 2 is played out, captains stopped asking about session 3, and nothing else is
+  // on the schedule: the months between seasons. (The sample data is made for today.)
+  async function offSeason() {
+    const api = await signedIn();
+    const year = (await api.entities.SessionDues.list())[0].season_year;
+    await api.roster.ask({ year, session: 3, startsOn: null });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 60 * DAY);
+    return { api, year };
+  }
+  const listOf = async (api, year, session) =>
+    (await api.entities.SessionRoster.list()).filter((r) => r.season_year === year && r.session === session);
+
+  it('is still the session the Dues page opens on, and says it is over', async () => {
+    const { api, year } = await offSeason();
+    expect(await api.roster.start()).toEqual({ season_year: year, session: 2, over: true });
+  });
+
+  it("keeps its list and split when players' statuses change or someone is taken off the team", async () => {
+    const { api, year } = await offSeason();
+    await api.roster.start();
+    const two = { year, session: 2 };
+    const list = await listOf(api, year, 2);
+    const before = split(await duesData(api), two);
+    expect(before.perPlayer).toBe(61);
+    expect(before.active).toHaveLength(12);
+
+    // A captain marks Kelly sitting out (the issue's example), and takes Mike off the team.
+    const kelly = await profileOf(api, 'Kelly Moss');
+    await api.entities.PlayerProfile.update(kelly.id, { status: 'on_break' });
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    await api.entities.TeamGuest.update(mike.id, { removed: true });
+    // Jordan says he's sub only from now on.
+    await api.auth.signIn('jordan@demo.test', 'demo1234');
+    await api.entities.PlayerProfile.update((await profileOf(api, 'Jordan Rivera')).id, { status: 'sub_pool' });
+
+    expect(await listOf(api, year, 2)).toEqual(list);
+    const after = split(await duesData(api), two);
+    expect(after.perPlayer).toBe(61);
+    expect(after.active.map((p) => p.user_id)).toEqual(before.active.map((p) => p.user_id));
+    expect(await profileOf(api, 'Kelly Moss')).toMatchObject({ status: 'on_break' });
+  });
+
+  it('leaves new players and roster names off it; the next session starts with them', async () => {
+    const { api, year } = await offSeason();
+    const me = await api.auth.me();
+    await api.auth.signUp('newbie@demo.test', 'demo1234');
+    const newbie = await api.auth.me();
+    await api.entities.PlayerProfile.create({ user_id: newbie.id, display_name: 'Nia New', gender: 'F', status: 'active' });
+    expect(await rosterOf(api, 2, newbie.id)).toBeUndefined();
+
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    const [ola] = await api.entities.TeamGuest.bulkCreate([{ display_name: 'Ola Late', status: 'active', removed: false, created_by: me.id }]);
+    expect(await rosterOf(api, 2, ola.id)).toBeUndefined();
+    const kelly = await profileOf(api, 'Kelly Moss');
+    await api.entities.PlayerProfile.update(kelly.id, { status: 'on_break' });
+
+    // Next season's first game goes on the schedule: its list is everyone's status now.
+    await api.entities.Game.create({ season_year: year + 1, session: 1, date: '2999-01-01', opponent: 'Net Ninjas' });
+    expect(await api.roster.start()).toEqual({ season_year: year + 1, session: 1, over: false });
+    const next = await listOf(api, year + 1, 1);
+    expect(next.find((r) => r.user_id === newbie.id)).toMatchObject({ status: 'active', answered_at: null });
+    expect(next.find((r) => r.guest_id === ola.id)).toMatchObject({ status: 'active', answered_at: null });
+    expect(next.find((r) => r.user_id === kelly.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+    // And status changes count for that one again.
+    await api.entities.PlayerProfile.update(kelly.id, { status: 'active' });
+    expect(await rosterOf(api, 1, kelly.user_id)).toBeDefined();
+    expect((await listOf(api, year + 1, 1)).find((r) => r.user_id === kelly.user_id)).toMatchObject({ status: 'active' });
+    expect((await listOf(api, year, 2)).find((r) => r.user_id === kelly.user_id)).toMatchObject({ status: 'active', answered_at: null });
+  });
+
+  it('counts status changes for the next session once captains ask who is playing it', async () => {
+    const { api, year } = await offSeason();
+    await api.roster.ask({ year, session: 3, startsOn: '2999-01-01' });
+    expect(await api.roster.start()).toEqual({ season_year: year, session: 3, over: false });
+    const sam = await profileOf(api, 'Sam Okafor');
+    await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
+    expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break' });
+    expect(await rosterOf(api, 2, sam.user_id)).toMatchObject({ status: 'active' });
   });
 });
 
@@ -306,7 +392,7 @@ describe('"Playing session N?" asked ahead', () => {
       const year = (await api.entities.SessionDues.list())[0].season_year;
       for (const g of await api.entities.Game.filter({ session: 2 })) await api.entities.Game.update(g.id, { date: '2000-01-01' });
       const changes = (await api.entities.DuesChange.list()).length;
-      expect(await api.roster.start()).toEqual({ season_year: year, session: 3 });
+      expect(await api.roster.start()).toEqual({ season_year: year, session: 3, over: false });
       // Jamie sat out session 2 and said she's back for session 3; Riley said sub only.
       expect(await profileOf(api, 'Jamie Fox')).toMatchObject({ status: 'active' });
       expect(await profileOf(api, 'Riley Novak')).toMatchObject({ status: 'sub_pool' });
