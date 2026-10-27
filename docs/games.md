@@ -30,7 +30,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 |---|---|
 | Only captains add, change or delete games, and enter results and stat lines. | `[db]` |
 | A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is filed under the year it starts in. It's shown as both years, "2026–27 · Session 2", on Schedule, game pages, Stats and Dues, and in the note on dues payments. | `[unit]` `[browser]` |
-| A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. Captains can pick another season or session. | `[unit]` `[browser]` |
+| A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. With no games at all, it's the session today is in, the same as the current session (section 6). Captains can pick another season or session. | `[unit]` `[browser]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
 | A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
@@ -79,7 +79,7 @@ the schedule or while this session still has games left.
 
 | Rule | Checked by |
 |---|---|
-| The current session is the next game's. Between sessions (no game coming up), it's the next session captains asked about; otherwise the latest game's. The site and the database agree (`currentSession()`, `roster_current_session()`). | `[unit]` `[db]` |
+| The current session is the next game's. Between sessions (no game coming up), it's the next session captains asked about; otherwise the latest game's. With no games on the schedule at all, it's the session today is in: November and December are the season's session 1, January and February session 2, March and April session 3, and May to October the coming season's session 1 (so January 2027 is 2026–27 · Session 2, never 2027–28's). The site and the database agree (`currentSession()`, `roster_current_session()`; `sessionOf()`, `roster_session_of()`). | `[unit]` `[db]` |
 | Once a session's games are all played and nothing else is on the schedule (and captains aren't asking about the next one), it's over and keeps its list, and so its dues: status changes (My Profile, Team page), new players, new roster names and anyone taken off the team don't change it. They change everyone's status right now, which the next session's list starts from when its first game is on the schedule or captains ask. The Dues page still opens on it, and captains correct it with **Change who was on session N**, like any past session. My Profile and the Team page say status changes count from the next session. The site and the database agree (`openSession()`, `roster_open_session()`). | `[unit]` `[db]` `[browser]` |
 | The current session's question is asked until its first game, under the Next game card. | `[browser]` |
 | Only captains ask about a later session, from the Team page, with its first game's date. They can change the date or stop asking until its first game; asking about a session that's over or has started is refused. Asking starts its list (everyone's status, nobody answered). | `[db]` `[browser]` |

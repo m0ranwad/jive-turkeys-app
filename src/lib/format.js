@@ -33,6 +33,15 @@ export const seasonOf = (date) => {
   return month >= SEASON_TURNS_MONTH ? year : year - 1;
 };
 
+/**
+ * The session a date (YYYY-MM-DD) is in: November and December are its season's first, January and February the
+ * second, March and April the third. May to October count for the first of the season coming up.
+ */
+export const sessionOf = (date) => {
+  const month = Number(date.split('-')[1]);
+  return { year: seasonOf(date), session: month >= SEASON_TURNS_MONTH ? 1 : month <= 2 ? 2 : 3 };
+};
+
 /** The calendar year a month (1-12) falls in during a season: November and December are its first year, January to April the next. */
 export const yearInSeason = (season, month) => (month >= SEASON_TURNS_MONTH ? Number(season) : Number(season) + 1);
 

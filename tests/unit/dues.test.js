@@ -27,7 +27,7 @@ import {
   stepSession,
   teamDues,
 } from '@/lib/dues';
-import { membersForSession } from '@/lib/roster';
+import { membersForSession, sessionForNewGames } from '@/lib/roster';
 
 describe('the session fee', () => {
   it('is the league fee plus the ref fee for every game: $595 + 7 × $18 = $721', () => {
@@ -600,9 +600,19 @@ describe('which session the captains see first', () => {
     expect(currentSession(games, '2026-08-01')).toEqual({ year: 2026, session: 1 });
   });
 
-  it("is the latest game's once the schedule is over, or this year's first without games", () => {
+  it("is the latest game's once the schedule is over", () => {
     expect(currentSession(games, '2026-12-01')).toEqual({ year: 2026, session: 2 });
-    expect(currentSession([], '2027-01-05')).toEqual({ year: 2027, session: 1 });
+  });
+
+  it('is the session today is in without games, the one Add game suggests (same as roster_current_session())', () => {
+    // January to April belong to the season that started the November before, not next season's first.
+    expect(currentSession([], '2026-11-10')).toEqual({ year: 2026, session: 1 });
+    expect(currentSession([], '2027-01-05')).toEqual({ year: 2026, session: 2 });
+    expect(currentSession([], '2027-03-15')).toEqual({ year: 2026, session: 3 });
+    expect(currentSession([], '2027-06-01')).toEqual({ year: 2027, session: 1 });
+    for (const day of ['2026-11-10', '2027-01-05', '2027-03-15', '2027-06-01']) {
+      expect(currentSession([], day)).toEqual(sessionForNewGames([], day, []));
+    }
   });
 
   it('is a later session captains asked about, between sessions (same as roster_current_session())', () => {

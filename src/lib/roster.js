@@ -4,7 +4,7 @@
 // becomes the current one (the next game's session), and follows status changes
 // while it's current. A session that hasn't started yet uses today's statuses.
 import { stepSession } from './dues';
-import { seasonOf } from './format';
+import { sessionOf } from './format';
 
 const sameSession = (row, period) => row.season_year === Number(period.year) && row.session === Number(period.session);
 
@@ -74,8 +74,8 @@ export const isEarlier = (a, b) => Number(a.year) < Number(b.year) || (Number(a.
  * The session a captain's new games most likely belong to (Add game, Import): a
  * later session captains are asking about ("Playing session 2?" while this one
  * wraps up, or before its schedule is out); else the newest session on the
- * schedule while it has games to come; else the one after it; else the first
- * of today's season.
+ * schedule while it has games to come; else the one after it; else, with no
+ * games at all, the session today is in (sessionOf(), like currentSession()).
  */
 export function sessionForNewGames(games, today, asks) {
   const latest = (games || [])
@@ -87,6 +87,6 @@ export function sessionForNewGames(games, today, asks) {
     .filter((p) => !latest || isEarlier(latest, p))
     .sort((a, b) => (isEarlier(a, b) ? -1 : 1))[0];
   if (asked) return asked;
-  if (!latest) return { year: seasonOf(today), session: 1 };
+  if (!latest) return sessionOf(today);
   return (games || []).some((g) => g.date >= today) ? latest : stepSession(latest, 1);
 }

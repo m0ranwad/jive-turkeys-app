@@ -113,6 +113,23 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- With nothing on the schedule, the current session is the one today is in:
+-- January to April belong to the season that started the November before,
+-- not next season's first.
+-- ---------------------------------------------------------------------------
+
+select ask_test.ok(
+  (select bool_and(s.cur_year = v.y and s.cur_session = v.n)
+     from (values ('2026-11-07'::date, 2026, 1), ('2026-12-31', 2026, 1), ('2027-01-01', 2026, 2), ('2027-02-28', 2026, 2),
+                  ('2027-03-01', 2026, 3), ('2027-04-30', 2026, 3), ('2027-05-01', 2027, 1), ('2027-10-20', 2027, 1)) v(d, y, n)
+     cross join lateral public.roster_session_of(v.d) s),
+  'a date is in its season''s session 1 in November and December, 2 in January and February, 3 in March and April, and the next season''s 1 from May (same as sessionOf())');
+select ask_test.ok(
+  (select c.cur_year = s.cur_year and c.cur_session = s.cur_session
+     from public.roster_current_session() c, public.roster_session_of(ask_test.today()) s),
+  'with no games on the schedule, the current session is the one today is in');
+
+-- ---------------------------------------------------------------------------
 -- Kim is a captain; Pat, Lee, Rex and Ada play; Gus and Sam are on the roster
 -- but haven't joined the app (Neo and Zed join later). Session 1 is under way: a game three weeks ago and its last
 -- one in three days. Session 2's schedule isn't out.

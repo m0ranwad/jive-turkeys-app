@@ -3,7 +3,7 @@
 // together, and the links players pay with.
 
 import { SESSIONS } from './constants';
-import { seasonName, shortName } from './format';
+import { seasonName, sessionOf, shortName } from './format';
 
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
@@ -432,8 +432,9 @@ export function reminderText({ session, parts, perPlayer, activeCount, unpaid, l
 /**
  * The current session: the next game's; between sessions, the earliest later
  * session captains asked about ("Playing session N?" before its schedule is
- * out, `asks` are session_asks rows); else the latest game's; else this year's
- * first. Same as the database's roster_current_session().
+ * out, `asks` are session_asks rows); else the latest game's; else, with no
+ * games at all, the session today is in (sessionOf()). Same as the database's
+ * roster_current_session().
  */
 export function currentSession(games, today, asks = []) {
   const upcoming = games.filter((g) => g.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -445,7 +446,7 @@ export function currentSession(games, today, asks = []) {
     .filter((a) => a.starts_on && later(a))
     .sort((a, b) => a.starts_on.localeCompare(b.starts_on) || a.season_year - b.season_year || a.session - b.session)[0];
   if (asked) return { year: asked.season_year, session: asked.session };
-  return latest ? { year: latest.season_year, session: latest.session } : { year: Number(today.slice(0, 4)), session: 1 };
+  return latest ? { year: latest.season_year, session: latest.session } : sessionOf(today);
 }
 
 /**
