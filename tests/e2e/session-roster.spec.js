@@ -198,6 +198,8 @@ test("if who's on each session doesn't load, Playing session N? waits, and the n
   await expect(prompt(page)).toContainText('Playing session 2?');
 
   await failRosterReads(page);
+  // Start over, so a load from before (say, after the welcome slides) can't finish now and show the lists.
+  await page.reload();
   await openTab(page, '/team', 'Team');
   await expect(page.getByTestId('session-answers')).toHaveCount(0);
   await openTab(page, '/', 'Schedule');
