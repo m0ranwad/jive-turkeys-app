@@ -417,15 +417,18 @@ export function PlayerSheet({
 
   const ids = [player.user_id, partner?.user_id].filter(Boolean);
   const isPaid = share ? share.paid : true;
+  const state = share ? team.stateOf(player.user_id) : null;
   // Paid, and the share has gone up since: the difference for them (and their partner) to pay.
   const balance = share?.paid && ids.every((id) => team.shareOf(id).paid) ? team.balanceOf(player.user_id) : 0;
   // What they paid, when it isn't simply their share: part of it (or before it went up), or more than it is now.
   const paidLine = share
     ? share.paid &&
       share.paid_amount !== share.amount &&
-      (share.paid_amount < share.amount
-        ? [`Paid ${dollars(share.paid_amount)} of ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
-        : [`Paid ${dollars(share.paid_amount)}`, `share is now ${dollars(share.amount)}`]
+      (state === 'topUp'
+        ? [`Paid ${dollars(share.paid_amount)}`, `share went up to ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
+        : share.paid_amount < share.amount
+          ? [`Paid ${dollars(share.paid_amount)} of ${dollars(share.amount)}`, balance > 0 && `${dollars(balance)} more to pay`]
+          : [`Paid ${dollars(share.paid_amount)}`, `share is now ${dollars(share.amount)}`]
       )
         .filter(Boolean)
         .join(' · ')
@@ -519,7 +522,13 @@ export function PlayerSheet({
               : `Not playing · ${notPlayingLabel(out)}`}
             {player.guest && ' · not joined yet'}
           </span>
-          <StatusChip paid={share ? hasPayment && stillOwed === 0 : isPaid} partial={hasPayment && stillOwed > 0} date={share ? stillOwed === 0 ? share.paid_date : null : out.paid_date} />
+          {/* Their own share, as on their line in Team dues; what the two of them owe is on the button below. */}
+          <StatusChip
+            paid={share ? state === 'paid' : isPaid}
+            partial={state === 'part'}
+            owes={state === 'topUp' ? share.shortBy : 0}
+            date={share ? (state === 'paid' ? share.paid_date : null) : out.paid_date}
+          />
         </div>
         {isPaid && (
           <p className="-mt-2 text-xs font-medium text-zinc-500">

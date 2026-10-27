@@ -142,6 +142,13 @@ export async function tapMessage(page, text) {
 }
 
 /** A new account's first step: the team code (TURKEY in the sample data). */
+/** Opens a section that starts closed (Payment details, Recent changes), unless it's open already. */
+export async function openSection(page, name) {
+  const section = page.locator('details', { has: page.locator('summary', { hasText: name }) });
+  if (!(await section.evaluate((d) => d.open))) await section.locator('summary').click();
+  return section;
+}
+
 export async function enterTeamCode(page, code = 'TURKEY') {
   await expect(page.getByRole('heading', { name: 'Enter the team code' })).toBeVisible();
   await page.getByLabel('Team code').fill(code);

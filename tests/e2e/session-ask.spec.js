@@ -164,7 +164,7 @@ test('opening directly on Dues waits for an older stopped list to refresh', asyn
   // Sam hasn't answered: follow today's status. Priya explicitly said she's in.
   await expect(page.getByTestId('dues-unpaid')).not.toContainText('Sam Okafor');
   await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
-  await expect(page.getByRole('heading', { name: '0 of 11 paid in full', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0 of 11 paid', exact: true })).toBeVisible();
   await expect(page.getByLabel('Amount for Priya Shah')).toHaveText('$66');
 });
 
@@ -178,7 +178,7 @@ test('Dues retries a failed roster refresh before showing amounts', async ({ pag
   await page.evaluate(() => localStorage.removeItem('jt_test_roster_start'));
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '4 of 12 paid in full', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '5 of 12 paid', exact: true })).toBeVisible();
 });
 
 test('players cannot ask, and do not see the captains\' list', async ({ page }) => {

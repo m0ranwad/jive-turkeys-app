@@ -42,7 +42,7 @@ test('a session that is over keeps who paid together: Alex and Riley are marked 
   await expect(row(page, 'Alex Chen')).toContainText('with Riley N.');
 
   await previousSession(page);
-  await expect(paidHeading(page, '12 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
   await expect(row(page, 'Alex Chen')).not.toContainText('with Riley N.');
   await row(page, 'Alex Chen').click();
   const sheet = page.getByRole('dialog', { name: 'Alex Chen' });
@@ -55,7 +55,7 @@ test('a session that is over keeps who paid together: Alex and Riley are marked 
   await sheet.getByRole('button', { name: 'Mark not paid' }).click();
   await expect(page.getByText('Alex Chen marked not paid')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(paidHeading(page, '11 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '11 of 12 paid')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Riley Novak');
 });
 

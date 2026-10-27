@@ -6,7 +6,7 @@
 // Sample data: session 1 is over (Jamie played it and is unavailable session 2;
 // Chris joined in session 2). Session 2 starts Saturday, and only some players
 // have answered: not the captain, Sam, Morgan, Riley, Kelly or Mike yet.
-import { expect, signIn, test } from './helpers';
+import { expect, openSection, signIn, test } from './helpers';
 
 const SAM = 'sam@demo.test';
 const JORDAN = 'jordan@demo.test'; // already answered for session 2
@@ -62,13 +62,13 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   // Session 2 splits without the captain; session 1 is exactly as it was.
   await openTab(page, '/dues', 'Dues');
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
-  await expect(paidHeading(page, '0 of 11 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '5 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
   // The dues history says why the split changed.
-  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText("You're unavailable");
+  await expect((await openSection(page, 'Recent changes'))).toContainText("You're unavailable");
   await page.getByRole('button', { name: 'Previous session' }).click();
   await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026–27');
-  await expect(paidHeading(page, '12 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Casey Captain');
   await expect(page.getByTestId('dues-paid')).toContainText('Jamie Fox');
@@ -108,11 +108,11 @@ test('captains can correct who was on a past session, and only that session chan
   await dialog.getByLabel('Jamie Fox in session 1').selectOption('off');
   await dialog.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByText('Session 1 updated')).toBeVisible();
-  await expect(paidHeading(page, '0 of 11 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '11 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
 
   await page.getByRole('button', { name: 'Next session' }).click();
-  await expect(paidHeading(page, '4 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
 
   // A session that hasn't started uses today's roster until it does.
   await page.getByRole('button', { name: 'Next session' }).click();
@@ -135,7 +135,7 @@ test('once a session is over, status changes count from the next one and its due
 
   await openTab(page, '/dues', 'Dues');
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
-  await expect(paidHeading(page, '4 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
   // Adding players on the Team page doesn't change it any more; correcting it does.
   await expect(page.getByRole('link', { name: /Add players to the roster on the Team page/ })).toHaveCount(0);
@@ -145,7 +145,7 @@ test('once a session is over, status changes count from the next one and its due
   await dialog.getByLabel('Kelly Moss in session 2').selectOption('on_break');
   await dialog.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByText('Session 2 updated')).toBeVisible();
-  await expect(paidHeading(page, '0 of 11 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '5 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
 
   await openTab(page, '/profile', 'Casey Captain');
@@ -157,7 +157,7 @@ test('players cannot correct past sessions', async ({ page }) => {
   await openTab(page, '/dues', 'Dues');
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await page.getByRole('button', { name: 'Previous session' }).click();
-  await expect(paidHeading(page, '12 of 12 paid in full')).toBeVisible();
+  await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
   await expect(page.getByRole('button', { name: /Change who was on session/ })).toHaveCount(0);
 });
 

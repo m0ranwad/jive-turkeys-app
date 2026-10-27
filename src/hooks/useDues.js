@@ -55,7 +55,11 @@ export function useDues() {
  * One session's slice: its fee row (or null), payments, history and changes
  * (newest first), and the team as it was that session (`members`, each with
  * that session's status). `started` is false for a session that has no list
- * of its own yet, which uses today's statuses.
+ * of its own yet, which uses today's statuses. `linked` are roster names that
+ * stopped counting when a captain linked them to an account already on the
+ * session's list: dues_changes doesn't record that, so it's shaped like a
+ * roster change (at the link, the name's last update) for teamDues() to tell
+ * what someone's share was when they paid. Not for showing.
  */
 export function sessionSlice(data, { year, session }) {
   const same = (r) => r.season_year === Number(year) && r.session === Number(session);
@@ -66,5 +70,8 @@ export function sessionSlice(data, { year, session }) {
     changes: (data.changes || []).filter(same),
     members: membersForSession(data.profiles, data.roster, { year, session }),
     started: hasSessionList(data.roster, { year, session }),
+    linked: (data.guests || [])
+      .filter((g) => g.linked_user_id && data.roster.some((r) => same(r) && r.guest_id === g.id && r.status === 'active'))
+      .map((g) => ({ kind: 'roster', user_id: g.id, old_value: { status: 'active' }, new_value: { status: 'off' }, created_date: g.updated_date })),
   };
 }

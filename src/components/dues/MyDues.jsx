@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { CARD } from '@/lib/constants';
-import { dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues } from '@/lib/dues';
+import { changeLine, dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues, topUps } from '@/lib/dues';
 import { seasonName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { isEarlier } from '@/lib/roster';
@@ -18,13 +18,15 @@ const round = (value) => Math.round(value * 100) / 100;
  * The signed-in player's share of one session: amount, paid or not (and how
  * much), and their partner if they pay together. `balance` is what each still
  * owes, added together, including any unpaid share; `changed` says
- * what was paid isn't the share, and `short` that it's less.
+ * what was paid isn't the share, and `short` that it's less. `state` is for
+ * the two of you together: 'paid', 'topUp' (paid it all, then the share went
+ * up), 'part' (paid part of it, or one of you hasn't paid) or 'unpaid'.
  */
 function myShare(data, period, userId) {
-  const { row, payments, history, changes, members } = sessionSlice(data, period);
+  const { row, payments, history, changes, members, linked } = sessionSlice(data, period);
   if (!row) return { row: null };
   // The team as it was that session, so later status changes don't rewrite it.
-  const team = teamDues(Number(row.total_fee) || 0, members, payments, data.profiles);
+  const team = teamDues(Number(row.total_fee) || 0, members, payments, data.profiles, { history, changes: [...changes, ...linked] });
   const share = team.shareOf(userId);
   const partner = share ? team.partnerOf(userId) : null;
   const partnerShare = partner ? team.shareOf(partner.user_id) : null;
@@ -35,6 +37,16 @@ function myShare(data, period, userId) {
   const owing = share ? team.owingTogether(userId).filter((p) => p.due > 0) : [];
   const balance = round(owing.reduce((sum, p) => sum + p.due, 0));
   const hasPayment = paidShares.length > 0;
+  const states = share ? [team.stateOf(userId), partner && team.stateOf(partner.user_id)].filter(Boolean) : [];
+  const state = !share
+    ? null
+    : states.every((s) => s === 'paid')
+      ? 'paid'
+      : states.every((s) => s === 'unpaid')
+        ? 'unpaid'
+        : states.every((s) => s === 'paid' || s === 'topUp')
+          ? 'topUp'
+          : 'part';
   return {
     row,
     team,
@@ -44,6 +56,7 @@ function myShare(data, period, userId) {
     amount,
     paid: !!payment?.paid,
     hasPayment,
+    state,
     // What was paid: for you and your partner, or (not on the roster) what you paid, if it was recorded.
     paidAmount,
     changed: hasPayment && (balance > 0 || paidAmount !== amount),
@@ -59,10 +72,10 @@ function myShare(data, period, userId) {
   };
 }
 
-/** Big dark card: what you owe and how the session total adds up. */
-function ShareCard({ mine }) {
-  const { row, team, share, partner, partnerShare, amount, paid, hasPayment, paidDate, paidAmount, changed, short, balance } = mine;
-  const statusPaid = share ? hasPayment && balance === 0 : paid;
+/** Big dark card: what you owe, why it changed (`why`, one line), and how the session total adds up. */
+function ShareCard({ mine, why }) {
+  const { row, team, share, partner, partnerShare, amount, paid, state, hasPayment, paidDate, paidAmount, changed, short, balance } = mine;
+  const statusPaid = share ? state === 'paid' : paid;
   const parts = feeParts(row);
   const refs = parts.ref_fee && parts.game_count ? feeTotal(parts) - parts.league_fee : 0;
   const line = (label, value, strong) => (
@@ -78,18 +91,31 @@ function ShareCard({ mine }) {
           {!share ? 'Not on the roster' : partner ? `You + ${partner.display_name.split(' ')[0]}` : 'Your share'}
         </span>
         {(share || paid) && (
-          <StatusChip paid={statusPaid} partial={hasPayment && balance > 0} date={statusPaid ? paidDate : null} className={statusPaid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'} />
+          <StatusChip
+            paid={statusPaid}
+            partial={state === 'part'}
+            owes={state === 'topUp' ? balance : 0}
+            date={statusPaid ? paidDate : null}
+            className={statusPaid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'}
+          />
         )}
       </div>
       {share ? (
         <>
           <p className="mt-2 font-display text-6xl font-extrabold leading-none tracking-tight">{dollars(balance > 0 ? balance : amount)}</p>
-          {balance > 0 && <p className="mt-1 text-sm font-bold text-white">left to pay</p>}
+          {balance > 0 && <p className="mt-1 text-sm font-bold text-white">{state === 'topUp' ? 'more to pay' : 'left to pay'}</p>}
           {hasPayment && changed && (
             <p className="mt-2 text-sm font-semibold text-amber-300" data-testid="share-changed">
-              {short
-                ? `${dollars(paidAmount)} paid of ${dollars(amount)}.`
-                : `You paid ${dollars(paidAmount)} before your share went down.`}
+              {state === 'topUp'
+                ? `You paid ${dollars(paidAmount)}${partner ? ' together' : ''}. Your share went up to ${dollars(amount)}.`
+                : short
+                  ? `${dollars(paidAmount)} paid of ${dollars(amount)}.`
+                  : `You paid ${dollars(paidAmount)} before your share went down.`}
+            </p>
+          )}
+          {why && (
+            <p className="mt-1 text-xs font-medium text-white/70" data-testid="share-why">
+              {why}
             </p>
           )}
           <p className="mt-2 text-sm font-medium text-white/70">
@@ -131,7 +157,7 @@ function TeamProgress({ team, onShowTeam }) {
     <section className={CARD} data-testid="team-progress">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className={HEADING}>
-          Team · {team.paidCount} of {team.active.length} paid in full
+          Team · {team.paidCount} of {team.active.length} paid
         </h3>
         <span className="text-xs font-semibold text-zinc-500">
           {dollars(team.collected)} in · {dollars(team.stillOwed)} to go
@@ -140,6 +166,7 @@ function TeamProgress({ team, onShowTeam }) {
       <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-zinc-100" aria-hidden>
         <div className="h-full rounded-full bg-lime-400" style={{ width: `${pct}%` }} />
       </div>
+      {team.topUpCount > 0 && <p className="mt-2 text-xs font-medium text-zinc-600">{topUps(team.topUpCount)}</p>}
       <button
         type="button"
         onClick={onShowTeam}
@@ -239,7 +266,9 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   const partPaymentLink = mine.balance > 0 && (
     <PartPayment max={mine.balance} both={mine.owing.length > 1} busy={busy} onSave={payPart} />
   );
-  const otherAmount = (s) => s.balance > 0 ? s.balance : s.paid ? s.paidAmount : s.share ? s.amount : null;
+  // A top-up shows the share, with what's owed on the chip.
+  const otherAmount = (s) =>
+    s.state === 'topUp' ? s.amount : s.balance > 0 ? s.balance : s.paid ? s.paidAmount : s.share ? s.amount : null;
 
   const otherSessions = others.length > 0 && (
     <section className={CARD}>
@@ -258,7 +287,12 @@ export function MyDues({ data, period, current, over = false, user, settings, on
             {otherAmount(s) != null && (
               <span className="text-sm font-bold tabular-nums">{dollars(otherAmount(s))}</span>
             )}
-            <StatusChip paid={s.share ? s.hasPayment && s.balance === 0 : s.paid} partial={s.hasPayment && s.balance > 0} date={s.balance === 0 ? s.paidDate : null} />
+            <StatusChip
+              paid={s.share ? s.state === 'paid' : s.paid}
+              partial={s.state === 'part'}
+              owes={s.state === 'topUp' ? s.balance : 0}
+              date={s.balance === 0 ? s.paidDate : null}
+            />
             <ChevronRight className="h-4 w-4 text-zinc-300" />
           </button>
         ))}
@@ -280,12 +314,17 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   }
 
   const names = [nameOf(user.id) || 'You', mine.partner?.display_name].filter(Boolean);
+  // The latest change that moved your share since you paid, on the card; the rest are under Payment details.
+  const showWhy = mine.paid && mine.changed && mine.why.length > 0;
+  const why =
+    showWhy &&
+    `Why: ${changeLine(mine.why[0], nameOf, user.id)}${mine.why.length > 1 ? ` · and ${mine.why.length - 1} more in Payment details` : ''}`;
   const markedBy =
     mine.paidBy === user.id ? 'you' : mine.paidBy ? nameOf(mine.paidBy).split(' ')[0] || 'a teammate' : null;
 
   return (
     <div className="space-y-4">
-      <ShareCard mine={mine} />
+      <ShareCard mine={mine} why={why} />
 
       {mine.share && !mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')}>
@@ -353,18 +392,22 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 
       {/* One entry just repeats the paid card above. */}
-      {(mine.history.length > 1 || mine.why.length > 0) && (
+      {(mine.history.length > 1 || showWhy) && (
         <section className={CARD}>
           <details>
             <summary className={cn(HEADING, 'cursor-pointer')}>Payment details</summary>
-            {mine.paid && mine.changed && mine.why.length > 0 && <div className="mt-4" data-testid="why-share-changed">
-              <h3 className={cn(HEADING, 'mb-3')}>Why your share changed</h3>
-              <HistoryList events={mine.why} nameOf={nameOf} meId={user.id} limit={3} />
-            </div>}
-            {mine.history.length > 1 && <div className="mt-4">
-              <h3 className={cn(HEADING, 'mb-3')}>Your history</h3>
-              <HistoryList events={mine.history} nameOf={nameOf} meId={user.id} limit={3} />
-            </div>}
+            {showWhy && (
+              <div className="mt-4" data-testid="why-share-changed">
+                <h3 className={cn(HEADING, 'mb-3')}>Why your share changed</h3>
+                <HistoryList events={mine.why} nameOf={nameOf} meId={user.id} limit={3} />
+              </div>
+            )}
+            {mine.history.length > 1 && (
+              <div className="mt-4">
+                <h3 className={cn(HEADING, 'mb-3')}>Your history</h3>
+                <HistoryList events={mine.history} nameOf={nameOf} meId={user.id} limit={3} />
+              </div>
+            )}
           </details>
         </section>
       )}

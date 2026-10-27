@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
-import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues } from '@/lib/dues';
+import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues, topUps } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,7 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
     <section className="rounded-3xl bg-zinc-950 p-5 text-white">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">
-          {team.paidCount} of {team.active.length} paid in full
+          {team.paidCount} of {team.active.length} paid
         </h2>
         <span className="text-sm font-bold text-lime-400">{dollars(team.perPlayer)} each</span>
       </div>
@@ -39,6 +39,7 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
       >
         <div className="h-full rounded-full bg-lime-400 transition-all" style={{ width: `${pct}%` }} />
       </div>
+      {team.topUpCount > 0 && <p className="mt-2 text-xs font-semibold text-amber-300">{topUps(team.topUpCount)}</p>}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
           <div className="font-display text-2xl font-extrabold leading-none text-lime-400">{dollars(team.collected)}</div>
@@ -84,11 +85,11 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
   const [rosterOpen, setRosterOpen] = useState(false);
 
   // The team as it was that session, so later status changes don't rewrite it.
-  const { row, payments, history, changes, members, started } = sessionSlice(data, period);
+  const { row, payments, history, changes, members, started, linked } = sessionSlice(data, period);
   // Paid / not paid, and what moved the split (the fee, custom amounts, the roster), newest first.
   const events = duesEvents(history, changes);
   const total = row ? Number(row.total_fee) || 0 : 0;
-  const team = teamDues(total, members, payments, data.profiles);
+  const team = teamDues(total, members, payments, data.profiles, { history, changes: [...changes, ...linked] });
   // Over: an earlier session, or the current one once its games are all played and nothing else is on the
   // schedule (`over`). Status changes don't reach them, so captains correct them here.
   const past = !!current && (isEarlier(period, current) || (over && !isEarlier(current, period)));
@@ -99,8 +100,9 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
   const between = past && !isEarlier(period, current);
   // The session a couple linked now counts from: the one being played, else the next one.
   const couplesFrom = !current ? period : over ? stepSession(current, 1) : current;
-  const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid || team.shareOf(p.user_id).shortBy > 0);
-  const paid = team.active.filter((p) => team.shareOf(p.user_id).paid && team.shareOf(p.user_id).shortBy === 0);
+  // Paid includes anyone who owes only a top-up after their share went up; part payments are still to pay.
+  const unpaid = team.active.filter((p) => ['unpaid', 'part'].includes(team.stateOf(p.user_id)));
+  const paid = team.active.filter((p) => ['paid', 'topUp'].includes(team.stateOf(p.user_id)));
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
 
   // A new session's fee starts from the last one saved, so there's usually nothing to type.
@@ -175,12 +177,17 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
     const changed = share.paid && share.paid_amount !== share.amount;
     const shareNote = share.paid_amount < share.amount ? `share is ${dollars(share.amount)}` : `share is now ${dollars(share.amount)}`;
     const balance = team.owingTogether(p.user_id).reduce((sum, x) => sum + x.due, 0);
-    const partPaid = share.paid && share.shortBy > 0;
+    const partPaid = team.stateOf(p.user_id) === 'part';
+    const topUp = team.stateOf(p.user_id) === 'topUp';
     const details = [
       p.guest && 'not joined yet',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
-      partPaid ? `${dollars(share.paid_amount)} paid of ${dollars(share.amount)}` : changed && shareNote,
+      partPaid
+        ? `${dollars(share.paid_amount)} paid of ${dollars(share.amount)}`
+        : topUp
+          ? `share went up · owes ${dollars(share.shortBy)}`
+          : changed && shareNote,
       share.paid && markedBy(p.user_id),
     ].filter(Boolean);
     return (
@@ -199,9 +206,10 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           </span>
         </button>
         <span className="text-sm font-bold tabular-nums text-zinc-700" aria-label={`Amount for ${p.display_name}`}>
-          {dollars(partPaid ? share.shortBy : share.paid ? share.paid_amount : share.amount)}{partPaid && <span className="block text-right text-[11px] font-medium text-zinc-500">left</span>}
+          {dollars(partPaid ? share.shortBy : share.paid ? share.paid_amount : share.amount)}
+          {partPaid && <span className="block text-right text-[11px] font-medium text-zinc-500">left</span>}
         </span>
-        {balance > 0 && (!share.paid || partPaid) && (share.paid || partner && team.shareOf(partner.user_id).paid) ? (
+        {balance > 0 && (!share.paid || share.shortBy > 0) && (share.paid || (partner && team.shareOf(partner.user_id).paid)) ? (
           <button
             type="button"
             onClick={() => markPaid(p)}
@@ -371,7 +379,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         )}
         {paid.length > 0 && (
           <div data-testid="dues-paid" className={cn(unpaid.length > 0 && 'mt-4')}>
-            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid in full · {paid.length}</h3>
+            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid · {paid.length}</h3>
             <ul className="divide-y divide-zinc-100">{paid.map(playerRow)}</ul>
           </div>
         )}

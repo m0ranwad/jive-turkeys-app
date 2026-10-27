@@ -22,6 +22,7 @@ import {
   profileAsPlayer,
   reminderText,
   shareChanges,
+  shareWhenPaid,
   splitDues,
   splitPayment,
   stepSession,
@@ -140,7 +141,7 @@ describe('what paid players paid', () => {
       ['d', 62, null, 0],
     ]);
     // Collected is what was paid; still to collect is the 9 unpaid shares plus the two $1 differences.
-    expect(split).toMatchObject({ owed: 744, collected: 184, stillOwed: 560, paidCount: 1 });
+    expect(split).toMatchObject({ owed: 744, collected: 184, stillOwed: 560, paidCount: 3 });
   });
 
   it('keeps what they paid when the fee goes down, without counting it against anyone else', () => {
@@ -183,6 +184,74 @@ describe('what paid players paid', () => {
     // One partner paid in full, the other hasn't paid: that's still one line, for the unpaid share.
     const mixed = teamDues(400, profiles, [paidAt('alex', 100), paidAt('sam', 100), paidAt('morgan', 100)]);
     expect(mixed.stillToPay).toEqual([{ name: 'Riley', amount: 100, more: false }]);
+  });
+});
+
+describe('paid part, or paid it all and the share went up', () => {
+  // $721 across twelve is $61 each. Payments are marked at 7pm on Oct 3; changes come after.
+  const twelve = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+  const profiles = twelve.map((id) => ({ user_id: id, display_name: id, status: 'active' }));
+  const paidAt = (user_id, paid_amount, extra = {}) => ({ user_id, paid: true, paid_date: '2026-10-03', paid_amount, override_amount: null, ...extra });
+  const marked = (...ids) => ids.map((user_id) => ({ user_id, paid: true, created_date: '2026-10-03T19:00:00Z' }));
+  const fee = (total_fee) => ({ league_fee: total_fee, ref_fee: 0, game_count: 7, total_fee });
+  const later = (kind, old_value, new_value, user_id = null) => ({ kind, user_id, old_value, new_value, created_date: '2026-10-05T18:00:00Z' });
+
+  it('a share that went up after they paid it all is a top-up; less than the share then is a part payment', () => {
+    const team = teamDues(735, profiles, [paidAt('a', 61), paidAt('b', 30), paidAt('c', 62)], profiles, {
+      history: marked('a', 'b', 'c'),
+      changes: [later('fee', fee(721), fee(735))],
+    });
+    expect(['a', 'b', 'c', 'd'].map(team.stateOf)).toEqual(['topUp', 'part', 'paid', 'unpaid']);
+    // Two paid, one of them owing a top-up; the part payment doesn't count as paid.
+    expect(team).toMatchObject({ paidCount: 2, topUpCount: 1, stillOwed: 62 * 9 + 1 + 32 });
+  });
+
+  it('a part payment with nothing changed since is a part payment', () => {
+    const team = teamDues(721, profiles, [paidAt('a', 30)], profiles, { history: marked('a') });
+    expect(team.stateOf('a')).toBe('part');
+    expect(team).toMatchObject({ paidCount: 0, topUpCount: 0 });
+  });
+
+  it('someone coming off the roster after they paid makes it a top-up', () => {
+    const roster = profiles.map((p) => (p.user_id === 'l' ? { ...p, status: 'on_break' } : p));
+    const team = teamDues(721, roster, [paidAt('a', 61)], roster, {
+      history: marked('a'),
+      changes: [later('roster', { status: 'active' }, { status: 'on_break' }, 'l')],
+    });
+    expect(team.shareOf('a')).toMatchObject({ amount: 66, shortBy: 5 });
+    expect(team.stateOf('a')).toBe('topUp');
+  });
+
+  it('a custom amount raised after they paid makes it a top-up', () => {
+    const team = teamDues(721, profiles, [paidAt('a', 61, { override_amount: 80 })], profiles, {
+      history: marked('a'),
+      changes: [later('custom_amount', null, { amount: 80 }, 'a')],
+    });
+    expect(team.shareOf('a')).toMatchObject({ amount: 80, shortBy: 19 });
+    expect(team.stateOf('a')).toBe('topUp');
+  });
+
+  it("counts as a top-up when the share then can't be told", () => {
+    // No record of when they paid.
+    expect(teamDues(735, profiles, [paidAt('a', 30)], profiles).stateOf('a')).toBe('topUp');
+    // The fee was first set after they paid.
+    const team = teamDues(721, profiles, [paidAt('a', 30)], profiles, { history: marked('a'), changes: [later('fee', null, fee(721))] });
+    expect(team.stateOf('a')).toBe('topUp');
+  });
+
+  it('works out the share then by undoing the changes since, newest first', () => {
+    const base = { total: 735, activeIds: twelve.slice(0, 11), payments: [], paidAt: '2026-10-03T19:00:00Z', userId: 'a' };
+    // Since they paid: l came off ($721 / 11 = $66), then the fee went up to $735 ($67).
+    const changes = [
+      { ...later('roster', { status: 'active' }, { status: 'on_break' }, 'l'), created_date: '2026-10-04T18:00:00Z' },
+      later('fee', fee(721), fee(735)),
+    ];
+    expect(shareWhenPaid({ ...base, changes })).toBe(61);
+    // Changes before they paid don't count.
+    expect(shareWhenPaid({ ...base, changes, paidAt: '2026-10-06T00:00:00Z' })).toBe(67);
+    // Someone who wasn't playing when they paid.
+    const joined = [later('roster', null, { status: 'active' }, 'a')];
+    expect(shareWhenPaid({ ...base, changes: joined })).toBeNull();
   });
 });
 
@@ -283,7 +352,8 @@ describe('part payments', () => {
       ['kim', true, 40, 21],
       ['sam', true, 50, 11],
     ]);
-    expect(after).toMatchObject({ paidCount: 0, collected: 90, stillOwed: 32 });
+    // Without the history it can't be told whether they paid part or their share went up: both count as paid.
+    expect(after).toMatchObject({ paidCount: 2, collected: 90, stillOwed: 32 });
     expect(after.stillToPay).toEqual([
       { name: 'kim', amount: 21, more: true },
       { name: 'sam', amount: 11, more: true },

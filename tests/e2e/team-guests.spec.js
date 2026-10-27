@@ -4,7 +4,7 @@
 // them off the team. Their roster status decides whether they split the dues, like
 // everyone else's.
 // The database enforces who can do what (supabase/tests/dues.test.sql).
-import { enterTeamCode, expect, signIn, test } from './helpers';
+import { enterTeamCode, expect, openSection, signIn, test } from './helpers';
 
 // Mike Russo (man, Defense) and Dana Wells (woman, Forward) are Active and haven't joined yet in the sample data.
 // Kelly Moss picked "Kelly M" on the roster when she joined.
@@ -183,7 +183,7 @@ test('a captain links a player who joined without picking their name', async ({ 
   await signIn(page);
   await openDues(page);
   await page.getByRole('button', { name: 'Mark paid for Mike Russo' }).click();
-  await expect(page.getByRole('heading', { name: '5 of 12 paid in full' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '6 of 12 paid' })).toBeVisible();
 
   // Say Mike joined the app as Chris Dunn: his payment and history move to that account.
   await openTeam(page);
@@ -200,9 +200,9 @@ test('a captain links a player who joined without picking their name', async ({ 
   await expect(card(page, 'Chris Dunn').getByTestId('joined-as')).toHaveText(/Joined as Mike Russo/);
 
   await openDues(page);
-  await expect(page.getByRole('heading', { name: '0 of 11 paid in full' })).toBeVisible();
-  await expect(page.getByTestId('dues-unpaid')).toContainText('Chris Dunn');
-  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText('You marked Chris D. paid');
+  await expect(page.getByRole('heading', { name: '6 of 11 paid' })).toBeVisible();
+  await expect(page.getByTestId('dues-paid')).toContainText('Chris Dunn');
+  await expect((await openSection(page, 'Recent changes'))).toContainText('You marked Chris D. paid');
 });
 
 test('a captain edits a player who has not joined, removes them, and adds them back', async ({ page }) => {
