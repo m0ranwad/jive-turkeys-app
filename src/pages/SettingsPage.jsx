@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CaptainsOnly, PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { TeamCodeCard } from '@/components/TeamCodeCard';
-import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { CARD, DEFAULT_SETTINGS } from '@/lib/constants';
 import { saveTeamSettings } from '@/lib/actions';
+import { saveFailedToast } from '@/lib/errors';
 import { hoursLabel } from '@/lib/potm';
 import { cn } from '@/lib/utils';
 
@@ -47,14 +47,41 @@ const ON_OFF = [
   { v: false, l: 'Off' },
 ];
 
+// Each setting as it's stored.
+const CLEAN = {
+  season_label: (v) => v?.trim() || null,
+  min_players: (v) => Number(v) || 0,
+  min_women: (v) => Number(v) || 0,
+  potm_window_hours: Number,
+  potm_reminder_hours: Number,
+  game_reminder_hours: Number,
+  potm_notify: Boolean,
+  potm_announce: Boolean,
+  game_reminders: Boolean,
+};
+const clean = (patch) => Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, CLEAN[k] ? CLEAN[k](v) : v]));
+
+/**
+ * Captains' team settings. Every change saves as it's made: a choice when it's
+ * tapped, a typed field when you leave it (or press Enter), so nothing is lost
+ * by leaving the page. A failed save says so and keeps what was entered.
+ */
 export function SettingsPage() {
   const { user, settings, isCaptain, loading, reload, roster } = useTeam();
   const { toast } = useToast();
   const [form, setForm] = useState(null);
-  const [busy, setBusy] = useState(false);
+  // What's saved, to tell a typed field that changed from one that didn't.
+  const saved = useRef(null);
+  // Saves still on their way, and whether any change was saved this visit.
+  const [saving, setSaving] = useState(0);
+  const [savedAny, setSavedAny] = useState(false);
 
+  // Filled once: saving reloads the team's settings, which mustn't wipe a field still being typed in.
   useEffect(() => {
-    if (!loading) setForm({ ...DEFAULT_SETTINGS, ...(settings || {}) });
+    if (!loading && !saved.current) {
+      saved.current = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+      setForm(saved.current);
+    }
   }, [loading, settings]);
 
   if (loading || !form) return <PageSpinner />;
@@ -62,44 +89,51 @@ export function SettingsPage() {
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  const save = async () => {
-    setBusy(true);
+  const persist = async (patch) => {
+    const values = clean(patch);
+    setSaving((n) => n + 1);
     try {
-      await saveTeamSettings({
-        season_label: form.season_label?.trim() || null,
-        primary_jersey: form.primary_jersey,
-        backup_jersey: form.backup_jersey,
-        venue_name: form.venue_name,
-        venue_address: form.venue_address,
-        min_players: Number(form.min_players) || 0,
-        min_women: Number(form.min_women) || 0,
-        potm_mode: form.potm_mode,
-        potm_window_hours: Number(form.potm_window_hours),
-        potm_notify: !!form.potm_notify,
-        potm_reminder_hours: Number(form.potm_reminder_hours),
-        potm_announce: !!form.potm_announce,
-        game_reminders: !!form.game_reminders,
-        game_reminder_hours: Number(form.game_reminder_hours),
-      });
-      await reload();
+      await saveTeamSettings(values);
+      saved.current = { ...saved.current, ...values };
+      setSavedAny(true);
       toast({ title: 'Team settings saved' });
+      await reload();
     } catch (err) {
-      toast({ title: "Settings didn't save", description: err.message });
+      toast(saveFailedToast(err));
     } finally {
-      setBusy(false);
+      setSaving((n) => n - 1);
     }
   };
 
+  // A tapped choice saves right away.
+  const pick = (patch) => {
+    set(patch);
+    persist(patch);
+  };
+
+  // A typed field saves when you leave it, if it changed.
   const field = (label, key, props = {}) => (
     <div className="space-y-2">
       <Label htmlFor={`setting-${key}`}>{label}</Label>
-      <Input id={`setting-${key}`} value={form[key] ?? ''} onChange={(e) => set({ [key]: e.target.value })} {...props} />
+      <Input
+        id={`setting-${key}`}
+        value={form[key] ?? ''}
+        onChange={(e) => set({ [key]: e.target.value })}
+        onBlur={() => {
+          if (clean({ [key]: form[key] })[key] !== clean({ [key]: saved.current[key] })[key]) persist({ [key]: form[key] });
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        {...props}
+      />
     </div>
   );
 
   return (
     <div className="space-y-5">
       <PageHeader title="Team settings" subtitle="Defaults for every game, the coed minimums, and awards." />
+      <p data-testid="settings-status" aria-live="polite" className="-mt-2 text-xs font-semibold text-zinc-500">
+        {saving ? 'Saving…' : savedAny ? 'All changes saved' : 'Changes save as you make them.'}
+      </p>
       <TeamCodeCard meId={user?.id} roster={roster} />
       <section className={cn(CARD, 'space-y-5')}>
         {field('Header line (under "Jive Turkeys")', 'season_label', { maxLength: 40, placeholder: DEFAULT_SETTINGS.season_label })}
@@ -123,7 +157,7 @@ export function SettingsPage() {
               <button
                 key={opt.v}
                 aria-pressed={form.potm_mode === opt.v}
-                onClick={() => set({ potm_mode: opt.v })}
+                onClick={() => pick({ potm_mode: opt.v })}
                 className={cn(
                   'rounded-2xl border-2 px-3 py-3 text-xs font-bold uppercase tracking-[0.06em] transition',
                   form.potm_mode === opt.v ? 'border-black bg-lime-400 text-black' : 'border-zinc-200 text-zinc-500 hover:border-zinc-300',
@@ -148,7 +182,7 @@ export function SettingsPage() {
             value={Number(form.potm_window_hours)}
             onPick={(h) =>
               // A reminder needs to come before voting closes.
-              set({
+              pick({
                 potm_window_hours: h,
                 potm_reminder_hours: Number(form.potm_reminder_hours) < h ? form.potm_reminder_hours : Math.max(...REMINDER_HOURS.filter((r) => r < h)),
               })
@@ -159,7 +193,7 @@ export function SettingsPage() {
             hint="A notification with the score and when voting closes."
             options={ON_OFF}
             value={!!form.potm_notify}
-            onPick={(v) => set({ potm_notify: v })}
+            onPick={(v) => pick({ potm_notify: v })}
           />
           <Choice
             label="Remind players who haven't voted"
@@ -169,14 +203,14 @@ export function SettingsPage() {
               l: h === 0 ? 'Off' : `${hoursLabel(h)} before`,
             }))}
             value={Number(form.potm_reminder_hours)}
-            onPick={(h) => set({ potm_reminder_hours: h })}
+            onPick={(h) => pick({ potm_reminder_hours: h })}
           />
           <Choice
             label="Post the winners in Team Chat"
             hint="When voting closes, with the vote counts. Everyone with chat notifications on hears about it."
             options={ON_OFF}
             value={!!form.potm_announce}
-            onPick={(v) => set({ potm_announce: v })}
+            onPick={(v) => pick({ potm_announce: v })}
           />
         </section>
         <section className="space-y-4 rounded-2xl bg-zinc-50 p-3.5" aria-label="Game reminders">
@@ -191,20 +225,17 @@ export function SettingsPage() {
             label="Send game reminders"
             options={ON_OFF}
             value={!!form.game_reminders}
-            onPick={(v) => set({ game_reminders: v })}
+            onPick={(v) => pick({ game_reminders: v })}
           />
           {form.game_reminders && (
             <Choice
               label="How long before kickoff"
               options={GAME_REMINDER_HOURS.map((h) => ({ v: h, l: hoursLabel(h) }))}
               value={Number(form.game_reminder_hours)}
-              onPick={(h) => set({ game_reminder_hours: h })}
+              onPick={(h) => pick({ game_reminder_hours: h })}
             />
           )}
         </section>
-        <Button onClick={save} disabled={busy} className="h-12 w-full text-sm font-bold uppercase tracking-[0.12em]">
-          {busy ? 'Saving…' : 'Save team settings'}
-        </Button>
       </section>
     </div>
   );
