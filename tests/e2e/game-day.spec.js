@@ -68,3 +68,23 @@ test('a Player of the Match vote can be changed', async ({ page }) => {
   await expect(man.getByRole('button', { name: second, exact: true })).toHaveClass(/bg-lime-400/);
   await expect(man.getByRole('button', { name: first, exact: true })).not.toHaveClass(/bg-lime-400/);
 });
+
+test("before kickoff a captain answers first, and Call for subs leads when we're short", async ({ page }) => {
+  await signIn(page);
+  await openGame(page, 'Goal Diggers');
+  // Your RSVP comes before the captain's tools.
+  const rsvp = page.getByRole('heading', { name: 'Your RSVP' });
+  const tools = page.getByRole('region', { name: 'Captain tools' });
+  expect((await rsvp.boundingBox()).y).toBeLessThan((await tools.boundingBox()).y);
+  const buttons = tools.getByRole('button');
+  await expect(buttons.first()).toHaveText('Call for subs');
+  await expect(buttons.first()).toHaveClass(/bg-lime-400/);
+  // Enter result is still there, last and plain, in case the game's time is wrong.
+  await expect(buttons.last()).toHaveText('Enter result');
+  await expect(buttons.last()).not.toHaveClass(/bg-lime-400/);
+
+  // Once it's started, Enter result leads.
+  await page.clock.fastForward('72:00:00');
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Captain tools' }).getByRole('button').first()).toHaveText('Enter result');
+});

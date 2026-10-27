@@ -33,6 +33,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is filed under the year it starts in. It's shown as both years, "2026–27 · Session 2", on Schedule, game pages, Stats and Dues, and in the note on dues payments. | `[unit]` `[browser]` |
 | A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. With no games at all, it's the session today is in, the same as the current session (section 6). Captains can pick another season or session. | `[unit]` `[browser]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
+| On a game before kickoff, a captain's own RSVP comes first and their tools after it: **Call for subs** leads (lime when we're short), and **Enter result** is last and plain, still there in case the game's time is wrong. Once the game has started, Enter result leads. | `[unit]` `[browser]` |
 | A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
 | Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |

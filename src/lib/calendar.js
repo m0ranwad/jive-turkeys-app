@@ -22,6 +22,12 @@ function gameTimes(game) {
   return { start: start.utc(), end: start.add(GAME_MINUTES, 'minute').utc() };
 }
 
+/** Whether a game has started, in the team's time zone. A game with no time yet starts at midnight. */
+export function hasKickedOff(game, now = new Date()) {
+  const start = gameTimes(game)?.start ?? dayjs.tz(`${game.date} 00:00`, 'YYYY-MM-DD HH:mm', TEAM_ZONE);
+  return !dayjs(now).isBefore(start);
+}
+
 /**
  * Schedule shortages become urgent within 48 hours of kickoff, in the team's
  * time zone. A game with no time yet counts until the end of its day.

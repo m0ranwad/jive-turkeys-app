@@ -16,6 +16,7 @@ import { AddToCalendar } from '@/components/game/AddToCalendar';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { saveFailedToast } from '@/lib/errors';
+import { hasKickedOff } from '@/lib/calendar';
 import { fmtDateLong, fmtTime, jerseyText, seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
@@ -149,6 +150,41 @@ export function GameDetailPage() {
       return { ...s, player_name: p?.display_name || 'Unknown', gender: p?.gender };
     });
 
+  // Before kickoff the main job is getting enough players: Call for subs leads (lime when we're short), and
+  // Enter result waits at the end (still there in case the game's time is wrong). Once it's started, it leads.
+  const started = game.has_result || hasKickedOff(game);
+  const resultButton = (
+    <button
+      onClick={() => setResultOpen(true)}
+      className={cn(pill, started ? 'bg-lime-400 text-black hover:bg-lime-300' : 'bg-white/5 text-white hover:bg-white/10')}
+    >
+      <Target className="h-3.5 w-3.5" />
+      {game.has_result ? 'Edit result' : 'Enter result'}
+    </button>
+  );
+  const captainTools = (
+    <div className="flex flex-wrap gap-2">
+      {started && resultButton}
+      {!game.has_result && (
+        <CallForSubsButton
+          game={game}
+          settings={data.settings}
+          profiles={sessionProfiles}
+          rsvps={data.rsvps}
+          primary={!started && !!counts?.isShort}
+        />
+      )}
+      {!game.has_result && counts && <CopyReminderButton game={game} headcount={counts} settings={data.settings} />}
+      <button onClick={() => setEditOpen(true)} className={cn(pill, 'bg-white/5 text-white hover:bg-white/10')}>
+        <Pencil className="h-3.5 w-3.5" /> Edit
+      </button>
+      <button onClick={deleteGame} className={cn(pill, 'bg-white/5 text-white/70 hover:bg-red-500 hover:text-white')}>
+        <Trash2 className="h-3.5 w-3.5" /> Delete
+      </button>
+      {!started && resultButton}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <button
@@ -215,24 +251,7 @@ export function GameDetailPage() {
           {game.notes && <p className="mt-3 rounded-2xl bg-white/5 px-3.5 py-2.5 text-xs text-white/70">{game.notes}</p>}
         </div>
 
-        {data.isCaptain && (
-          <div className="flex flex-wrap gap-2 border-t border-white/10 px-5 py-3.5">
-            <button onClick={() => setResultOpen(true)} className={cn(pill, 'bg-lime-400 text-black hover:bg-lime-300')}>
-              <Target className="h-3.5 w-3.5" />
-              {game.has_result ? 'Edit result' : 'Enter result'}
-            </button>
-            {!game.has_result && counts && <CopyReminderButton game={game} headcount={counts} settings={data.settings} />}
-            {!game.has_result && (
-              <CallForSubsButton game={game} settings={data.settings} profiles={sessionProfiles} rsvps={data.rsvps} />
-            )}
-            <button onClick={() => setEditOpen(true)} className={cn(pill, 'bg-white/5 text-white hover:bg-white/10')}>
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </button>
-            <button onClick={deleteGame} className={cn(pill, 'bg-white/5 text-white/70 hover:bg-red-500 hover:text-white')}>
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </button>
-          </div>
-        )}
+        {data.isCaptain && game.has_result && <div className="border-t border-white/10 px-5 py-3.5">{captainTools}</div>}
       </section>
 
       {!game.has_result && onRoster && (
@@ -243,6 +262,13 @@ export function GameDetailPage() {
           suspended={suspended.includes(data.user.id)}
           busy={busy || rsvp.isBusy(game)}
         />
+      )}
+
+      {/* Before a game, a captain answers for themselves first, like everyone else; their tools come next. */}
+      {data.isCaptain && !game.has_result && (
+        <section aria-label="Captain tools" className="rounded-3xl bg-zinc-950 px-5 py-3.5 text-white">
+          {captainTools}
+        </section>
       )}
 
       {counts && (

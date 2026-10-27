@@ -1,6 +1,6 @@
 // "Add to calendar": the .ics file and the Google Calendar link for one game.
 import { describe, expect, it } from 'vitest';
-import { gameIcs, googleCalendarUrl, shortageIsUrgent } from '@/lib/calendar';
+import { gameIcs, googleCalendarUrl, hasKickedOff, shortageIsUrgent } from '@/lib/calendar';
 
 const settings = { primary_jersey: 'Bright green/yellow', backup_jersey: 'Black', venue_name: 'North Coast', venue_address: '8809 Lake Rd, Seville, OH' };
 const game = {
@@ -14,6 +14,16 @@ const game = {
   notes: 'Bring both jerseys; playoff seeding',
 };
 const link = 'https://jiveturkeys.app/games/g1';
+
+describe('kickoff', () => {
+  it('is the game time, Eastern; a game with no time yet starts at midnight', () => {
+    expect(hasKickedOff(game, new Date('2026-10-15T22:59:00Z'))).toBe(false);
+    expect(hasKickedOff(game, new Date('2026-10-15T23:00:00Z'))).toBe(true);
+    const noTime = { ...game, time: '' };
+    expect(hasKickedOff(noTime, new Date('2026-10-15T03:59:00Z'))).toBe(false);
+    expect(hasKickedOff(noTime, new Date('2026-10-15T04:00:00Z'))).toBe(true);
+  });
+});
 
 describe('shortage warnings on Schedule', () => {
   it('becomes urgent 48 hours before Eastern kickoff, and ends at kickoff', () => {

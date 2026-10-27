@@ -2,6 +2,7 @@ import { Copy, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export const gameLink = (game) => `${window.location.origin}/games/${game.id}`;
 const women = (n) => (n === 1 ? 'woman' : 'women');
@@ -40,8 +41,11 @@ export function CopyReminderButton({ game, headcount, settings }) {
   );
 }
 
-/** Copies a call-up message naming only available subs who haven't said IN or OUT. */
-export function CallForSubsButton({ game, settings, profiles, rsvps }) {
+/**
+ * Copies a call-up message naming only available subs who haven't said IN or
+ * OUT. `primary`: the lime main button (before kickoff, when we're short).
+ */
+export function CallForSubsButton({ game, settings, profiles, rsvps, primary = false }) {
   const { toast } = useToast();
 
   const copy = async () => {
@@ -79,7 +83,10 @@ export function CallForSubsButton({ game, settings, profiles, rsvps }) {
   return (
     <button
       onClick={copy}
-      className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-white/20"
+      className={cn(
+        'inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] transition',
+        primary ? 'bg-lime-400 text-black hover:bg-lime-300' : 'bg-white/10 text-white hover:bg-white/20',
+      )}
     >
       <UserPlus className="h-3.5 w-3.5" />
       Call for subs
