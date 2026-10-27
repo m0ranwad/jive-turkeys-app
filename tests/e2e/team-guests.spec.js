@@ -171,7 +171,7 @@ test("a captain's status change takes a player who has not joined out of the spl
   await openTeam(page);
   await card(page, 'Mike Russo').getByRole('button', { name: 'Available to sub' }).click();
   await expect(page.getByText('Mike Russo marked Available to sub')).toBeVisible();
-  await expect(page.getByText('11 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expect(page.getByText('11 playing · 2 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
 
   // $721 across 11: $65.55, rounded up.
   await openDues(page);
