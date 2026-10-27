@@ -14,7 +14,7 @@ export function PotmPrompt({ data }) {
       {games.map((g) => (
         <Link
           key={g.id}
-          to={`/games/${g.id}`}
+          to={`/games/${g.id}#vote`}
           className="flex items-center gap-3 rounded-3xl border-2 border-lime-400 bg-lime-50 p-4 transition hover:bg-lime-100"
         >
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-lime-400 text-black">

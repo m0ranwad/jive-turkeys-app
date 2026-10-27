@@ -47,8 +47,11 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   );
 }
 
-/** `onPick` (captains): tap a name to set that player's RSVP. */
-export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null }) {
+/**
+ * `onPick` (captains): tap a name to set that player's RSVP. `bare`: just the
+ * counts and names, inside something else (a played game's folded list).
+ */
+export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null, bare = false }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
     { label: 'Women field', value: `${headcount.womenFieldIn}/${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
@@ -63,8 +66,8 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
   ].filter(Boolean);
 
   return (
-    <section className={CARD}>
-      <div className="flex items-start justify-between gap-3">
+    <section className={bare ? 'px-5 pb-5' : CARD}>
+      {!bare && <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Headcount</h3>
           <p className="mt-1 text-xs font-medium text-zinc-500">
@@ -72,7 +75,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           </p>
         </div>
         <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
-      </div>
+      </div>}
       <div className="mt-3 grid grid-cols-3 gap-2">
         {tiles.map((tile) => (
           <div key={tile.label} className={cn('rounded-2xl px-3 py-2.5', tile.tone)}>
@@ -81,7 +84,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           </div>
         ))}
       </div>
-      {headcount.isShort && (
+      {headcount.isShort && !bare && (
         <p className="mt-3 rounded-2xl bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">
           Short on {shortParts.join(' and ')} (min {headcount.minPlayers} players, {headcount.minWomen} women on the field).
         </p>
@@ -110,7 +113,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           <Group label="Unavailable" note="No sub requests" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
         )}
       </div>
-      {game.location && (
+      {game.location && !bare && (
         <a
           href={mapsUrl(game.location)}
           target="_blank"

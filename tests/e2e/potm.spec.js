@@ -24,6 +24,8 @@ test('a player who still has a vote to cast is asked on Schedule, until they vot
 
   await card.getByRole('link').click();
   await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();
+  // It opens at the vote, not at the top of the game.
+  await expect(potm(page)).toBeInViewport();
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting open until Thu 9:00 PM');
   const man = potm(page).locator('div.rounded-2xl', { hasText: 'Man of the Match' });
   await man.getByRole('button').first().click();
