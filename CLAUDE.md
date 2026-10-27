@@ -223,8 +223,10 @@ manages the GitHub, Cloudflare and Supabase accounts.
   backend's `trackChange()` mirrors the triggers.
 - Seasons run November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and are filed under the year they start
   in: `season_year` 2026 is the 2026–27 season, so January games of session 2 are still 2026. Show a season with
-  `seasonName()` / `seasonLabel()` ("2026–27 · Session 2") and get a date's with `seasonOf()` (`src/lib/format.js`).
-  Add game and Import start on `sessionForNewGames()` (`src/lib/roster.js`), and imported dates without a year go by
+  `seasonName()` / `seasonLabel()` ("2026–27 · Session 2") and get a date's with `seasonOf()`, or its session with
+  `sessionOf()` (`src/lib/format.js`; `roster_session_of()` in SQL).
+  Add game and Import start on `sessionForNewGames()` (`src/lib/roster.js`; with no games at all, both it and the current
+  session are the session today is in), and imported dates without a year go by
   the season (`yearInSeason()`).
 - Each session keeps its own roster (`session_roster`, `src/lib/roster.js`), so a status change never rewrites a
   past session's dues or headcounts. A session's list starts as a copy of everyone's status when it becomes the

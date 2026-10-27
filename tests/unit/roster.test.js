@@ -7,7 +7,7 @@ import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
 import { sessionAsk } from '@/components/SessionPrompt';
-import { seasonLabel, seasonName, seasonOf } from '@/lib/format';
+import { seasonLabel, seasonName, seasonOf, sessionOf } from '@/lib/format';
 import { headcount } from '@/lib/team-logic';
 import {
   askFor,
@@ -584,6 +584,17 @@ describe('seasons that cross New Year', () => {
     expect(seasonOf('2027-05-01')).toBe(2027);
     expect(seasonOf('2027-10-20')).toBe(2027);
   });
+
+  it('have three sessions of two months each, and the months in between count for the first one coming up', () => {
+    expect(sessionOf('2026-11-07')).toEqual({ year: 2026, session: 1 });
+    expect(sessionOf('2026-12-31')).toEqual({ year: 2026, session: 1 });
+    expect(sessionOf('2027-01-01')).toEqual({ year: 2026, session: 2 });
+    expect(sessionOf('2027-02-28')).toEqual({ year: 2026, session: 2 });
+    expect(sessionOf('2027-03-01')).toEqual({ year: 2026, session: 3 });
+    expect(sessionOf('2027-04-30')).toEqual({ year: 2026, session: 3 });
+    expect(sessionOf('2027-05-01')).toEqual({ year: 2027, session: 1 });
+    expect(sessionOf('2027-10-20')).toEqual({ year: 2027, session: 1 });
+  });
 });
 
 describe('which session new games go in', () => {
@@ -608,8 +619,10 @@ describe('which session new games go in', () => {
     expect(sessionForNewGames([game({ year: 2026, session: 3 }, '2027-04-24')], '2027-05-10', [])).toEqual({ year: 2027, session: 1 });
   });
 
-  it("is the first session of today's season when there are no games yet", () => {
+  it('is the session today is in when there are no games yet', () => {
     expect(sessionForNewGames([], '2026-10-20', [])).toEqual({ year: 2026, session: 1 });
-    expect(sessionForNewGames([], '2027-02-01', [])).toEqual({ year: 2026, session: 1 });
+    expect(sessionForNewGames([], '2026-12-01', [])).toEqual({ year: 2026, session: 1 });
+    expect(sessionForNewGames([], '2027-02-01', [])).toEqual({ year: 2026, session: 2 });
+    expect(sessionForNewGames([], '2027-03-15', [])).toEqual({ year: 2026, session: 3 });
   });
 });
