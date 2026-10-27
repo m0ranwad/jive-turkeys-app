@@ -394,7 +394,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           </div>
         )}
         {team.active.length === 0 && (
-          <p className="py-3 text-sm text-zinc-500">No active players yet. Set roster statuses on the Team page.</p>
+          <p className="py-3 text-sm text-zinc-500">Nobody is down as Playing yet. Set who's playing on the Team page.</p>
         )}
         {isCaptain && !past && (
           <Link

@@ -72,7 +72,7 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
   await expect(card).toContainText('League fee$595');
   await expect(card).toContainText('Refs · 7 games × $18$126');
   await expect(card).toContainText('Session total$721');
-  await expect(card).toContainText('Split across 12 active players');
+  await expect(card).toContainText('Split across the 12 teammates playing');
 
   await expect(page.getByRole('link', { name: 'Pay $122 with Venmo' })).toHaveAttribute(
     'href',

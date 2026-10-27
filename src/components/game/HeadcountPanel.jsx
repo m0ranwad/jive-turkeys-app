@@ -1,4 +1,5 @@
 import { ShortBanner } from '@/components/schedule/GameCard';
+import { shortageIsUrgent } from '@/lib/calendar';
 import { CARD } from '@/lib/constants';
 import { fmtDateShort, fmtTime, jerseyText, mapsUrl } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -23,18 +24,21 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
               {...(onPick && { type: 'button', onClick: () => onPick(entry.profile) })}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
-                // Not joined the site yet: grey and dashed, like their card on the Team page.
-                entry.profile.guest
-                  ? 'border-dashed border-zinc-300 bg-zinc-50 text-zinc-500'
-                  : entry.profile.gender === 'F'
-                    ? 'border-lime-300 bg-lime-50 text-lime-900'
+                entry.profile.gender === 'F'
+                  ? 'border-lime-300 bg-lime-50 text-lime-900'
+                  : entry.profile.guest
+                    ? 'border-zinc-300 bg-zinc-50 text-zinc-500'
                     : 'border-zinc-200 bg-white text-zinc-700',
+                // Joining and gender are separate: roster-only women stay green.
+                entry.profile.guest && 'border-dashed',
                 onPick && 'transition hover:border-zinc-900',
               )}
             >
               {/* Heard as "RSVP for Taylor Brooks GK": the name and tags on screen, in order. */}
               {onPick && <span className="sr-only">RSVP for </span>}
               {entry.profile.display_name}
+              {entry.profile.gender === 'F' && <span className="sr-only">, woman</span>}
+              {entry.profile.guest && <span className="sr-only">, not joined yet</span>}
               {entry.playing_gk && <span className="text-[11px] font-black uppercase text-zinc-500">GK</span>}
               {suspendedIds.includes(entry.profile.user_id) && (
                 <span className="text-[11px] font-black uppercase text-red-600">Susp</span>
@@ -47,20 +51,21 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   );
 }
 
-/** `onPick` (captains): tap a name to set that player's RSVP. */
+/**
+ * `onPick` (captains): tap a name to set that player's RSVP. How many more we need
+ * follows Schedule: grey until 48 hours before kickoff, then red, and gone once
+ * the game has a score.
+ */
 export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
-    { label: 'Women field', value: `${headcount.womenFieldIn}/${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
+    { label: 'Women on field', value: `${headcount.womenFieldIn} of ${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
     { label: 'MAYBE', value: headcount.groups.maybe.length, tone: 'bg-amber-300 text-black' },
     { label: 'OUT', value: headcount.groups.out.length, tone: 'bg-zinc-100 text-zinc-600' },
     { label: 'No reply', value: headcount.groups.none.length, tone: 'bg-zinc-100 text-zinc-600' },
     { label: 'Men', value: headcount.totalIn - headcount.womenIn, tone: 'bg-zinc-100 text-zinc-600' },
   ];
-  const shortParts = [
-    headcount.needTotal ? `${headcount.needTotal} player${headcount.needTotal === 1 ? '' : 's'}` : null,
-    headcount.needWomen ? `${headcount.needWomen} wom${headcount.needWomen === 1 ? 'an' : 'en'}` : null,
-  ].filter(Boolean);
+  const showNeed = !game.has_result && headcount.isShort;
 
   return (
     <section className={CARD}>
@@ -71,7 +76,9 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
             {fmtDateShort(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'} · {jerseyText(game.jersey, settings)}
           </p>
         </div>
-        <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+        {showNeed && (
+          <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={shortageIsUrgent(game)} />
+        )}
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {tiles.map((tile) => (
@@ -81,14 +88,15 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           </div>
         ))}
       </div>
-      {headcount.isShort && (
-        <p className="mt-3 rounded-2xl bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">
-          Short on {shortParts.join(' and ')} (min {headcount.minPlayers} players, {headcount.minWomen} women on the field).
+      {showNeed && (
+        <p className="mt-3 text-xs font-medium text-zinc-500">
+          We need at least {headcount.minPlayers} players, with {headcount.minWomen} women on the field (a woman in goal
+          doesn't count).
         </p>
       )}
       {onPick && (
         <p className="mt-3 text-xs font-medium text-zinc-500">
-          Tap a name to set their RSVP, for teammates who told you another way or haven't joined the site (grey).
+          Tap a name to set their RSVP, for teammates who told you another way or haven't joined the site (dashed outline).
         </p>
       )}
       <div className="mt-4 space-y-4">
@@ -110,6 +118,16 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           <Group label="Unavailable" note="No sub requests" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
         )}
       </div>
+      <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-semibold text-zinc-500">
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className="h-3 w-6 shrink-0 rounded-full border border-lime-300 bg-lime-50" />
+          Green = women
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className="h-3 w-6 shrink-0 rounded-full border border-dashed border-zinc-300 bg-zinc-50" />
+          Dashed = not joined
+        </span>
+      </p>
       {game.location && (
         <a
           href={mapsUrl(game.location)}
