@@ -181,6 +181,9 @@ test("if who was on each session doesn't load, Dues says so and offers nothing t
   await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Mark (me|us) paid/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Try again' }).click();
+  // Keep reads failing until this retry finishes. The old error remains visible
+  // while the roster-start request is pending, so visibility alone isn't enough.
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeEnabled();
   await expect(page.getByTestId('dues-failed')).toBeVisible();
 
   await restoreRosterReads(page);

@@ -237,7 +237,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   players are asked **Playing session N?** on Schedule (`src/components/SessionPrompt.jsx`) and captains see who
   hasn't answered on Team. Captains can also ask ahead, before the schedule is out or with games still left
   (`session_asks`, `roster_ask()` / `roster_answer()`, `AskSessionDialog.jsx`): answers go into that session's list
-  only, its list follows today's statuses for anyone who hasn't answered (`roster_follow_ahead()`), between sessions
+  only, its list follows today's statuses for anyone who hasn't answered even after **Stop asking**
+  (`roster_follow_ahead()`; opening the site refreshes older stopped lists), between sessions
   it's the current session (`roster_current_session()` = `currentSession()`), and when it becomes current the answers
   become everyone's status (`roster_apply_asked()`, also if captains stopped asking). Captains asking notifies
   everyone asked, and anyone who hasn't answered gets a reminder at noon a week before the session starts, also

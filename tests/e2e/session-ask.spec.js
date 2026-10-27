@@ -95,6 +95,92 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await expect(card).toContainText('5 of 14 answered');
 });
 
+test('stopping the question keeps future dues current and preserves explicit answers', async ({ page }) => {
+  await signIn(page);
+  await openTab(page, '/team', 'Team');
+  await page.getByTestId('session-ask').getByRole('button', { name: 'Change date' }).click();
+  await page.getByRole('dialog', { name: "Ask who's playing session 3" }).getByRole('button', { name: 'Stop asking' }).click();
+  await expect(page.getByText('Stopped asking about session 3')).toBeVisible();
+
+  // Casey hasn't answered session 3; Priya explicitly said she's in.
+  await playerCard(page, 'Casey Captain').getByRole('button', { name: 'On Break' }).click();
+  await expect(page.getByText('Casey Captain marked On Break')).toBeVisible();
+  await playerCard(page, 'Priya Shah').getByRole('button', { name: 'On Break' }).click();
+  await expect(page.getByText('Priya Shah marked On Break')).toBeVisible();
+
+  await openTab(page, '/dues', 'Dues');
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: 'Next session' }).click();
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
+  await page.getByRole('button', { name: 'Set the fee' }).click();
+  await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Casey Captain');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: 'Next session' }).click();
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Casey Captain');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
+});
+
+// The demo mutates synchronously, while the live roster-start RPC changes the
+// database after a network round trip. Delay that mutation to exercise direct
+// entry on Dues with a stopped list saved by the older version.
+async function slowRosterStart(page) {
+  await page.route('**/src/api/index.js', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()) + `
+      const originalStart = api.roster.start.bind(api.roster);
+      api.roster.start = async (...args) => {
+        const mode = localStorage.getItem('jt_test_roster_start');
+        if (mode === 'fail') throw new Error('Roster refresh failed');
+        if (mode === 'slow') await new Promise(resolve => setTimeout(resolve, 1500));
+        return originalStart(...args);
+      };
+    ` });
+  });
+}
+
+test('opening directly on Dues waits for an older stopped list to refresh', async ({ page }) => {
+  await slowRosterStart(page);
+  await signIn(page);
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const sam = db.player_profiles.find((p) => p.display_name === 'Sam Okafor');
+    const priya = db.player_profiles.find((p) => p.display_name === 'Priya Shah');
+    sam.status = priya.status = 'on_break';
+    const ask = db.session_asks.find((a) => a.session === 3);
+    ask.starts_on = ask.applied_at = null;
+    db.session_dues.push({ ...db.session_dues.find((d) => d.session === 2), id: crypto.randomUUID(), session: 3 });
+    localStorage.setItem(key, JSON.stringify(db));
+    localStorage.setItem('jt_test_roster_start', 'slow');
+  });
+  await page.goto('/dues');
+  await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await page.getByRole('button', { name: 'Next session' }).click();
+  await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
+  // Sam hasn't answered: follow today's status. Priya explicitly said she's in.
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Sam Okafor');
+  await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
+  await expect(page.getByRole('heading', { name: '0 of 11 paid', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Amount for Priya Shah')).toHaveText('$66');
+});
+
+test('Dues retries a failed roster refresh before showing amounts', async ({ page }) => {
+  await slowRosterStart(page);
+  await signIn(page);
+  await page.evaluate(() => localStorage.setItem('jt_test_roster_start', 'fail'));
+  await page.goto('/dues');
+  await expect(page.getByTestId('dues-failed')).toBeVisible();
+  await expect(page.getByTestId('dues-unpaid')).toHaveCount(0);
+  await page.evaluate(() => localStorage.removeItem('jt_test_roster_start'));
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '6 of 12 paid', exact: true })).toBeVisible();
+});
+
 test('players cannot ask, and do not see the captains\' list', async ({ page }) => {
   await signIn(page, PLAYER);
   await openTab(page, '/team', 'Team');

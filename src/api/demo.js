@@ -685,10 +685,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   // Same as the database's roster_follow_ahead(): until they start, sessions asked about
   // ahead keep up with today's status for anyone who hasn't answered them, anyone taken
   // off the team (no longer their answer, so added back they're asked again), and anyone
-  // new. Not recorded as a dues change.
+  // new, even after captains stop asking. Not recorded as a dues change.
   const followAhead = (who, status) => {
     const cur = current();
-    for (const ask of db.session_asks.filter((a) => a.starts_on && isEarlier(cur, { year: a.season_year, session: a.session }))) {
+    for (const ask of db.session_asks.filter((a) => isEarlier(cur, { year: a.season_year, session: a.session }))) {
       const list = db.session_roster.filter((r) => r.season_year === ask.season_year && r.session === ask.session);
       if (!list.length) continue;
       const row = list.find((r) => (who.user_id ? r.user_id === who.user_id : r.guest_id === who.guest_id));
@@ -1592,12 +1592,18 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const period = current();
       startSession(period);
       applyAsked(period);
+      // Repair lists saved before stopped questions kept following today's roster.
+      // This doesn't apply answers to profiles or reopen the question.
+      for (const ask of db.session_asks.filter((a) => !a.starts_on && isEarlier(period, { year: a.season_year, session: a.session }))) {
+        const ahead = { year: ask.season_year, session: ask.session };
+        if (db.session_roster.some((r) => sessionOf(r) === `${ahead.year}-${ahead.session}`)) refreshAsked(ahead);
+      }
       save(db);
       return delay({ season_year: Number(period.year), session: Number(period.session), over: !open() });
     },
     // Captains ask "Playing session N?" about a session that hasn't started, with its
     // first game's date (again: a new date; none: stop asking). Its list starts now;
-    // asked again after they stopped, it catches up with what changed in between.
+    // after stopping, unanswered players still follow today's statuses.
     async ask({ year, session, startsOn }) {
       requireUser();
       failIfOffline();

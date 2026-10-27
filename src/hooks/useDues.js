@@ -9,6 +9,9 @@ export function useDues() {
 
   const load = useCallback(async () => {
     try {
+      // Opening directly on Dues must finish repairing session lists before
+      // reading them. useTeam() starts that work too, but loads alongside us.
+      await api.roster.start();
       const [dues, payments, history, profiles, guests, games, roster, changes] = await Promise.all([
         api.entities.SessionDues.list(),
         api.entities.DuesPayment.list(),

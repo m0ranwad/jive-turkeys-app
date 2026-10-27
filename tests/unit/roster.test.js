@@ -8,6 +8,7 @@ import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
 import { sessionAsk } from '@/components/SessionPrompt';
 import { seasonLabel, seasonName, seasonOf } from '@/lib/format';
+import { headcount } from '@/lib/team-logic';
 import {
   askFor,
   beforeFirstGame,
@@ -408,7 +409,7 @@ describe('"Playing session N?" asked ahead', () => {
       expect(await rosterOf(api, 2, sam.user_id)).toMatchObject({ status: 'active' });
     });
 
-    it('brings the list up to date when captains ask again after they stopped, keeping the answers', async () => {
+    it('keeps the list current after captains stop asking, and keeps answers when asking again', async () => {
       const api = await signedIn();
       const year = (await api.entities.SessionDues.list())[0].season_year;
       const sam = await profileOf(api, 'Sam Okafor');
@@ -416,7 +417,7 @@ describe('"Playing session N?" asked ahead', () => {
       await api.roster.ask({ year, session: 3, startsOn: null });
       // Sam hasn't answered session 3, and sits out session 2 while captains aren't asking.
       await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
-      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'active', answered_at: null });
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
       const changes = (await api.entities.DuesChange.list()).length;
       await api.roster.ask({ year, session: 3, startsOn: '2099-01-02' });
       expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
@@ -436,8 +437,8 @@ describe('"Playing session N?" asked ahead', () => {
       await api.auth.signUp('newbie@demo.test', 'demo1234');
       const newbie = await api.auth.me();
       await api.entities.PlayerProfile.create({ user_id: newbie.id, display_name: 'Nia New', gender: 'F', status: 'active' });
-      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'active', answered_at: null });
-      expect(await rosterOf(api, 3, newbie.id)).toBeUndefined();
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+      expect(await rosterOf(api, 3, newbie.id)).toMatchObject({ status: 'active', answered_at: null });
       const changes = (await api.entities.DuesChange.list()).length;
 
       // Session 2 is played out and session 3's first game goes on the schedule.
@@ -453,6 +454,72 @@ describe('"Playing session N?" asked ahead', () => {
       expect(await profileOf(api, 'Jamie Fox')).toMatchObject({ status: 'active' });
       expect(await profileOf(api, 'Riley Novak')).toMatchObject({ status: 'sub_pool' });
       expect(await api.entities.DuesChange.list()).toHaveLength(changes);
+    });
+
+    it('uses current unanswered players for future dues and headcounts after stopping the question', async () => {
+      const api = await signedIn();
+      const year = (await api.entities.SessionDues.list())[0].season_year;
+      const future = { year, session: 3 };
+      const past = split(await duesData(api), { year, session: 1 });
+      const sam = await profileOf(api, 'Sam Okafor');
+      const priya = await profileOf(api, 'Priya Shah');
+      const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+      await api.roster.ask({ ...future, startsOn: null });
+      const changes = (await api.entities.DuesChange.filter({ session: 3 })).length;
+      await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
+      // Priya explicitly said she's in next session, so today's status doesn't override it.
+      await api.entities.PlayerProfile.update(priya.id, { status: 'on_break' });
+      await api.entities.TeamGuest.update(mike.id, { removed: true });
+      await api.entities.TeamGuest.create({ display_name: 'Grace New', gender: 'F', status: 'active' });
+
+      const data = await duesData(api);
+      const members = sessionSlice(data, future).members;
+      const team = teamDues(720, members, []);
+      const active = team.active.map((p) => p.display_name);
+      expect(active).toContain('Grace New');
+      expect(active).toContain('Priya Shah');
+      expect(active).not.toContain('Sam Okafor');
+      expect(active).not.toContain('Mike Russo');
+      const groups = headcount({ game: { id: 'future' }, rsvps: [], profiles: members }).groups;
+      expect(groups.none.map((e) => e.profile.display_name)).toEqual(expect.arrayContaining(['Grace New', 'Priya Shah']));
+      expect(groups.subs.map((e) => e.profile.display_name)).toContain('Sam Okafor');
+      expect(members.map((p) => p.display_name)).not.toContain('Mike Russo');
+      expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+      expect((await rosterOf(api, 3, priya.user_id)).answered_at).not.toBeNull();
+      expect(await api.entities.DuesChange.filter({ session: 3 })).toHaveLength(changes);
+      const pastAfter = split(data, { year, session: 1 });
+      expect(pastAfter).toMatchObject({ perPlayer: past.perPlayer, paidCount: past.paidCount, collected: past.collected });
+      const shares = (team) => team.active.map(({ user_id, status, pays_with }) => ({ user_id, status, pays_with, share: team.shareOf(user_id) }));
+      expect(shares(pastAfter)).toEqual(shares(past));
+    });
+
+    it('refreshes a stopped future list saved by an older version when the site opens', async () => {
+      const api = await signedIn();
+      const year = (await api.entities.SessionDues.list())[0].season_year;
+      const sam = await profileOf(api, 'Sam Okafor');
+      const priya = await profileOf(api, 'Priya Shah');
+      await api.roster.ask({ year, session: 3, startsOn: null });
+      const savedKey = 'jt_demo_db_v28';
+      const saved = JSON.parse(localStorage.getItem(savedKey));
+      // Act out the old version: today's profile changed, but the stopped list didn't.
+      saved.player_profiles.find((p) => p.user_id === sam.user_id).status = 'on_break';
+      saved.player_profiles.find((p) => p.user_id === priya.user_id).status = 'on_break';
+      localStorage.setItem(savedKey, JSON.stringify(saved));
+      const reopened = await signedIn();
+      const before = await duesData(reopened);
+      const past = split(before, { year, session: 1 });
+      const earlier = await reopened.entities.SessionRoster.filter({ session: 1 });
+      expect(await rosterOf(reopened, 3, sam.user_id)).toMatchObject({ status: 'active', answered_at: null });
+      await reopened.roster.start();
+      expect(await rosterOf(reopened, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
+      expect(await rosterOf(reopened, 3, priya.user_id)).toMatchObject({ status: 'active' });
+      expect((await rosterOf(reopened, 3, priya.user_id)).answered_at).not.toBeNull();
+      expect(await profileOf(reopened, 'Priya Shah')).toMatchObject({ status: 'on_break' });
+      expect((await reopened.entities.SessionAsk.filter({ session: 3 }))[0]).toMatchObject({ starts_on: null, applied_at: null });
+      expect(await reopened.entities.SessionRoster.filter({ session: 1 })).toEqual(earlier);
+      expect(split(await duesData(reopened), { year, session: 1 })).toMatchObject({
+        perPlayer: past.perPlayer, paidCount: past.paidCount, collected: past.collected,
+      });
     });
 
     it('puts a player added back on the session asked about ahead again, to be asked again', async () => {
