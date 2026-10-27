@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Pencil, Target, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { ArrowLeft, ChevronDown, Pencil, Target, Trash2 } from 'lucide-react';
 import { api } from '@/api';
 import { HeadcountPanel } from '@/components/game/HeadcountPanel';
 import { PotmVoting } from '@/components/game/PotmVoting';
@@ -25,6 +25,7 @@ const pill = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[11
 
 export function GameDetailPage() {
   const { id } = useParams();
+  const { hash } = useLocation();
   const navigate = useNavigate();
   const data = useSeasonData();
   const rsvp = useRsvp(data);
@@ -45,6 +46,14 @@ export function GameDetailPage() {
     () => (game ? computeHeadcount({ game, rsvps: data.rsvps, profiles: sessionProfiles, settings: data.settings }) : null),
     [game, data.rsvps, sessionProfiles, data.settings],
   );
+
+  // Vote on Schedule opens the game at its vote (#vote).
+  const votingShown = !!game?.has_result;
+  useEffect(() => {
+    if (hash !== '#vote' || !votingShown) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('vote')?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }, [hash, votingShown]);
 
   if (data.loading) return <PageSpinner />;
 
@@ -245,16 +254,7 @@ export function GameDetailPage() {
         />
       )}
 
-      {counts && (
-        <HeadcountPanel
-          game={game}
-          headcount={counts}
-          suspendedIds={suspended}
-          settings={data.settings}
-          onPick={data.isCaptain && !game.has_result ? setRsvpFor : null}
-        />
-      )}
-
+      {/* A played game leads with what happened: the score, then the vote, then who said they were in, folded. */}
       {game.has_result && (
         <>
           <ResultCard game={game} stats={statsWithNames} fillIns={data.fillIns} />
@@ -268,6 +268,30 @@ export function GameDetailPage() {
             onChanged={data.reload}
           />
         </>
+      )}
+
+      {counts && !game.has_result && (
+        <HeadcountPanel
+          game={game}
+          headcount={counts}
+          suspendedIds={suspended}
+          settings={data.settings}
+          onPick={data.isCaptain ? setRsvpFor : null}
+        />
+      )}
+      {counts && game.has_result && (
+        <details className="group rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Who said they were in</span>
+            <span className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
+              {counts.totalIn} in
+              <ChevronDown className="h-4 w-4 transition group-open:rotate-180 motion-reduce:transition-none" />
+            </span>
+          </summary>
+          <div className="-mt-2">
+            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} settings={data.settings} bare />
+          </div>
+        </details>
       )}
 
       <RsvpForDialog

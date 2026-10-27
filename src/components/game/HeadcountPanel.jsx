@@ -54,9 +54,10 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
 /**
  * `onPick` (captains): tap a name to set that player's RSVP. How many more we need
  * follows Schedule: grey until 48 hours before kickoff, then red, and gone once
- * the game has a score.
+ * the game has a score. `bare`: just the counts and names, inside something
+ * else (a played game's folded list).
  */
-export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null }) {
+export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null, bare = false }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
     { label: 'Women on field', value: `${headcount.womenFieldIn} of ${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
@@ -68,8 +69,8 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
   const showNeed = !game.has_result && headcount.isShort;
 
   return (
-    <section className={CARD}>
-      <div className="flex items-start justify-between gap-3">
+    <section className={bare ? 'px-5 pb-5' : CARD}>
+      {!bare && <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Headcount</h3>
           <p className="mt-1 text-xs font-medium text-zinc-500">
@@ -79,7 +80,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
         {showNeed && (
           <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={shortageIsUrgent(game)} />
         )}
-      </div>
+      </div>}
       <div className="mt-3 grid grid-cols-3 gap-2">
         {tiles.map((tile) => (
           <div key={tile.label} className={cn('rounded-2xl px-3 py-2.5', tile.tone)}>
@@ -88,7 +89,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           </div>
         ))}
       </div>
-      {showNeed && (
+      {showNeed && !bare && (
         <p className="mt-3 text-xs font-medium text-zinc-500">
           We need at least {headcount.minPlayers} players, with {headcount.minWomen} women on the field (a woman in goal
           doesn't count).
@@ -128,7 +129,7 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           Dashed = not joined
         </span>
       </p>
-      {game.location && (
+      {game.location && !bare && (
         <a
           href={mapsUrl(game.location)}
           target="_blank"

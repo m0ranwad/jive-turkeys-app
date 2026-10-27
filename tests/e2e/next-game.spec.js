@@ -42,12 +42,14 @@ test("a game's own page shows the shortage the way Schedule does", async ({ page
   await nextGame(page).getByRole('link', { name: /Details/ }).click();
   await expect(headcount).toContainText('Short · Need 2 more · 1 more woman');
 
-  // A played game has nothing to call for.
+  // A played game has nothing to call for: who said IN is folded away, with no shortage.
   await page.goto('/');
   await page.getByRole('link', { name: /vs The Hat Tricks/ }).click();
-  await expect(headcount).toBeVisible();
-  await expect(headcount).not.toContainText('Need');
-  await expect(headcount).not.toContainText('We need at least');
+  const rsvps = page.locator('details', { hasText: 'Who said they were in' });
+  await rsvps.getByText('Who said they were in').click();
+  await expect(rsvps.locator('[data-group="IN"]')).toBeVisible();
+  await expect(rsvps).not.toContainText('Need');
+  await expect(rsvps).not.toContainText('We need at least');
 });
 
 test('the next game is at the top of Schedule, and you answer right there', async ({ page }) => {

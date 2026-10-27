@@ -75,7 +75,8 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
   };
 
   return (
-    <section className={CARD}>
+    // #vote: where Vote on Schedule lands, clear of the sticky header.
+    <section id="vote" className={cn(CARD, 'scroll-mt-24')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Player of the Match</h3>
         {game.potm_closes_at && (
