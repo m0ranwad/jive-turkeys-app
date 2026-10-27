@@ -184,7 +184,7 @@ export function SettingsPage() {
             <span className="block text-sm font-bold">Game reminders</span>
             <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
               Before each game, Playing teammates who haven't answered get "Are you in?". If we're short, players available to sub who haven't said OUT are asked (only women, when it's women we need). Phones with
-              notifications on only. "Copy reminder" on each game still works for the group text.
+              notifications on only. Captains can also tap "Remind team" or "Call for subs" on a game any time to post one in Team Chat.
             </span>
           </div>
           <Choice
