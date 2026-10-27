@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { LoaderCircle, Lock, Mail, UserPlus } from 'lucide-react';
+import { LoaderCircle, Lock, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError, OrDivider, safeReturnTo } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ function VerifyEmail({ email }) {
   };
 
   return (
-    <AuthShell icon={Mail} title="Verify your email" subtitle={`We sent a code to ${email}`}>
+    <AuthShell title="Verify your email" subtitle={`We sent a code to ${email}`}>
       <FormError>{error}</FormError>
       <div className="mb-6 flex justify-center">
         <InputOTP maxLength={6} value={code} onChange={setCode} autoFocus autoComplete="one-time-code">
@@ -101,9 +101,8 @@ export function RegisterPage() {
 
   return (
     <AuthShell
-      icon={UserPlus}
       title="Create your account"
-      subtitle="Sign up to get started"
+      subtitle="Next, you'll enter the team code from your invite."
       footer={
         <>
           Already have an account?{' '}
@@ -140,7 +139,7 @@ export function RegisterPage() {
             id="password"
             type="password"
             autoComplete="new-password"
-            placeholder="••••••••"
+            placeholder="At least 6 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -152,7 +151,6 @@ export function RegisterPage() {
             id="confirm"
             type="password"
             autoComplete="new-password"
-            placeholder="••••••••"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />

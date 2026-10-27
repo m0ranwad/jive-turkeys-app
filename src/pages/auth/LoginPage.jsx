@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { LoaderCircle, Lock, LogIn, Mail } from 'lucide-react';
+import { LoaderCircle, Lock, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError, GoogleIcon, OrDivider, safeReturnTo } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
@@ -51,9 +51,8 @@ export function LoginPage() {
 
   return (
     <AuthShell
-      icon={LogIn}
       title="Welcome back"
-      subtitle="Log in to your account"
+      subtitle="Log in to the team site."
       footer={
         <>
           Don't have an account?{' '}
@@ -95,7 +94,6 @@ export function LoginPage() {
             id="password"
             type="password"
             autoComplete="current-password"
-            placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />

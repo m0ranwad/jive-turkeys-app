@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { ArrowLeft, LoaderCircle, Lock, Mail, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Lock, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError } from '@/components/AuthShell';
 import { PageSpinner } from '@/components/PageSpinner';
@@ -28,7 +28,6 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      icon={Mail}
       title="Reset password"
       subtitle="We'll send you a link to reset it"
       footer={
@@ -112,7 +111,6 @@ export function ResetPasswordPage() {
   if (!hasSession) {
     return (
       <AuthShell
-        icon={TriangleAlert}
         title="Invalid reset link"
         subtitle="This password reset link is missing or invalid"
         footer={
@@ -130,7 +128,6 @@ export function ResetPasswordPage() {
 
   return (
     <AuthShell
-      icon={Lock}
       title={isInvite ? 'Welcome to the team' : 'New password'}
       subtitle={isInvite ? 'Choose a password for your account' : 'Enter your new password below'}
     >
@@ -144,7 +141,6 @@ export function ResetPasswordPage() {
             type="password"
             autoComplete="new-password"
             autoFocus
-            placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -156,7 +152,6 @@ export function ResetPasswordPage() {
             id="confirm"
             type="password"
             autoComplete="new-password"
-            placeholder="••••••••"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />
