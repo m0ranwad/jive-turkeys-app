@@ -84,7 +84,7 @@ test("before kickoff a captain answers first, and Call for subs leads when we're
   await expect(buttons.last()).not.toHaveClass(/bg-lime-400/);
 
   // Once it's started, Enter result leads.
-  await page.clock.fastForward('72:00:00');
+  await page.clock.fastForward(72 * 60 * 60 * 1000);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Captain tools' }).getByRole('button').first()).toHaveText('Enter result');
 });
