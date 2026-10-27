@@ -102,7 +102,7 @@ export function RegisterPage() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Next, you'll enter the team code from your invite."
+      subtitle="You'll need the team code from your invite to join."
       footer={
         <>
           Already have an account?{' '}

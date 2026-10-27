@@ -141,6 +141,7 @@ export function ResetPasswordPage() {
             type="password"
             autoComplete="new-password"
             autoFocus
+            placeholder="At least 6 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
