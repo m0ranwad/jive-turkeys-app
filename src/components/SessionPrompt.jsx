@@ -102,7 +102,7 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
   );
 }
 
-/** How the answers for a session are coming in: in (and how many women), subs, sitting out, still to answer. */
+/** How the answers for a session are coming in: playing (and how many women), available to sub, unavailable, still to answer. */
 export function sessionTally(rows, period, players) {
   const list = sessionRows(rows, period).filter((r) => r.status !== 'off');
   const answered = list.filter((r) => r.answered_at);
@@ -154,7 +154,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
         <span className={cn(chip, 'bg-lime-400 text-black')}>{tally.in} in</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.women} women</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>
-          {tally.subs} {tally.subs === 1 ? 'sub' : 'subs'}
+          {tally.subs} available to sub
         </span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.out} unavailable</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.waiting} to answer</span>

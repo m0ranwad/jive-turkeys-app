@@ -14,7 +14,8 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
-| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. Red shortage warnings appear within 48 hours of Eastern kickoff; earlier games show neutral response counts. Device setup offers follow the schedule. | `[browser]` |
+| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
+| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page always shows it in red. | `[unit]` `[browser]` |
 | On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
@@ -104,9 +105,3 @@ the date captains gave.
 | At noon (Eastern) a week before a session starts, anyone asked who hasn't answered gets a reminder: whenever the question is open, whether captains asked ahead or it opened on its own once the schedule was up. A timer (`pg_cron`, every 5 minutes, `session_asks_tick()`) sends it. | `[db]` |
 | If the question opens later than that, the reminder goes at the next chance between noon and 9 PM, at least a day after the "captains asked" one, and never on the first game's day. | `[db]` |
 | Each goes out once per session, only to players on the team who kept **Game alerts** on, never to anyone taken off the team or not yet in with the team code. Nothing once the first game is played. | `[db]` |
-
-## 7. Joining and dues clarity
-
-- New teammates go straight from the team code to choosing their roster name and confirming name and gender. Optional details stay in My Profile; the general guide is available from How to Use. Returning players arrive on their requested page without a tour. `[browser]`
-- Availability uses **Playing / Available to sub / Unavailable** consistently. Playing teammates split dues; Unavailable keeps team access but receives no automatic sub requests and is excluded from copied calls for subs. Existing statuses and session answers are preserved. `[db]` `[unit]` `[browser]`
-- Dues counts only fully settled shares as paid in full. A part payment or a share increase leaves the player in Still to pay with their remaining balance, while the original payment stays recorded. My dues leads with that balance and shows Part paid. Fee breakdown and history open on request. Couples, custom amounts, and past-session payments retain their existing rules. `[unit]` `[browser]`

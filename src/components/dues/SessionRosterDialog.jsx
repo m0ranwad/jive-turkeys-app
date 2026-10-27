@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 
 const CHOICES = [
   { value: 'active', label: 'Playing' },
-  { value: 'on_break', label: 'Unavailable' },
   { value: 'sub_pool', label: 'Available to sub' },
+  { value: 'on_break', label: 'Unavailable' },
   { value: 'off', label: 'Not on the team' },
 ];
 

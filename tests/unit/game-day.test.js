@@ -54,7 +54,7 @@ describe('the headcount', () => {
     expect(names('in')).toEqual(['ann', 'sub']);
     expect(names('maybe')).toEqual(['bea']);
     expect(names('out')).toEqual(['dan']);
-    // Active players who haven't answered are No reply; subs and players on break who haven't are Subs.
+    // Playing teammates who haven't answered are No reply; available subs are Subs; unavailable players have their own group.
     expect(names('none')).toEqual(['cat', 'eli']);
     expect(names('subs')).toEqual([]);
     expect(names('unavailable')).toEqual(['rest']);
