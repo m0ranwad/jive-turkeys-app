@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CaptainsOnly, PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { TeamCodeCard } from '@/components/TeamCodeCard';
 import { Input, Label } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { CARD, DEFAULT_SETTINGS } from '@/lib/constants';
 import { saveTeamSettings } from '@/lib/actions';
 import { saveFailedToast } from '@/lib/errors';
 import { hoursLabel } from '@/lib/potm';
+import { createSettingsAutosave } from '@/lib/settings-autosave';
 import { cn } from '@/lib/utils';
 
 const WINDOW_HOURS = [6, 12, 24, 48];
@@ -47,81 +48,65 @@ const ON_OFF = [
   { v: false, l: 'Off' },
 ];
 
-// Each setting as it's stored.
-const CLEAN = {
-  season_label: (v) => v?.trim() || null,
-  min_players: (v) => Number(v) || 0,
-  min_women: (v) => Number(v) || 0,
-  potm_window_hours: Number,
-  potm_reminder_hours: Number,
-  game_reminder_hours: Number,
-  potm_notify: Boolean,
-  potm_announce: Boolean,
-  game_reminders: Boolean,
-};
-const clean = (patch) => Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, CLEAN[k] ? CLEAN[k](v) : v]));
+// A save can outlive this page. Returning while it is pending (or after a
+// failure) uses the same draft and queue, rather than starting a competing save.
+const drafts = new Map();
 
 /**
  * Captains' team settings. Every change saves as it's made: a choice when it's
- * tapped, a typed field when you leave it (or press Enter), so nothing is lost
- * by leaving the page. A failed save says so and keeps what was entered.
+ * tapped, a typed field after a short pause or when you leave it. Navigation
+ * flushes the draft too, including browser Back, which doesn't blur the field.
  */
 export function SettingsPage() {
   const { user, settings, isCaptain, loading, reload, roster } = useTeam();
   const { toast } = useToast();
-  const [form, setForm] = useState(null);
-  // What's saved, to tell a typed field that changed from one that didn't.
-  const saved = useRef(null);
-  // Saves still on their way, and whether any change was saved this visit.
-  const [saving, setSaving] = useState(0);
-  const [savedAny, setSavedAny] = useState(false);
+  const [editor, setEditor] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
 
   // Filled once: saving reloads the team's settings, which mustn't wipe a field still being typed in.
   useEffect(() => {
-    if (!loading && !saved.current) {
-      saved.current = { ...DEFAULT_SETTINGS, ...(settings || {}) };
-      setForm(saved.current);
+    if (loading || !isCaptain || !user?.id) return;
+    let autosave = drafts.get(user.id);
+    if (!autosave) {
+      autosave = createSettingsAutosave({ ...DEFAULT_SETTINGS, ...(settings || {}) }, {
+        save: saveTeamSettings,
+        onSaved: async () => {
+          toast({ title: 'Team settings saved' });
+          // A failed refresh is retried by the next screen's load; the write
+          // itself has already succeeded.
+          await reload().catch(() => {});
+        },
+        onError: (error) => toast(saveFailedToast(error)),
+      });
+      drafts.set(user.id, autosave);
     }
-  }, [loading, settings]);
+    setEditor(autosave);
+    const unsubscribe = autosave.subscribe(setSnapshot);
+    return () => {
+      unsubscribe();
+      autosave.flush().finally(() => {
+        if (drafts.get(user.id) === autosave && !autosave.hasSubscribers() && !autosave.isDirty()) drafts.delete(user.id);
+      });
+    };
+    // Settings is only the starting value. Reloads mustn't overwrite a draft.
+  }, [loading, isCaptain, user?.id, reload, toast]);
 
-  if (loading || !form) return <PageSpinner />;
+  if (loading) return <PageSpinner />;
   if (!isCaptain) return <CaptainsOnly>Team defaults are managed by the captains.</CaptainsOnly>;
+  if (!editor || !snapshot) return <PageSpinner />;
 
-  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const { form, status } = snapshot;
+  const pick = (patch) => editor.change(patch, true);
 
-  const persist = async (patch) => {
-    const values = clean(patch);
-    setSaving((n) => n + 1);
-    try {
-      await saveTeamSettings(values);
-      saved.current = { ...saved.current, ...values };
-      setSavedAny(true);
-      toast({ title: 'Team settings saved' });
-      await reload();
-    } catch (err) {
-      toast(saveFailedToast(err));
-    } finally {
-      setSaving((n) => n - 1);
-    }
-  };
-
-  // A tapped choice saves right away.
-  const pick = (patch) => {
-    set(patch);
-    persist(patch);
-  };
-
-  // A typed field saves when you leave it, if it changed.
+  // Typing schedules a save; blur/Enter also retries a failed field.
   const field = (label, key, props = {}) => (
     <div className="space-y-2">
       <Label htmlFor={`setting-${key}`}>{label}</Label>
       <Input
         id={`setting-${key}`}
         value={form[key] ?? ''}
-        onChange={(e) => set({ [key]: e.target.value })}
-        onBlur={() => {
-          if (clean({ [key]: form[key] })[key] !== clean({ [key]: saved.current[key] })[key]) persist({ [key]: form[key] });
-        }}
+        onChange={(e) => editor.change({ [key]: e.target.value })}
+        onBlur={() => editor.change({ [key]: form[key] }, true)}
         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         {...props}
       />
@@ -132,7 +117,9 @@ export function SettingsPage() {
     <div className="space-y-5">
       <PageHeader title="Team settings" subtitle="Defaults for every game, the coed minimums, and awards." />
       <p data-testid="settings-status" aria-live="polite" className="-mt-2 text-xs font-semibold text-zinc-500">
-        {saving ? 'Saving…' : savedAny ? 'All changes saved' : 'Changes save as you make them.'}
+        {status === 'saving' ? 'Saving…' : status === 'error' ? 'Some changes haven’t saved. Try again.'
+          : status === 'dirty' ? 'Unsaved changes.' : status === 'saved' ? 'All changes saved' : 'Changes save as you make them.'}
+        {status === 'error' && <button type="button" onClick={() => editor.retry()} className="ml-1 inline-flex min-h-11 items-center px-2 underline underline-offset-2">Retry saving</button>}
       </p>
       <TeamCodeCard meId={user?.id} roster={roster} />
       <section className={cn(CARD, 'space-y-5')}>

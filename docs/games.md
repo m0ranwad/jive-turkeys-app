@@ -51,6 +51,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Voting opens when the result is posted and closes after the team's window (12 hours unless changed). After that, votes can't be cast, changed or taken back, and the buttons go away. | `[db]` `[browser]` |
 | The most votes wins each award; ties share it. | `[unit]` `[db]` |
 | Notifications and the winners post: see section 7 of `docs/chat.md`. | |
+| Team Settings choices save when tapped; typed fields save after a short pause, on blur or Enter, and when leaving Settings (including browser Back). Saves run in order so a slower earlier save can't replace the latest choice. Failed edits stay available when returning to Settings, with an unsaved status and **Retry saving** until they succeed. | `[unit]` `[browser]` |
 
 ## 4. Importing a league schedule
 
