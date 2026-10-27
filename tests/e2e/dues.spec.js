@@ -54,7 +54,7 @@ async function expectRemaining(page, amount) {
 test('Dues has its own tab, where Profile used to be', async ({ page }) => {
   await signIn(page, JORDAN);
   const tabs = page.locator('nav:visible a');
-  await expect(tabs).toHaveText([/Schedule/i, /Stats/i, /Team/i, /Chat/i, /Rules/i, /Dues/i]);
+  await expect(tabs).toHaveText([/Schedule/i, /Stats/i, /Team/i, /Chat/i, /Dues/i]);
   await openDues(page);
   await expect(page.getByTestId('my-dues')).toBeVisible();
 });
