@@ -290,6 +290,29 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await expect(page.getByTestId('my-dues')).toContainText('Refs · 7 games × $20$140');
 });
 
+test('captains save league and referee fees with cents while games stay whole', async ({ page }) => {
+  await signIn(page);
+  await openDues(page);
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Session 2 fee' });
+  await dialog.getByLabel('League fee').fill('595.50');
+  await dialog.getByLabel('Ref fee / game').fill('18.25');
+  await dialog.getByLabel('Games').fill('7.5');
+  await expect(dialog).toContainText('Games is a whole number.');
+  await expect(dialog.getByRole('button', { name: 'Save fee' })).toBeDisabled();
+  await dialog.getByLabel('Games').fill('7');
+  await dialog.getByRole('button', { name: 'Save fee' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('$595.50 league + 7 × $18.25 refs = $723.25. Rounding up adds $8.75.')).toBeVisible();
+
+  // Reload and reopen the form: both decimal amounts were actually saved.
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit fee' }).click();
+  await expect(dialog.getByLabel('League fee')).toHaveValue('595.5');
+  await expect(dialog.getByLabel('Ref fee / game')).toHaveValue('18.25');
+  await expect(dialog.getByLabel('Games')).toHaveValue('7');
+});
+
 test('players keep what they paid when the fee changes, and the difference can be marked paid', async ({ page }) => {
   await signIn(page);
   await openDues(page);
