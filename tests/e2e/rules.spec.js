@@ -2,7 +2,9 @@
 import { CAPTAIN, PLAYER, expect, signIn, test } from './helpers';
 
 async function openRules(page) {
-  await page.locator('a[href="/rules"]:visible').first().click();
+  // Field Rules is in the menu (the tab bar has five tabs).
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('link', { name: 'Field Rules' }).click();
   await expect(page.getByRole('heading', { name: 'Field Rules' })).toBeVisible();
 }
 

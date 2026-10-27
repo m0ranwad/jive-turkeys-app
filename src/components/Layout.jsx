@@ -37,7 +37,6 @@ const TABS = [
   { to: '/stats', label: 'Stats', icon: ChartColumn },
   { to: '/team', label: 'Team', icon: Users },
   { to: CHAT_PATH, label: 'Chat', icon: MessageSquare, bold: true },
-  { to: '/rules', label: 'Rules', icon: BookOpen },
   { to: '/dues', label: 'Dues', icon: DollarSign },
 ];
 
@@ -108,13 +107,11 @@ export function Layout() {
     reload();
   };
 
+  // Only what isn't a tab (the tabs and the profile button are always on screen). Your name at the top opens My Profile.
   const menuItems = [
-    { to: CHAT_PATH, label: 'Team Chat', icon: MessageSquare, show: true },
     { to: '/announcements', label: 'Announcements', icon: Megaphone, show: true },
-    { to: '/dues', label: 'Dues', icon: DollarSign, show: true },
-    { to: '/settings', label: 'Team Settings', icon: SlidersHorizontal, show: isCaptain },
     { to: '/rules', label: 'Field Rules', icon: BookOpen, show: true },
-    { to: '/profile', label: 'My Profile', icon: User, show: true },
+    { to: '/settings', label: 'Team Settings', icon: SlidersHorizontal, show: isCaptain },
   ];
 
   // The side menu is a dialog: Escape closes it, focus stays inside it, and closing it goes back to the Menu button.
@@ -248,7 +245,11 @@ export function Layout() {
             </DialogClose>
           </div>
           {user && (
-            <div className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3.5">
+            <Link
+              to="/profile"
+              onClick={() => setMenuOpen(false)}
+              className="mt-5 flex items-center gap-3 rounded-2xl bg-white/5 p-3.5 transition hover:bg-white/10"
+            >
               <span className="grid h-11 w-11 place-items-center rounded-full bg-lime-400 font-display text-sm font-black text-black">
                 {myInitials}
               </span>
@@ -261,7 +262,8 @@ export function Layout() {
                   {profile?.status ? ` · ${STATUS_LABEL[profile.status]}` : ''}
                 </span>
               </span>
-            </div>
+              <span className="ml-auto text-[11px] font-bold uppercase tracking-[0.12em] text-white/60">My profile</span>
+            </Link>
           )}
           <div className="mt-5 space-y-1">
             {menuItems
@@ -269,17 +271,12 @@ export function Layout() {
               .map((item) => (
                 <Link
                   key={item.to}
-                  // Says Team Chat, so it opens Team Chat (the Chat tab opens the room list on phones).
-                  to={item.to === CHAT_PATH ? `${CHAT_PATH}?room=team` : item.to}
+                  to={item.to}
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold transition hover:bg-white/5"
                 >
                   <item.icon className="h-4 w-4 text-lime-400" />
                   {item.label}
-                  <span className="ml-auto flex gap-1">
-                    <Badge n={unreadFor(item.to)} className="ring-zinc-950" />
-                    <Badge mention n={mentionsFor(item.to)} className="ring-zinc-950" />
-                  </span>
                 </Link>
               ))}
             <button
