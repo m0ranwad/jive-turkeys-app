@@ -38,7 +38,7 @@ export function SessionStepper({ period, note, onStep }) {
 }
 
 /** Paid (pale lime, with the date) or Unpaid (amber). Not a button. `dateOnly` drops the word "Paid". */
-export function StatusChip({ paid, date, dateOnly, className }) {
+export function StatusChip({ paid, partial = false, date, dateOnly, className }) {
   return (
     <span
       className={cn(
@@ -48,7 +48,7 @@ export function StatusChip({ paid, date, dateOnly, className }) {
       )}
     >
       {paid && <Check className="h-3 w-3" strokeWidth={3.5} />}
-      {paid ? (dateOnly && date ? shortDate(date) : `Paid${date ? ` ${shortDate(date)}` : ''}`) : 'Unpaid'}
+      {paid ? (dateOnly && date ? shortDate(date) : `Paid in full${date ? ` ${shortDate(date)}` : ''}`) : partial ? 'Part paid' : 'Unpaid'}
     </span>
   );
 }

@@ -40,7 +40,6 @@ async function switchTo(page, email) {
   await page.locator('#email').fill(email);
   await page.locator('#password').fill('demo1234');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 

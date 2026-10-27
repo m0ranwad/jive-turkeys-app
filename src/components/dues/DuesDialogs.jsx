@@ -519,7 +519,7 @@ export function PlayerSheet({
               : `Not playing · ${notPlayingLabel(out)}`}
             {player.guest && ' · not joined yet'}
           </span>
-          <StatusChip paid={isPaid} date={share ? share.paid_date : out.paid_date} />
+          <StatusChip paid={share ? hasPayment && stillOwed === 0 : isPaid} partial={hasPayment && stillOwed > 0} date={share ? stillOwed === 0 ? share.paid_date : null : out.paid_date} />
         </div>
         {isPaid && (
           <p className="-mt-2 text-xs font-medium text-zinc-500">

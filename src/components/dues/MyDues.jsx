@@ -62,7 +62,7 @@ function myShare(data, period, userId) {
 /** Big dark card: what you owe and how the session total adds up. */
 function ShareCard({ mine }) {
   const { row, team, share, partner, partnerShare, amount, paid, hasPayment, paidDate, paidAmount, changed, short, balance } = mine;
-  const statusPaid = partner ? hasPayment && balance === 0 : paid;
+  const statusPaid = share ? hasPayment && balance === 0 : paid;
   const parts = feeParts(row);
   const refs = parts.ref_fee && parts.game_count ? feeTotal(parts) - parts.league_fee : 0;
   const line = (label, value, strong) => (
@@ -78,16 +78,17 @@ function ShareCard({ mine }) {
           {!share ? 'Not on the roster' : partner ? `You + ${partner.display_name.split(' ')[0]}` : 'Your share'}
         </span>
         {(share || paid) && (
-          <StatusChip paid={statusPaid} date={paidDate} className={statusPaid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'} />
+          <StatusChip paid={statusPaid} partial={hasPayment && balance > 0} date={statusPaid ? paidDate : null} className={statusPaid ? 'bg-lime-400 text-black' : 'bg-amber-300 text-black'} />
         )}
       </div>
       {share ? (
         <>
-          <p className="mt-2 font-display text-6xl font-extrabold leading-none tracking-tight">{dollars(amount)}</p>
+          <p className="mt-2 font-display text-6xl font-extrabold leading-none tracking-tight">{dollars(balance > 0 ? balance : amount)}</p>
+          {balance > 0 && <p className="mt-1 text-sm font-bold text-white">left to pay</p>}
           {hasPayment && changed && (
             <p className="mt-2 text-sm font-semibold text-amber-300" data-testid="share-changed">
               {short
-                ? `You've paid ${dollars(paidAmount)} of your ${dollars(amount)} share${balance > 0 ? `, so there's ${dollars(balance)} more to pay` : ''}.`
+                ? `${dollars(paidAmount)} paid of ${dollars(amount)}.`
                 : `You paid ${dollars(paidAmount)} before your share went down.`}
             </p>
           )}
@@ -108,14 +109,17 @@ function ShareCard({ mine }) {
           {paid && ', and your captains can see that on Team dues.'}
         </p>
       )}
-      <div className="mt-4 space-y-1.5 border-t border-white/10 pt-3 text-sm">
-        {refs > 0 && line('League fee', dollars(parts.league_fee))}
-        {refs > 0 && line(`Refs · ${parts.game_count} games × ${dollars(parts.ref_fee)}`, dollars(refs))}
-        {line('Session total', dollars(feeTotal(parts)), true)}
-        <p className="pt-1 text-xs text-white/50">
-          Split across {team.active.length} active players, rounded up to the next dollar.
-        </p>
-      </div>
+      <details className="mt-4 border-t border-white/10 pt-3 text-sm">
+        <summary className="cursor-pointer font-semibold text-white/80">Fee breakdown</summary>
+        <div className="mt-3 space-y-1.5">
+          {refs > 0 && line('League fee', dollars(parts.league_fee))}
+          {refs > 0 && line(`Refs · ${parts.game_count} games × ${dollars(parts.ref_fee)}`, dollars(refs))}
+          {line('Session total', dollars(feeTotal(parts)), true)}
+          <p className="pt-1 text-xs text-white/50">
+            Split across {team.active.length} active players, rounded up to the next dollar.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }
@@ -127,7 +131,7 @@ function TeamProgress({ team, onShowTeam }) {
     <section className={CARD} data-testid="team-progress">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className={HEADING}>
-          Team · {team.paidCount} of {team.active.length} paid
+          Team · {team.paidCount} of {team.active.length} paid in full
         </h3>
         <span className="text-xs font-semibold text-zinc-500">
           {dollars(team.collected)} in · {dollars(team.stillOwed)} to go
@@ -235,7 +239,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   const partPaymentLink = mine.balance > 0 && (
     <PartPayment max={mine.balance} both={mine.owing.length > 1} busy={busy} onSave={payPart} />
   );
-  const otherAmount = (s) => s.partner && s.balance > 0 ? s.balance : s.paid ? s.paidAmount : s.share ? s.amount : null;
+  const otherAmount = (s) => s.balance > 0 ? s.balance : s.paid ? s.paidAmount : s.share ? s.amount : null;
 
   const otherSessions = others.length > 0 && (
     <section className={CARD}>
@@ -254,7 +258,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
             {otherAmount(s) != null && (
               <span className="text-sm font-bold tabular-nums">{dollars(otherAmount(s))}</span>
             )}
-            <StatusChip paid={s.partner ? s.hasPayment && s.balance === 0 : s.paid} date={s.paidDate} />
+            <StatusChip paid={s.share ? s.hasPayment && s.balance === 0 : s.paid} partial={s.hasPayment && s.balance > 0} date={s.balance === 0 ? s.paidDate : null} />
             <ChevronRight className="h-4 w-4 text-zinc-300" />
           </button>
         ))}
@@ -283,13 +287,6 @@ export function MyDues({ data, period, current, over = false, user, settings, on
     <div className="space-y-4">
       <ShareCard mine={mine} />
 
-      {mine.paid && mine.changed && mine.why.length > 0 && (
-        <section className={CARD} data-testid="why-share-changed">
-          <h3 className={cn(HEADING, 'mb-3')}>Why your share changed</h3>
-          <HistoryList events={mine.why} nameOf={nameOf} meId={user.id} limit={3} />
-        </section>
-      )}
-
       {mine.share && !mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')}>
           <h3 className={HEADING}>Pay</h3>
@@ -314,7 +311,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
               Mark {dollars(mine.balance)} paid
             </Button>
           </div>
-          {partPaymentLink}
+          <div>{partPaymentLink}</div>
           <button
             type="button"
             onClick={() => setConfirming(true)}
@@ -356,10 +353,19 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 
       {/* One entry just repeats the paid card above. */}
-      {mine.history.length > 1 && (
+      {(mine.history.length > 1 || mine.why.length > 0) && (
         <section className={CARD}>
-          <h3 className={cn(HEADING, 'mb-3')}>Your history</h3>
-          <HistoryList events={mine.history} nameOf={nameOf} meId={user.id} limit={3} />
+          <details>
+            <summary className={cn(HEADING, 'cursor-pointer')}>Payment details</summary>
+            {mine.paid && mine.changed && mine.why.length > 0 && <div className="mt-4" data-testid="why-share-changed">
+              <h3 className={cn(HEADING, 'mb-3')}>Why your share changed</h3>
+              <HistoryList events={mine.why} nameOf={nameOf} meId={user.id} limit={3} />
+            </div>}
+            {mine.history.length > 1 && <div className="mt-4">
+              <h3 className={cn(HEADING, 'mb-3')}>Your history</h3>
+              <HistoryList events={mine.history} nameOf={nameOf} meId={user.id} limit={3} />
+            </div>}
+          </details>
         </section>
       )}
 

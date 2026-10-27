@@ -482,7 +482,7 @@ describe('"Playing session N?" asked ahead', () => {
       expect(active).not.toContain('Mike Russo');
       const groups = headcount({ game: { id: 'future' }, rsvps: [], profiles: members }).groups;
       expect(groups.none.map((e) => e.profile.display_name)).toEqual(expect.arrayContaining(['Grace New', 'Priya Shah']));
-      expect(groups.subs.map((e) => e.profile.display_name)).toContain('Sam Okafor');
+      expect(groups.unavailable.map((e) => e.profile.display_name)).toContain('Sam Okafor');
       expect(members.map((p) => p.display_name)).not.toContain('Mike Russo');
       expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break', answered_at: null });
       expect((await rosterOf(api, 3, priya.user_id)).answered_at).not.toBeNull();

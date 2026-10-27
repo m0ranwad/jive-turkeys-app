@@ -42,7 +42,7 @@ test('a session that is over keeps who paid together: Alex and Riley are marked 
   await expect(row(page, 'Alex Chen')).toContainText('with Riley N.');
 
   await previousSession(page);
-  await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
+  await expect(paidHeading(page, '12 of 12 paid in full')).toBeVisible();
   await expect(row(page, 'Alex Chen')).not.toContainText('with Riley N.');
   await row(page, 'Alex Chen').click();
   const sheet = page.getByRole('dialog', { name: 'Alex Chen' });
@@ -55,7 +55,7 @@ test('a session that is over keeps who paid together: Alex and Riley are marked 
   await sheet.getByRole('button', { name: 'Mark not paid' }).click();
   await expect(page.getByText('Alex Chen marked not paid')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(paidHeading(page, '11 of 12 paid')).toBeVisible();
+  await expect(paidHeading(page, '11 of 12 paid in full')).toBeVisible();
   await expect(page.getByTestId('dues-paid')).toContainText('Riley Novak');
 });
 
@@ -67,7 +67,7 @@ test('a link counts from this session on, only offers its players, and asks befo
   await duesOption(sheet, 'Pay together');
   const picker = sheet.getByLabel('Pays together with');
   await expect(sheet).toContainText('From this session on; earlier sessions keep who paid together then.');
-  // Jamie is sitting out session 2.
+  // Jamie is unavailable session 2.
   await expect(picker.locator('option', { hasText: 'Jamie Fox' })).toHaveCount(0);
 
   await picker.selectOption({ label: 'Riley Novak' });

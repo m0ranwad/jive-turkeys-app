@@ -41,8 +41,6 @@ const TABS = [
   { to: '/dues', label: 'Dues', icon: DollarSign },
 ];
 
-const seenKey = (userId) => `jt_seen_walkthrough_${userId}`;
-
 /** The Chat tab's unread number, or (with `mention`) its separate @ count of messages that mention you. */
 function Badge({ n, mention, className }) {
   if (!n) return null;
@@ -58,14 +56,6 @@ function Badge({ n, mention, className }) {
       {n > 99 ? '99+' : n}
     </span>
   );
-}
-
-function hasSeenWalkthrough(userId) {
-  try {
-    return !!localStorage.getItem(seenKey(userId));
-  } catch {
-    return false;
-  }
 }
 
 export function Layout() {
@@ -87,8 +77,8 @@ export function Layout() {
 
   useEffect(() => {
     if (!user) return;
-    if (!profile || !hasSeenWalkthrough(user.id)) setWalkthroughOpen(true);
-  }, [user, profile]);
+    if (!loading && !profile) setWalkthroughOpen(true);
+  }, [user, profile, loading]);
 
   // This device's notifications follow whoever is signed in on it.
   useEffect(() => {
@@ -113,14 +103,7 @@ export function Layout() {
     return () => window.removeEventListener('jt:show-install', open);
   }, []);
 
-  const closeWalkthrough = (markSeen) => {
-    if (user && markSeen !== false) {
-      try {
-        localStorage.setItem(seenKey(user.id), '1');
-      } catch {
-        // Private mode: they'll just see it again next time.
-      }
-    }
+  const closeWalkthrough = () => {
     setWalkthroughOpen(false);
     reload();
   };

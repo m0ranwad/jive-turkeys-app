@@ -150,8 +150,8 @@ test('asking who\'s playing a later session', async ({ page }) => {
   await signIn(page, PLAYER);
   await expect(page.getByTestId('session-ahead')).toBeVisible();
   await expectAccessible(page, 'Schedule, asked ahead');
-  await page.getByTestId('session-ahead').getByRole('button', { name: 'Sitting out' }).click();
-  await expect(page.getByTestId('session-ahead')).toContainText('Session 3: Sitting out');
+  await page.getByTestId('session-ahead').getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByTestId('session-ahead')).toContainText('Session 3: Unavailable');
   await expectAccessible(page, 'Schedule, answered ahead');
 });
 
@@ -204,8 +204,8 @@ test('toggle buttons tell screen readers which one is picked', async ({ page }) 
 
   await visit(page, '/profile', 'Casey Captain');
   const status = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Roster status' }) });
-  await expect(status.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(status.getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(status.getByRole('button', { name: 'Playing' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(status.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('with reduce motion turned on, the menu, dialogs and game cards stay still', async ({ page }) => {

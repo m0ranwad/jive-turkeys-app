@@ -26,7 +26,7 @@ test('captains RSVP for teammates who have not joined, and the headcount counts 
   await expect(chip(page, 'MAYBE', 'Dana Wells')).toBeVisible();
   await expect(group(page, 'IN')).toContainText('IN · 6');
   await expect(group(page, 'No reply')).toContainText('No reply · 3');
-  await expect(group(page, 'Subs')).toContainText('Jamie Fox');
+  await expect(group(page, 'Unavailable')).toContainText('Jamie Fox');
   await expect(group(page, 'No reply')).not.toContainText('Jamie Fox');
 
   // The reminder only nags Active players.
@@ -88,7 +88,6 @@ test('a teammate who has not joined gets a stat line, shows in the stats, and ca
   await page.locator('#email').fill('jordan@demo.test');
   await page.locator('#password').fill('demo1234');
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
   await openNextGame(page);
   await page.getByRole('button', { name: 'Mike Russo', exact: true }).click();
   await expect(page.getByText('Vote counted')).toBeVisible();
@@ -102,7 +101,6 @@ test('when they join and pick their name, their RSVP and stats come with them', 
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Mike Russo' }).click();
   const reloaded = page.waitForEvent('load');
   await page.getByRole('button', { name: 'Start using the app' }).click();

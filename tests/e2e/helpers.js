@@ -17,7 +17,7 @@ export const test = base.extend({
   },
 });
 
-/** Signs in to the demo site (fresh sample data per test) and skips the welcome slides, chat tip and notifications card. */
+/** Signs in to the demo site (fresh sample data per test) and dismisses the chat tip and notifications card. */
 export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = false } = {}) {
   // A fixed midday start, so sample messages from "26 hours ago" are always Yesterday.
   await page.clock.install({ time: new Date('2026-10-08T12:00:00') });
@@ -27,7 +27,6 @@ export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = 
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 

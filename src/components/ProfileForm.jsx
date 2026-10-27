@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POSITIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', busy = false, hidePosition = false }) {
+export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', busy = false, hidePosition = false, requiredOnly = false }) {
   const id = useId();
   const [form, setForm] = useState({
     display_name: initial?.display_name || '',
@@ -73,7 +73,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         <p className="text-xs text-zinc-500">Used only for coed headcount rules.</p>
       </div>
 
-      <div className={cn('grid gap-5', !hidePosition && 'sm:grid-cols-2')}>
+      {!requiredOnly && <div className={cn('grid gap-5', !hidePosition && 'sm:grid-cols-2')}>
         <div className="space-y-2">
           <Label htmlFor={`${id}-phone`}>Phone (optional)</Label>
           <Input
@@ -103,9 +103,9 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
             </Select>
           </div>
         )}
-      </div>
+      </div>}
 
-      <div className="space-y-2 sm:max-w-[50%]">
+      {!requiredOnly && <div className="space-y-2 sm:max-w-[50%]">
         <Label htmlFor={`${id}-year_joined`}>Year joined (optional)</Label>
         <Input
           id={`${id}-year_joined`}
@@ -115,7 +115,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
           onChange={(e) => set({ year_joined: e.target.value })}
           placeholder="2015"
         />
-      </div>
+      </div>}
 
       {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</p>}
 

@@ -14,6 +14,8 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
   await expect(card).toContainText('vs Goal Diggers');
   await expect(card).toContainText('6 in');
   await expect(card).toContainText("You haven't answered");
+  await expect(page.getByRole('link', { name: /vs Goal Diggers/ })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
 
   await card.getByRole('button', { name: 'IN', exact: true }).click();
   await expect(card.getByRole('button', { name: 'IN', exact: true })).toHaveAttribute('aria-pressed', 'true');

@@ -119,7 +119,7 @@ export function ProfilePage() {
         <section className={CARD}>
           <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Roster status</h2>
           <p className="mb-3 mt-1 text-xs font-medium text-zinc-500">
-            Set this anytime{statusCounts}. On Break puts you in the sub pool for call-ups.
+            Set this anytime{statusCounts}. Unavailable gets no sub requests.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((opt) => (

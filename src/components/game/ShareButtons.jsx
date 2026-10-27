@@ -40,7 +40,7 @@ export function CopyReminderButton({ game, headcount, settings }) {
   );
 }
 
-/** Copies a call-up message naming the sub pool (and players on break). */
+/** Copies a call-up message naming only available subs who haven't said IN or OUT. */
 export function CallForSubsButton({ game, settings, profiles, rsvps }) {
   const { toast } = useToast();
 
@@ -48,18 +48,16 @@ export function CallForSubsButton({ game, settings, profiles, rsvps }) {
     const gameRsvps = (rsvps || []).filter((r) => r.game_id === game.id);
     const inIds = new Set(gameRsvps.filter((r) => r.status === 'in').map((r) => r.user_id));
     const available = (profiles || []).filter(
-      (p) => (p.status === 'sub_pool' || p.status === 'on_break') && !inIds.has(p.user_id),
+      (p) => p.status === 'sub_pool' && !gameRsvps.some((r) => r.user_id === p.user_id && ['in', 'out'].includes(r.status)),
     );
     const subPool = available.filter((p) => p.status === 'sub_pool').map((p) => p.display_name);
-    const onBreak = available.filter((p) => p.status === 'on_break').map((p) => p.display_name);
 
     const lines = [
       `🦃 Jive Turkeys — subs needed for ${fmtDateShort(game.date)} · ${fmtTime(game.time)}`,
       `vs ${game.opponent} · Field ${game.field_number || 'TBD'} · Jersey: ${jerseyText(game.jersey, settings)}`,
     ];
-    if (subPool.length) lines.push(`Sub Pool (first call): ${subPool.join(', ')}`);
-    if (onBreak.length) lines.push(`On break (if you can play): ${onBreak.join(', ')}`);
-    if (!subPool.length && !onBreak.length) lines.push('Everyone in the sub pool is already in ✅');
+    if (subPool.length) lines.push(`Available to sub: ${subPool.join(', ')}`);
+    else lines.push('No available subs left to ask.');
 
     const minPlayers = Number(settings?.min_players ?? 8);
     const minWomen = Number(settings?.min_women ?? 3);

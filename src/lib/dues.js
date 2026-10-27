@@ -97,7 +97,7 @@ export function splitDues(total, active, payments) {
     collected: sum(paid, 'paid_amount'),
     // Unpaid shares, plus the difference for anyone whose share went up after they paid.
     stillOwed: fromCents(cents(sum(players.filter((p) => !p.paid))) + cents(sum(paid, 'shortBy'))),
-    paidCount: paid.length,
+    paidCount: paid.filter((p) => p.shortBy === 0).length,
     // Above zero: rounding up collects a little more than the fee. Below: custom amounts leave some uncovered.
     extra: fromCents(cents(sum(players)) - cents(total)),
   };
@@ -150,7 +150,7 @@ export function duesMembers({ profiles, guests = [], payments, history, changes 
   return { members, payments: payments.map(keyed), history: history.map(keyed), changes: changes.map(keyed) };
 }
 
-const NOT_PLAYING = { on_break: 'sitting out', sub_pool: 'sub pool' };
+const NOT_PLAYING = { on_break: 'unavailable', sub_pool: 'available to sub' };
 
 /** Why someone in `notPlaying` isn't on the session's active roster, in a couple of words. */
 export const notPlayingLabel = ({ status, player }) => NOT_PLAYING[status] ?? (player.removed ? 'off the team' : 'not on the roster');
@@ -249,7 +249,7 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
   };
 }
 
-const ROSTER_LABEL = { active: 'playing', on_break: 'sitting out', sub_pool: 'in the sub pool' };
+const ROSTER_LABEL = { active: 'playing', on_break: 'unavailable', sub_pool: 'available to sub' };
 
 /**
  * One line for a change that moves the split (dues_changes): the session fee,
@@ -290,7 +290,6 @@ export function changeLine(change, nameOf, meId) {
     return change.user_id === meId ? `You're ${ROSTER_LABEL[status]}` : `${shortName(nameOf(change.user_id))} is ${ROSTER_LABEL[status]}`;
   }
   const who = name(change.user_id);
-  if (status === 'sub_pool') return `${actor} moved ${who} to the sub pool`;
   return `${actor} marked ${who} as ${ROSTER_LABEL[status]}`;
 }
 

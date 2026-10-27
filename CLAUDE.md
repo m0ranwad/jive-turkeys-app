@@ -213,7 +213,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   (`dues_fill_paid_amounts()`); any still null count the current share. The database's copy of the split,
   `dues_shares()`, must stay the same as `teamDues()` (`supabase/tests/dues_shares.test.sql` and "the database splits
   the same way" in `tests/unit/dues.test.js` use the same numbers). If a share goes up afterwards
-  the player stays paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
+  the payment stays recorded and the player shows Part paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
   session's active roster show under **Paid, not playing** and count in Collected (`notPlaying` in `teamDues()`).
   Anyone can record part of a payment (**Paid part of it?**, up to what's owed; a couple's is split by what each owes,
   `partPayment()` / `splitPayment()`); the rest shows the same way as a share that went up. What moves the split is
@@ -249,7 +249,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   session from Team dues (`SessionRosterDialog.jsx`).
 - Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
   (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts
-  and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough
+  and positions, plus a **Copy invite** message. Joining opens directly on the roster-name choice, then confirms name and gender; optional details stay in My Profile. A new player picks their name
   (`src/components/Walkthrough.jsx`, `claim_team_guest()`), which brings over their status and moves their dues
   payments and history to their account; captains can also link one (`link_team_guest()`); both use
   `move_team_guest()`, which records exactly what it moved and overwrote in `team_guest_links`. Captains see
@@ -367,3 +367,7 @@ a test to get a check green: fix the code, or, if the behavior changed on purpos
   `BACKUP_AGE_RECIPIENT` variable; the private key stays with the owners. Never print, store or ask for it.
 - Update `vendor/xlsx-*.tgz` from the network. It's vendored because cloud sessions can't reach
   cdn.sheetjs.com.
+
+## Simpler player screens
+
+Joining skips introductory slides; returning players arrive directly on their requested page. The general tour remains under How to Use. Availability labels are Playing (`active`), Available to sub (`sub_pool`), and Unavailable (`on_break`). Only available subs receive automatic or named copied sub requests. Unavailable players retain team access and can still give an explicit RSVP. Dues summaries count only fully settled shares, show remaining balances for part payments, and keep history and fee breakdown behind a tap. Schedule shows the next game once and uses red shortage warnings within 48 hours of Eastern kickoff.

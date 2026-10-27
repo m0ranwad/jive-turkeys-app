@@ -50,7 +50,8 @@ describe('the headcount', () => {
 
   it('lists Active players who have not answered as No reply, and subs on their own', () => {
     expect(names('none')).toEqual(['Kim']);
-    expect(names('subs')).toEqual(['Sid', 'Rae']);
+    expect(names('subs')).toEqual(['Sid']);
+    expect(names('unavailable')).toEqual(['Rae']);
   });
 
   it('leaves out roster names taken off the team', () => {

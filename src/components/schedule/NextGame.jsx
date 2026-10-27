@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { AnswerButtons, SuspendedBadge, answerLabel } from '@/components/game/AnswerButtons';
 import { ShortBanner, JerseyDot } from '@/components/schedule/GameCard';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
+import { shortageIsUrgent } from '@/lib/calendar';
 
 /**
  * The next game, at the top of Schedule: when and where, the headcount, and
@@ -28,7 +29,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
           to={`/games/${game.id}`}
           className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-white/20"
         >
-          Details <ChevronRight className="h-3 w-3" />
+          <span className="sr-only">vs {game.opponent}, </span>Details <ChevronRight className="h-3 w-3" />
         </Link>
       </div>
 
@@ -39,7 +40,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
             {headcount.womenFieldIn}/{headcount.minWomen} women
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">{headcount.groups.none.length} no reply</span>
-          <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+          {shortageIsUrgent(game) && <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />}
         </div>
       )}
 

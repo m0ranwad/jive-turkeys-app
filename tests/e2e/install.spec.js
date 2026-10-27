@@ -1,5 +1,5 @@
 // Adding the site to a phone's Home Screen so it opens like an app.
-import { expect, isPhone, signIn, test } from './helpers';
+import { chatTab, expect, isPhone, signIn, test } from './helpers';
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
@@ -54,7 +54,7 @@ test.describe('on a phone', () => {
     await signIn(page);
     await expect(card(page)).toBeVisible();
     await expect(card(page)).toContainText('Get the app');
-    await page.getByRole('link', { name: 'Chat', exact: true }).filter({ visible: true }).click();
+    await chatTab(page).click();
     await expect(card(page)).toHaveCount(0);
     await page.getByRole('link', { name: 'Schedule', exact: true }).filter({ visible: true }).click();
     await card(page).getByRole('button', { name: 'Not now' }).click();

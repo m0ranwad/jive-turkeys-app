@@ -36,21 +36,21 @@ test("a player answers for the next session ahead, and only that session changes
   await expect(ahead(page)).toContainText('Asking ahead');
   await expect(ahead(page)).toContainText('Playing session 3?');
   await expect(ahead(page)).toContainText('3 in so far');
-  await ahead(page).getByRole('button', { name: 'Sitting out' }).click();
-  await expect(page.getByText("Sitting out session 3. You'll still get sub call-ups.")).toBeVisible();
-  await expect(ahead(page)).toContainText('Session 3: Sitting out');
+  await ahead(page).getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText("Unavailable for session 3. No sub requests.")).toBeVisible();
+  await expect(ahead(page)).toContainText('Session 3: Unavailable');
 
   // Jordan is still Active for session 2.
   await openTab(page, '/profile', 'Jordan Rivera');
   await expect(page.getByText('It counts for session 2')).toBeVisible();
-  await expect(rosterStatus(page).getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(rosterStatus(page).getByRole('button', { name: 'Playing' })).toHaveAttribute('aria-pressed', 'true');
 
   // The answer stays, and can be changed.
   await openTab(page, '/', 'Schedule');
   await ahead(page).getByRole('button', { name: 'Change' }).click();
-  await expect(ahead(page).getByRole('button', { name: 'Sitting out' })).toHaveAttribute('aria-pressed', 'true');
-  await ahead(page).getByRole('button', { name: "I'm in" }).click();
-  await expect(ahead(page)).toContainText('Session 3: I\'m in');
+  await expect(ahead(page).getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
+  await ahead(page).getByRole('button', { name: 'Playing' }).click();
+  await expect(ahead(page)).toContainText('Session 3: Playing');
   await expect(ahead(page)).toContainText('4 in so far');
 });
 
@@ -58,7 +58,7 @@ test("captains answer this session's question first, then the next one's", async
   await signIn(page);
   await expect(page.getByTestId('session-prompt')).toContainText('Playing session 2?');
   await expect(ahead(page)).toHaveCount(0);
-  await page.getByTestId('session-prompt').getByRole('button', { name: "I'm in" }).click();
+  await page.getByTestId('session-prompt').getByRole('button', { name: 'Playing' }).click();
   await expect(page.getByTestId('session-prompt')).toHaveCount(0);
   await expect(ahead(page)).toContainText('Playing session 3?');
 });
@@ -103,10 +103,10 @@ test('stopping the question keeps future dues current and preserves explicit ans
   await expect(page.getByText('Stopped asking about session 3')).toBeVisible();
 
   // Casey hasn't answered session 3; Priya explicitly said she's in.
-  await playerCard(page, 'Casey Captain').getByRole('button', { name: 'On Break' }).click();
-  await expect(page.getByText('Casey Captain marked On Break')).toBeVisible();
-  await playerCard(page, 'Priya Shah').getByRole('button', { name: 'On Break' }).click();
-  await expect(page.getByText('Priya Shah marked On Break')).toBeVisible();
+  await playerCard(page, 'Casey Captain').getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText('Casey Captain marked Unavailable')).toBeVisible();
+  await playerCard(page, 'Priya Shah').getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText('Priya Shah marked Unavailable')).toBeVisible();
 
   await openTab(page, '/dues', 'Dues');
   await page.getByRole('tab', { name: 'Team dues' }).click();
@@ -164,7 +164,7 @@ test('opening directly on Dues waits for an older stopped list to refresh', asyn
   // Sam hasn't answered: follow today's status. Priya explicitly said she's in.
   await expect(page.getByTestId('dues-unpaid')).not.toContainText('Sam Okafor');
   await expect(page.getByTestId('dues-unpaid')).toContainText('Priya Shah');
-  await expect(page.getByRole('heading', { name: '0 of 11 paid', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '0 of 11 paid in full', exact: true })).toBeVisible();
   await expect(page.getByLabel('Amount for Priya Shah')).toHaveText('$66');
 });
 
@@ -178,7 +178,7 @@ test('Dues retries a failed roster refresh before showing amounts', async ({ pag
   await page.evaluate(() => localStorage.removeItem('jt_test_roster_start'));
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { name: 'Dues', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '6 of 12 paid', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '4 of 12 paid in full', exact: true })).toBeVisible();
 });
 
 test('players cannot ask, and do not see the captains\' list', async ({ page }) => {
@@ -196,14 +196,14 @@ test('between sessions, the question is at the top of Schedule and status change
   await expect(next).toContainText('Games show here when the schedule is out');
   await expect(next).toContainText('3 in');
   await expect(next).toContainText('10 to answer');
-  await next.getByRole('button', { name: 'Sub only' }).click();
-  await expect(page.getByText("You're in the sub pool for session 3")).toBeVisible();
+  await next.getByRole('button', { name: 'Available to sub' }).click();
+  await expect(page.getByText("You're available to sub for session 3")).toBeVisible();
   await expect(next).toContainText('Your answer');
-  await expect(next.getByRole('button', { name: 'Sub only' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(next.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
 
   await openTab(page, '/profile', 'Casey Captain');
   await expect(page.getByText('It counts for session 3')).toBeVisible();
-  await expect(rosterStatus(page).getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(rosterStatus(page).getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test("between sessions, a captain's answer for someone is their status right now", async ({ page }) => {
@@ -217,8 +217,8 @@ test("between sessions, a captain's answer for someone is their status right now
   await answers.getByLabel('Sam Okafor in session 3').selectOption('on_break');
   await answers.getByRole('button', { name: 'Save 2 changes' }).click();
   await expect(page.getByText('Session 3 updated')).toBeVisible();
-  await expect(playerCard(page, 'Mike Russo').getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(playerCard(page, 'Sam Okafor').getByRole('button', { name: 'On Break' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(playerCard(page, 'Mike Russo').getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(playerCard(page, 'Sam Okafor').getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test("captains' new games go in the session they're asking about, with dates in the season's years", async ({ page }) => {

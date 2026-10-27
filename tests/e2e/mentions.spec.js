@@ -129,7 +129,6 @@ test('@team pings everyone, and only captains can use it', async ({ page }) => {
   await page.getByRole('link', { name: 'My profile' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await page.getByRole('button', { name: 'Sign in as a player' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
   // The captain's two @team messages (this one, and the one in the food thread they haven't opened).
   await expect(mentionBadge(page)).toHaveText('@2');

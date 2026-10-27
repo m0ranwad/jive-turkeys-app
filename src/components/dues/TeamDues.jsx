@@ -25,7 +25,7 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
     <section className="rounded-3xl bg-zinc-950 p-5 text-white">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">
-          {team.paidCount} of {team.active.length} paid
+          {team.paidCount} of {team.active.length} paid in full
         </h2>
         <span className="text-sm font-bold text-lime-400">{dollars(team.perPlayer)} each</span>
       </div>
@@ -99,8 +99,8 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
   const between = past && !isEarlier(period, current);
   // The session a couple linked now counts from: the one being played, else the next one.
   const couplesFrom = !current ? period : over ? stepSession(current, 1) : current;
-  const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid);
-  const paid = team.active.filter((p) => team.shareOf(p.user_id).paid);
+  const unpaid = team.active.filter((p) => !team.shareOf(p.user_id).paid || team.shareOf(p.user_id).shortBy > 0);
+  const paid = team.active.filter((p) => team.shareOf(p.user_id).paid && team.shareOf(p.user_id).shortBy === 0);
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
 
   // A new session's fee starts from the last one saved, so there's usually nothing to type.
@@ -174,12 +174,13 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
     // before it went up), or more than it is now.
     const changed = share.paid && share.paid_amount !== share.amount;
     const shareNote = share.paid_amount < share.amount ? `share is ${dollars(share.amount)}` : `share is now ${dollars(share.amount)}`;
-    const balance = share.paid ? team.balanceOf(p.user_id) : 0;
+    const balance = team.owingTogether(p.user_id).reduce((sum, x) => sum + x.due, 0);
+    const partPaid = share.paid && share.shortBy > 0;
     const details = [
       p.guest && 'not joined yet',
       partner && `with ${shortName(partner.display_name)}`,
       share.custom && 'custom amount',
-      changed && shareNote,
+      partPaid ? `${dollars(share.paid_amount)} paid of ${dollars(share.amount)}` : changed && shareNote,
       share.paid && markedBy(p.user_id),
     ].filter(Boolean);
     return (
@@ -198,9 +199,9 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           </span>
         </button>
         <span className="text-sm font-bold tabular-nums text-zinc-700" aria-label={`Amount for ${p.display_name}`}>
-          {dollars(share.paid ? share.paid_amount : share.amount)}
+          {dollars(partPaid ? share.shortBy : share.paid ? share.paid_amount : share.amount)}{partPaid && <span className="block text-right text-[11px] font-medium text-zinc-500">left</span>}
         </span>
-        {balance > 0 ? (
+        {balance > 0 && (!share.paid || partPaid) && (share.paid || partner && team.shareOf(partner.user_id).paid) ? (
           <button
             type="button"
             onClick={() => markPaid(p)}
@@ -370,7 +371,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         )}
         {paid.length > 0 && (
           <div data-testid="dues-paid" className={cn(unpaid.length > 0 && 'mt-4')}>
-            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid · {paid.length}</h3>
+            <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid in full · {paid.length}</h3>
             <ul className="divide-y divide-zinc-100">{paid.map(playerRow)}</ul>
           </div>
         )}
@@ -415,8 +416,10 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
 
       {events.length > 0 && (
         <section className={CARD}>
-          <h3 className={cn(HEADING, 'mb-3')}>Recent changes</h3>
-          <HistoryList events={events} nameOf={nameOf} meId={user.id} limit={5} />
+          <details>
+            <summary className={cn(HEADING, 'cursor-pointer')}>Recent changes</summary>
+            <div className="mt-3"><HistoryList events={events} nameOf={nameOf} meId={user.id} limit={5} /></div>
+          </details>
         </section>
       )}
 

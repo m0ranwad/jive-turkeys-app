@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
 import { resultOf } from '@/lib/team-logic';
+import { shortageIsUrgent } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
 export function ShortBanner({ needTotal = 0, needWomen = 0, className }) {
@@ -51,6 +52,7 @@ export function JerseyDot({ jersey, className }) {
 
 export function GameCard({ game, headcount, settings }) {
   const final = game.has_result;
+  const urgent = shortageIsUrgent(game);
   const result = final ? resultOf(game) : null;
   const chip = 'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em]';
 
@@ -83,18 +85,18 @@ export function GameCard({ game, headcount, settings }) {
             </div>
             <ResultBadge result={result} className="h-9 w-9 rounded-2xl text-sm" />
           </div>
-        ) : (
+        ) : urgent ? (
           <ShortBanner
             className="hidden shrink-0 sm:inline-flex"
             needTotal={headcount?.needTotal}
             needWomen={headcount?.needWomen}
           />
-        )}
+        ) : null}
       </div>
       {!final && headcount && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {/* On phones the banner sits with the counts so the opponent name has room. */}
-          <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+          {urgent && <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />}
           <span className={cn(chip, 'bg-lime-100 text-lime-800')}>{headcount.totalIn} in</span>
           <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.womenFieldIn} women</span>
           <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.maybe.length} maybe</span>

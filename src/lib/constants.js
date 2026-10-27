@@ -7,7 +7,7 @@ export const SEASON_TURNS_MONTH = 5;
 
 export const POSITIONS = ['Forward', 'Mid-Field', 'Defense', 'Goalie'];
 
-export const STATUS_LABEL = { active: 'Active', on_break: 'On Break', sub_pool: 'Sub Pool' };
+export const STATUS_LABEL = { active: 'Playing', on_break: 'Unavailable', sub_pool: 'Available to sub' };
 
 export const STATUS_CLASS = {
   active: 'bg-lime-400 text-black',
@@ -16,9 +16,9 @@ export const STATUS_CLASS = {
 };
 
 export const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'on_break', label: 'On Break' },
-  { value: 'sub_pool', label: 'Sub Pool' },
+  { value: 'active', label: 'Playing' },
+  { value: 'sub_pool', label: 'Available to sub' },
+  { value: 'on_break', label: 'Unavailable' },
 ];
 
 export const DEFAULT_SETTINGS = {

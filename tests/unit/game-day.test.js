@@ -56,7 +56,8 @@ describe('the headcount', () => {
     expect(names('out')).toEqual(['dan']);
     // Active players who haven't answered are No reply; subs and players on break who haven't are Subs.
     expect(names('none')).toEqual(['cat', 'eli']);
-    expect(names('subs')).toEqual(['rest']);
+    expect(names('subs')).toEqual([]);
+    expect(names('unavailable')).toEqual(['rest']);
   });
 
   it("only counts this game's answers", () => {

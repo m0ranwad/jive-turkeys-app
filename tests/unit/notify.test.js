@@ -258,7 +258,7 @@ describe('"Playing session N?"', () => {
       ...phone(id),
       subscription_id: id,
       title: '📋 Playing session 2?',
-      body: "Session 2 starts Sat, Jan 2 and you haven't answered yet. Tap to say I'm in, Sub only or Sitting out.",
+      body: "Session 2 starts Sat, Jan 2 and you haven't answered yet. Tap to choose Playing, Available to sub or Unavailable.",
       url: '/',
     });
     const { deps, db, delivered } = await setup({ targets: [row('a'), row('b')] });

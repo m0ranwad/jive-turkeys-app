@@ -140,7 +140,7 @@ describe('what paid players paid', () => {
       ['d', 62, null, 0],
     ]);
     // Collected is what was paid; still to collect is the 9 unpaid shares plus the two $1 differences.
-    expect(split).toMatchObject({ owed: 744, collected: 184, stillOwed: 560, paidCount: 3 });
+    expect(split).toMatchObject({ owed: 744, collected: 184, stillOwed: 560, paidCount: 1 });
   });
 
   it('keeps what they paid when the fee goes down, without counting it against anyone else', () => {
@@ -218,10 +218,10 @@ describe('changes that move the split', () => {
 
   it('say who came onto or off the roster, and who did it when it was someone else', () => {
     const roster = (user_id, status, changed_by = user_id) => ({ kind: 'roster', user_id, changed_by, old_value: null, new_value: { status } });
-    expect(line(roster('dana', 'on_break'))).toBe('Dana W. is sitting out');
+    expect(line(roster('dana', 'on_break'))).toBe('Dana W. is unavailable');
     expect(line(roster('sam', 'active'))).toBe("You're playing");
-    expect(line(roster('dana', 'sub_pool', 'kim'))).toBe('Kim C. moved Dana W. to the sub pool');
-    expect(line(roster('sam', 'on_break', 'kim'))).toBe('Kim C. marked you as sitting out');
+    expect(line(roster('dana', 'sub_pool', 'kim'))).toBe('Kim C. marked Dana W. as available to sub');
+    expect(line(roster('sam', 'on_break', 'kim'))).toBe('Kim C. marked you as unavailable');
     expect(line(roster('dana', 'active', 'kim'), 'kim')).toBe('You marked Dana W. as playing');
     expect(line(roster('dana', 'off', 'kim'))).toBe('Kim C. took Dana W. off the roster');
     expect(line(roster('dana', 'active', null))).toBe('Dana W. is playing');
@@ -283,7 +283,7 @@ describe('part payments', () => {
       ['kim', true, 40, 21],
       ['sam', true, 50, 11],
     ]);
-    expect(after).toMatchObject({ paidCount: 2, collected: 90, stillOwed: 32 });
+    expect(after).toMatchObject({ paidCount: 0, collected: 90, stillOwed: 32 });
     expect(after.stillToPay).toEqual([
       { name: 'kim', amount: 21, more: true },
       { name: 'sam', amount: 11, more: true },
@@ -339,7 +339,7 @@ describe('players who paid and are not playing', () => {
       ['Lee', 'off', 45.5, '2026-10-04'],
       ['Pat', 'sub_pool', null, '2026-10-03'],
     ]);
-    expect(team.notPlaying.map(notPlayingLabel)).toEqual(['sitting out', 'off the team', 'sub pool']);
+    expect(team.notPlaying.map(notPlayingLabel)).toEqual(['unavailable', 'off the team', 'available to sub']);
     // Kim's $50, plus Jo's $50 and Lee's $45.50. Pat's amount wasn't recorded.
     expect(team).toMatchObject({ collected: 145.5, notPlayingPaid: 95.5, stillOwed: 50, paidCount: 1 });
     expect(team.notPlayingOf('jo').paid_amount).toBe(50);
