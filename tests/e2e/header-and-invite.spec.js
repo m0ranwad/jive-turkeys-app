@@ -9,6 +9,8 @@ test('captains change the line under "Jive Turkeys" in the header', async ({ pag
   await expect(header).toContainText('Season 12 · Indoor Coed');
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('link', { name: 'Team Settings' }).click();
+  // The menu keeps focus while it slides away, then hands it back to the Menu button. Typing before then loses letters.
+  await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
   await page.getByLabel('Header line (under "Jive Turkeys")').fill('Fall 2026 · Thursday Coed');
   await page.getByRole('button', { name: 'Save team settings' }).click();
   await expect(page.getByText('Team settings saved')).toBeVisible();

@@ -348,8 +348,10 @@ live database when they reach `main`. So:
 | `npm run test:db-rehearsal` | Rehearses migrations not yet on `origin/main` | Same setup as `test:db` |
 
 GitHub runs all of them on every pull request and on `main` (`.github/workflows/tests.yml`).
-`@playwright/test` is pinned to the version matching the Chromium in cloud sessions (`/opt/pw-browsers`);
-don't upgrade it on its own (Dependabot skips it, `.github/dependabot.yml`). Never skip, delete or loosen
+`@playwright/test` is pinned to 1.63.0, the version matching the Chromium in cloud sessions (`/opt/pw-browsers`);
+don't upgrade it on its own (Dependabot skips it, `.github/dependabot.yml`). If cloud sessions get a new Chromium,
+browser tests stop with "Executable doesn't exist"; then the pin moves to the session's own `playwright --version`,
+with a co-owner's OK (issue #124). Never skip, delete or loosen
 a test to get a check green: fix the code, or, if the behavior changed on purpose, update the test and
 `docs/chat.md` together.
 
