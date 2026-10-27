@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Browser tests for the site in demo mode (sample data in the browser, no
 // Supabase). Run with `npm run test:e2e`; they start their own dev server.
 // @playwright/test is pinned to match the Chromium build in Claude's cloud
-// sessions; CI installs the matching browser itself.
+// sessions (1.63.0, Chromium 1243); CI installs the matching browser itself.
 const PORT = 4173;
 
 export default defineConfig({
