@@ -20,6 +20,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
 | A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
+| In the game's headcount, women have green name chips whether or not they've joined. A dashed outline separately means not joined, with both cues explained in the key and in text for screen readers. | `[browser]` |
 | The game is short when IN is under the minimum players or women on the field (8 and 3 unless captains change them). | `[unit]` |
 | Players off the roster (removed, or roster names who joined under their own account) aren't counted. | `[unit]` |
 | A roster name's RSVPs, stat lines and Player of the Match votes move to the account that picks it, and go back to the grey card if a captain unlinks that pick (`supabase/tests/unlink.test.sql`). | `[db]` |
