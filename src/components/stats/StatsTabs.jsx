@@ -12,16 +12,17 @@ function RecordRow({ label, record: r, highlight }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 rounded-2xl px-3.5 py-3',
+        'grid grid-cols-3 items-center gap-2 rounded-2xl px-3.5 py-3 min-[360px]:grid-cols-[1fr_auto_auto_auto] sm:gap-3',
         highlight ? 'bg-zinc-950 text-white' : 'bg-zinc-50',
       )}
     >
-      <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{label}</span>
-      <span className="w-20 text-center text-xs font-bold">
+      {/* Small phones give the label its own line, with the record beneath it. */}
+      <span className="col-span-3 min-w-0 font-display text-sm font-extrabold uppercase leading-tight tracking-tight min-[360px]:col-span-1">{label}</span>
+      <span className="w-14 justify-self-center text-center text-xs font-bold sm:w-20">
         {r.w}-{r.l}-{r.d}
       </span>
-      <span className={cn('w-16 text-center text-xs font-semibold', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.gf} GF</span>
-      <span className={cn('w-16 text-center text-xs font-semibold', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.ga} GA</span>
+      <span className={cn('w-12 justify-self-center text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.gf} GF</span>
+      <span className={cn('w-12 justify-self-center text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.ga} GA</span>
     </div>
   );
 }
@@ -144,9 +145,9 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
       <div className="divide-y divide-zinc-100">
         {rows.map((r) => (
           <div key={r.profile.user_id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 py-2.5">
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', r.profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
-              <span className="truncate text-sm font-semibold">{r.profile.display_name}</span>
+              <span className="min-w-0 break-words text-sm font-semibold leading-tight">{r.profile.display_name}</span>
               {r.profile.guest && (
                 <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500">
                   Not joined

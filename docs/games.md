@@ -40,6 +40,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |
 | The record counts wins, losses, draws and goals from games with a result only, overall, per season and session, and per opponent. | `[unit]` |
 | The leaderboard and career stats add up games played, goals, assists, cards and Player of the Match awards. | `[unit]` |
+| Stats shows the full season/session labels in Standings and full names in the Player leaderboard. On small phones, the standings labels sit above the record numbers so words stay readable. Season and session filters appear under the tabs, except on Legacy, which always covers every season. | `[browser]` |
 
 ## 3. Player of the Match
 
