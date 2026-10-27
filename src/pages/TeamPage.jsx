@@ -40,7 +40,10 @@ function StatusButtons({ current, onPick }) {
   ));
 }
 
-/** A card's name area: for captains, a button that opens that player's options; otherwise just the name. */
+/**
+ * A card's name area: for captains, a button that opens that player's options; otherwise just the name.
+ * It's named by what it shows (the name first), so voice control can tap it by name.
+ */
 function PlayerButton({ openOptions, name, children }) {
   if (!openOptions) return <div className="flex min-w-0 flex-1 items-center gap-3">{children}</div>;
   return (
@@ -48,7 +51,7 @@ function PlayerButton({ openOptions, name, children }) {
       type="button"
       onClick={openOptions}
       aria-haspopup="dialog"
-      aria-label={`${name} options`}
+      data-options-for={name}
       className="-m-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1.5 text-left transition hover:bg-zinc-50"
     >
       {children}
@@ -260,6 +263,7 @@ export function TeamPage() {
             name={p.display_name}
           >
             <span
+              aria-hidden="true"
               className={cn(
                 'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
                 p.guest
@@ -327,7 +331,7 @@ export function TeamPage() {
         </div>
         {joinedAs && (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900">
-            Joined as {joinedAs.display_name}? Tap Edit to move this spot to their account.
+            Joined as {joinedAs.display_name}? Tap this name, then Edit, to move this spot to their account.
           </p>
         )}
         {lookalikes.length > 0 && (
@@ -354,8 +358,8 @@ export function TeamPage() {
         {skipped && (
           <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="no-roster-name">
             <p>
-              Didn't pick a roster name. If they're one of the grey cards, tap Edit on that card to move it to this
-              account.
+              Didn't pick a roster name. If they're one of the grey cards, tap that name, then Edit, to move it to
+              this account.
             </p>
             <button
               onClick={() => answerCheck([{ kind: 'not_on_roster', user_id: p.user_id }], `Got it: ${p.display_name} isn't on the roster`)}
@@ -623,10 +627,9 @@ export function TeamPage() {
                       setOptionsFor(null);
                       setRemoving(optionsPlayer);
                     }}
-                    aria-label={`Remove ${optionsPlayer.display_name}`}
                     className="flex h-11 w-full items-center justify-center rounded-2xl text-xs font-bold uppercase tracking-[0.1em] text-red-700 transition hover:bg-red-50"
                   >
-                    Remove from the team
+                    Remove {optionsPlayer.display_name}
                   </button>
                 </>
               )}

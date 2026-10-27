@@ -163,7 +163,7 @@ export async function duesOption(sheet, name) {
 
 /** Captains: a player's options on the Team page (status, captain, remove or edit), opened by tapping their name. */
 export async function playerOptions(page, name) {
-  await page.getByRole('button', { name: `${name} options`, exact: true }).click();
+  await page.locator(`button[data-options-for="${name}"]`).click();
   const dialog = page.getByRole('dialog', { name, exact: true });
   await expect(dialog).toBeVisible();
   return dialog;

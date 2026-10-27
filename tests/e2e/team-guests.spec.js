@@ -138,7 +138,7 @@ test('a captain sees when someone on the roster probably joined under a fuller n
   await add.getByLabel('Names').fill('Chris D');
   await add.getByTestId('lookalikes').getByLabel("They're different people. Add them too.").check();
   await add.getByRole('button', { name: 'Add to the roster' }).click();
-  await expect(card(page, 'Chris D')).toContainText('Joined as Chris Dunn? Tap Edit to move this spot to their account.');
+  await expect(card(page, 'Chris D')).toContainText('Joined as Chris Dunn? Tap this name, then Edit, to move this spot to their account.');
 
   await (await playerOptions(page, 'Chris D')).getByRole('button', { name: 'Edit Chris D' }).click();
   const edit = page.getByRole('dialog', { name: 'Chris D' });
@@ -294,7 +294,7 @@ test('when someone signs up twice, captains see it and can move the roster spot 
   await page.getByRole('dialog', { name: 'Unlink Kelly M?' }).getByRole('button', { name: 'Unlink', exact: true }).click();
   await expect(page.getByText('Kelly M is a grey card again')).toBeVisible();
   // The new account is the one suggested now.
-  await expect(card(page, 'Kelly M')).toContainText('Joined as Kelly M.? Tap Edit to move this spot to their account.');
+  await expect(card(page, 'Kelly M')).toContainText('Joined as Kelly M.? Tap this name, then Edit, to move this spot to their account.');
   await (await playerOptions(page, 'Kelly M')).getByRole('button', { name: 'Edit Kelly M' }).click();
   const edit = page.getByRole('dialog', { name: 'Kelly M' });
   await expect(edit.getByLabel('Joined without picking their name?').locator('option:checked')).toHaveText('Kelly M.');
