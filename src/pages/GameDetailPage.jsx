@@ -8,7 +8,7 @@ import { ResultCard } from '@/components/game/ResultCard';
 import { ResultDialog } from '@/components/game/ResultDialog';
 import { RsvpCard } from '@/components/game/RsvpCard';
 import { RsvpForDialog } from '@/components/game/RsvpForDialog';
-import { CallForSubsButton, CopyReminderButton } from '@/components/game/ShareButtons';
+import { CallForSubsButton, RemindTeamButton } from '@/components/game/ShareButtons';
 import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
@@ -221,7 +221,7 @@ export function GameDetailPage() {
               <Target className="h-3.5 w-3.5" />
               {game.has_result ? 'Edit result' : 'Enter result'}
             </button>
-            {!game.has_result && counts && <CopyReminderButton game={game} headcount={counts} settings={data.settings} />}
+            {!game.has_result && counts && <RemindTeamButton game={game} headcount={counts} settings={data.settings} />}
             {!game.has_result && (
               <CallForSubsButton game={game} settings={data.settings} profiles={sessionProfiles} rsvps={data.rsvps} />
             )}

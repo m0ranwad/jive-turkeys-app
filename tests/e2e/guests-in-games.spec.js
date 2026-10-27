@@ -29,8 +29,9 @@ test('captains RSVP for teammates who have not joined, and the headcount counts 
   await expect(group(page, 'Unavailable')).toContainText('Jamie Fox');
   await expect(group(page, 'No reply')).not.toContainText('Jamie Fox');
 
-  // The reminder only nags Active players.
-  await page.getByRole('button', { name: 'Copy reminder' }).click();
+  // The reminder only nags Playing teammates.
+  await page.getByRole('button', { name: 'Remind team' }).click();
+  await page.getByRole('dialog', { name: 'Remind the team' }).getByRole('button', { name: 'Copy instead' }).click();
   const reminder = await page.evaluate(() => navigator.clipboard.readText());
   expect(reminder).toContain('Still to RSVP: Casey Captain, Chris Dunn, Kelly Moss');
 
