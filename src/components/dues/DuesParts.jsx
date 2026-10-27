@@ -37,18 +37,28 @@ export function SessionStepper({ period, note, onStep }) {
   );
 }
 
-/** Paid (pale lime, with the date) or Unpaid (amber). Not a button. `dateOnly` drops the word "Paid". */
-export function StatusChip({ paid, date, dateOnly, className }) {
+/**
+ * Paid in full (pale lime, with the date); or amber: Paid · owes $X (paid it all,
+ * then the share went up by `owes`), Part paid, or Unpaid. Not a button.
+ * `dateOnly` drops the words "Paid in full".
+ */
+export function StatusChip({ paid, partial = false, owes = 0, date, dateOnly, className }) {
+  const label =
+    owes > 0
+      ? `Paid · owes ${dollars(owes)}`
+      : paid
+        ? dateOnly && date ? shortDate(date) : `Paid in full${date ? ` ${shortDate(date)}` : ''}`
+        : partial ? 'Part paid' : 'Unpaid';
   return (
     <span
       className={cn(
         'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]',
-        paid ? 'bg-lime-100 text-lime-900' : 'bg-amber-100 text-amber-900',
+        paid && !owes ? 'bg-lime-100 text-lime-900' : 'bg-amber-100 text-amber-900',
         className,
       )}
     >
-      {paid && <Check className="h-3 w-3" strokeWidth={3.5} />}
-      {paid ? (dateOnly && date ? shortDate(date) : `Paid${date ? ` ${shortDate(date)}` : ''}`) : 'Unpaid'}
+      {paid && !owes && <Check className="h-3 w-3" strokeWidth={3.5} />}
+      {label}
     </span>
   );
 }

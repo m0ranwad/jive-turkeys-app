@@ -8,15 +8,15 @@ import { cn } from '@/lib/utils';
 
 const STEPS = [
   { eyebrow: 'Welcome', title: 'Everything in one place', body: 'Schedule, RSVPs, and stats in one place. Team Chat keeps the banter going.' },
-  { eyebrow: 'Step 1', title: 'Set up your profile', body: 'Name and gender, plus optional phone and the year you joined.' },
+  { eyebrow: 'Step 1', title: 'Keep your status current', body: 'Playing, Available to sub or Unavailable, on My Profile. Captains plan subs around it.' },
   { eyebrow: 'Step 2', title: 'RSVP every game', body: 'Tap IN, OUT, or MAYBE. Captains count on this to know if we need subs.' },
   { eyebrow: 'Step 3', title: 'After games', body: 'Check scores, stats, Player of the Match, and our record against every team.' },
   { eyebrow: 'Step 4', title: 'New to the complex?', body: 'Check the Field Rules tab. Indoor rules are different.' },
 ];
 
 /**
- * "How to use" slides. A new player can't skip the last step: it creates their
- * profile, which is what puts them on the team.
+ * New players go straight to their roster name and required details.
+ * The introductory slides remain available on request under How to Use.
  */
 export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [step, setStep] = useState(0);
@@ -36,7 +36,9 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
   const [retry, setRetry] = useState(null);
 
   useEffect(() => {
-    if (!open || !needsProfile) return;
+    if (!open) return;
+    setStep(0);
+    if (!needsProfile) return;
     api.entities.TeamGuest.list('display_name')
       .then((rows) => setNames(rows.filter((g) => !g.removed && !g.linked_user_id)))
       .catch(() => setNames([]));
@@ -47,8 +49,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
 
   if (!open) return null;
 
-  const total = STEPS.length + (needsProfile ? 1 : 0);
-  const onProfileStep = needsProfile && step === STEPS.length;
+  const total = STEPS.length;
+  const onProfileStep = needsProfile;
   const isLast = step === total - 1;
 
   const createProfile = async (values, chosen) => {
@@ -129,7 +131,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
           </span>
           {!onProfileStep && (
             <button
-              onClick={() => (needsProfile ? setStep(STEPS.length) : onClose())}
+              onClick={() => onClose()}
               className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-900"
             >
               Skip
@@ -146,8 +148,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
               <div>
                 <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                 <p className="mt-1.5 text-sm text-zinc-500">
-                  Find your name. Your captain already put you on the roster, so your spot and your dues are waiting
-                  for you.
+                  Find your name. Your roster spot and payments will come with you.
                 </p>
                 <div className="mt-4 grid gap-2">
                   {names.map((g) => (
@@ -181,16 +182,15 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                 <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                 {pick ? (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details: your roster
-                    spot and dues come with you.{' '}
+                    You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Confirm your details.{' '}
                     <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
                       Not you?
                     </button>
                   </p>
                 ) : (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Set up your profile to get on the roster and into game headcounts. Name and gender are required.
-                    Everything else is optional, and you can pick your position later on the Team tab.
+                    Name and gender are for coed headcounts. A phone number is optional; it lets captains tap to call
+                    you. Everything else is in My Profile.
                     {names.length > 0 && (
                       <>
                         {' '}
@@ -273,6 +273,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       submitLabel="Start using the app"
                       busy={busy}
                       hidePosition
+                      hideYearJoined
                     />
                   </div>
                 )}

@@ -8,9 +8,9 @@ import { entryFor } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 
 const CHOICES = [
-  { value: 'active', label: 'Active' },
-  { value: 'on_break', label: 'On Break' },
-  { value: 'sub_pool', label: 'Sub Pool' },
+  { value: 'active', label: 'Playing' },
+  { value: 'sub_pool', label: 'Available to sub' },
+  { value: 'on_break', label: 'Unavailable' },
   { value: 'off', label: 'Not on the team' },
 ];
 

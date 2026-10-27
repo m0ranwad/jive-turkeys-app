@@ -14,10 +14,11 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
-| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. Each later upcoming game can be answered under its card in the list. | `[browser]` |
+| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
+| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page always shows it in red. | `[unit]` `[browser]` |
 | On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
-| Active players who haven't answered are **No reply**; Sub Pool and On Break players who haven't are **Subs**, so reminders don't nag them. | `[unit]` |
+| Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
 | A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
 | The game is short when IN is under the minimum players or women on the field (8 and 3 unless captains change them). | `[unit]` |
 | Players off the roster (removed, or roster names who joined under their own account) aren't counted. | `[unit]` |
@@ -65,8 +66,8 @@ the words and picks who gets each one (`game_reminder_targets`).
 
 | Rule | Checked by |
 |---|---|
-| A set time before kickoff (6 hours unless captains change it in Team Settings, or turn reminders off), Active players who haven't answered get "Are you in?" with the day, time, opponent and field. Tapping it opens the game. | `[db]` `[unit]` |
-| When we're short then, Sub Pool and On Break players who haven't said OUT get "We need subs" with how many (and how many women). If only women are short, only women are asked. If someone drops out later, up to kickoff, it goes out then. | `[db]` |
+| A set time before kickoff (6 hours unless captains change it in Team Settings, or turn reminders off), Playing teammates who haven't answered get "Are you in?" with the day, time, opponent and field. Tapping it opens the game. | `[db]` `[unit]` |
+| When we're short then, only teammates **Available to sub** who haven't said IN or OUT get "We need subs" with how many (and how many women). If only women are short, only women are asked. If someone drops out later, up to kickoff, it goes out then. | `[db]` |
 | The headcount behind it is the site's: a woman in goal doesn't count toward the women, roster names count, and captains' minimums apply. | `[db]` |
 | Each goes out once per game; none after kickoff or once there's a result; never to players who turned **Game alerts** off. | `[db]` |
 | Kickoff times are read the way captains type them ("19:00", "7:00 PM", "7pm"), in Eastern time; a game with no time gets no reminder. | `[db]` |
@@ -89,7 +90,7 @@ the schedule or while this session still has games left.
 | A player taken off the team is off the session asked about even if they'd answered. Added back, they're on it again, following their status, and asked again. | `[db]` `[unit]` |
 | Opening the site refreshes any future list saved before stopped questions kept following today's roster. Dues waits for that refresh before reading the lists, including when opened directly; if the refresh fails, dues asks the player to retry instead of showing an old split. It keeps explicit answers and past-session lists, doesn't apply future answers to today's statuses, and doesn't reopen the question. Asking again keeps those answers too. | `[db]` `[unit]` `[browser]` |
 | An answer given for a roster name ahead (by a captain) goes with the name: the new player who picks it has that answer, not a fresh "still to answer". Undoing the pick gives the name its answer back and puts the account back on the list, still to answer. | `[db]` `[unit]` |
-| Between sessions, the question is the **Next up** card at the top of Schedule, with the answers so far (in, women, subs, sitting out, still to answer). Status changes made then (My Profile, Team page) count for that session, not the one that just ended. | `[db]` `[browser]` |
+| Between sessions, the question is the **Next up** card at the top of Schedule, with the answers so far (playing, women, available subs, unavailable, still to answer). Status changes made then (My Profile, Team page) count for that session, not the one that just ended. | `[db]` `[browser]` |
 | When an asked session becomes the current one, the answers given ahead become everyone's status right now, once, without being recorded again as dues changes. Its list is checked first (statuses of anyone still to answer, new players, anyone removed). Both happen even if captains stopped asking before its schedule went up. | `[db]` `[unit]` |
 | Captains see how many have answered and who hasn't on the Team page, and can answer for anyone, roster names included. Players don't see that list. Between sessions that session is the current one, so a captain's answer is that player's status right now, as when tapping a status on the Team page. | `[browser]` |
 | Answers stop once the session's first game is played. | `[db]` |

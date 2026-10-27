@@ -97,6 +97,7 @@ export function splitDues(total, active, payments) {
     collected: sum(paid, 'paid_amount'),
     // Unpaid shares, plus the difference for anyone whose share went up after they paid.
     stillOwed: fromCents(cents(sum(players.filter((p) => !p.paid))) + cents(sum(paid, 'shortBy'))),
+    // Everyone marked paid. teamDues() leaves out anyone who paid only part of their share.
     paidCount: paid.length,
     // Above zero: rounding up collects a little more than the fee. Below: custom amounts leave some uncovered.
     extra: fromCents(cents(sum(players)) - cents(total)),
@@ -150,10 +151,46 @@ export function duesMembers({ profiles, guests = [], payments, history, changes 
   return { members, payments: payments.map(keyed), history: history.map(keyed), changes: changes.map(keyed) };
 }
 
-const NOT_PLAYING = { on_break: 'sitting out', sub_pool: 'sub pool' };
+const NOT_PLAYING = { on_break: 'unavailable', sub_pool: 'available to sub' };
 
 /** Why someone in `notPlaying` isn't on the session's active roster, in a couple of words. */
 export const notPlayingLabel = ({ status, player }) => NOT_PLAYING[status] ?? (player.removed ? 'off the team' : 'not on the roster');
+
+/** "1 owes a top-up": paid players whose share went up after they paid it all. */
+export const topUps = (n) => `${n} ${n === 1 ? 'owes' : 'owe'} a top-up`;
+
+/** When a player last marked (some of) their dues paid, from dues_history, or undefined. */
+const lastPaidAt = (history, userId) =>
+  history.filter((e) => e.user_id === userId && e.paid).map((e) => e.created_date).sort().at(-1);
+
+/**
+ * A player's share when they last marked paid, worked out by undoing, newest
+ * first, the changes that moved the split since (dues_changes): the session
+ * fee, custom amounts, and who was on the active roster. Null when it can't be
+ * told: the fee was first set after they paid, or they weren't playing then.
+ */
+export function shareWhenPaid({ total, activeIds, payments, changes, paidAt, userId }) {
+  let fee = total;
+  const active = new Set(activeIds);
+  const override = new Map(payments.map((p) => [p.user_id, p.override_amount ?? null]));
+  const since = changes.filter((c) => c.created_date > paidAt).sort((a, b) => (a.created_date < b.created_date ? 1 : -1));
+  for (const change of since) {
+    if (change.kind === 'fee') {
+      if (!change.old_value) return null;
+      fee = num(change.old_value.total_fee);
+    } else if (change.kind === 'custom_amount') {
+      override.set(change.user_id, change.old_value?.amount ?? null);
+    } else if (change.old_value?.status === 'active') {
+      active.add(change.user_id);
+    } else {
+      active.delete(change.user_id);
+    }
+  }
+  if (!active.has(userId)) return null;
+  const ids = [...active];
+  const split = splitDues(fee, ids, ids.map((id) => ({ user_id: id, override_amount: override.get(id) ?? null })));
+  return split.players.find((p) => p.user_id === userId).amount;
+}
 
 /**
  * One session's dues for the whole team: the split, active players in list
@@ -162,8 +199,11 @@ export const notPlayingLabel = ({ status, player }) => NOT_PLAYING[status] ?? (p
  * rows. `everyone` is every player and roster name (the session's roster by
  * default), to find who paid and isn't on the active roster (`notPlaying`):
  * they don't owe anything, and what they paid counts in `collected`.
+ * `history` and `changes` (that session's dues_history and dues_changes) tell
+ * someone who paid part of their share from someone whose share went up after
+ * they paid it all (`stateOf()`).
  */
-export function teamDues(total, profiles, payments, everyone = profiles) {
+export function teamDues(total, profiles, payments, everyone = profiles, { history = [], changes = [] } = {}) {
   const name = (p) => p.display_name || '';
   const active = profiles.filter((p) => p.status === 'active');
   const byUser = new Map(active.map((p) => [p.user_id, p]));
@@ -196,6 +236,22 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
   const owingTogether = (userId) =>
     [userId, partnerOf(userId)?.user_id].filter(Boolean).map((id) => ({ user_id: id, due: shareOf(id) ? due(id) : 0 }));
 
+  // 'paid', 'unpaid', or for someone paid who still owes: 'topUp' (they paid their
+  // whole share and it went up since) or 'part' (they paid less than it was then).
+  // When their share then can't be told, it counts as a top-up.
+  const activeIds = ordered.map((p) => p.user_id);
+  const states = new Map(
+    split.players.map((s) => {
+      if (!s.paid) return [s.user_id, 'unpaid'];
+      if (s.shortBy === 0) return [s.user_id, 'paid'];
+      const paidAt = lastPaidAt(history, s.user_id);
+      const then = paidAt ? shareWhenPaid({ total, activeIds, payments, changes, paidAt, userId: s.user_id }) : null;
+      return [s.user_id, then == null || cents(s.paid_amount) >= cents(then) ? 'topUp' : 'part'];
+    }),
+  );
+  const stateOf = (userId) => states.get(userId) ?? null;
+  const count = (state) => [...states.values()].filter((s) => s === state).length;
+
   // Who still owes, with a couple who both still owe as one line and one amount.
   const stillToPay = [];
   const listed = new Set();
@@ -213,7 +269,7 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
     });
   }
 
-  // Paid for the session, but not on its active roster (sitting out, sub pool, taken off the team).
+  // Paid for the session, but not on its active roster (unavailable, available to sub, taken off the team).
   const session = new Map(profiles.map((p) => [p.user_id, p]));
   const people = new Map(everyone.map((p) => [p.user_id, p]));
   const notPlaying = payments
@@ -237,8 +293,12 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
   return {
     ...split,
     collected: fromCents(cents(split.collected) + cents(notPlayingPaid)),
+    // Paid, counting anyone who owes only a top-up; not anyone who paid part of it.
+    paidCount: count('paid') + count('topUp'),
+    topUpCount: count('topUp'),
     active: ordered,
     shareOf,
+    stateOf,
     partnerOf,
     balanceOf,
     owingTogether,
@@ -249,7 +309,7 @@ export function teamDues(total, profiles, payments, everyone = profiles) {
   };
 }
 
-const ROSTER_LABEL = { active: 'playing', on_break: 'sitting out', sub_pool: 'in the sub pool' };
+const ROSTER_LABEL = { active: 'playing', on_break: 'unavailable', sub_pool: 'available to sub' };
 
 /**
  * One line for a change that moves the split (dues_changes): the session fee,
@@ -290,7 +350,6 @@ export function changeLine(change, nameOf, meId) {
     return change.user_id === meId ? `You're ${ROSTER_LABEL[status]}` : `${shortName(nameOf(change.user_id))} is ${ROSTER_LABEL[status]}`;
   }
   const who = name(change.user_id);
-  if (status === 'sub_pool') return `${actor} moved ${who} to the sub pool`;
   return `${actor} marked ${who} as ${ROSTER_LABEL[status]}`;
 }
 
@@ -305,7 +364,7 @@ export const duesEvents = (history, changes = []) =>
  * custom amount.
  */
 export function shareChanges(changes, history, userId, custom) {
-  const paidAt = history.filter((e) => e.user_id === userId && e.paid).map((e) => e.created_date).sort().at(-1);
+  const paidAt = lastPaidAt(history, userId);
   if (!paidAt) return [];
   return changes
     .filter((c) => c.created_date > paidAt)

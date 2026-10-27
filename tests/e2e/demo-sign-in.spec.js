@@ -5,7 +5,6 @@ import { expect, test } from './helpers';
 const profileButton = (page) => page.getByRole('link', { name: 'My profile' });
 
 async function skipWelcome(page) {
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 
@@ -33,7 +32,6 @@ test('the demo opens signed in as the captain; signing out sticks, and one tap s
 
 test('a link to a page opens that page, signed in', async ({ page }) => {
   await page.goto('/rules');
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page).toHaveURL(/\/rules$/);
   await expect(profileButton(page)).toHaveText('CC');
 });

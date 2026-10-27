@@ -2,7 +2,7 @@
 // accessibility basics (WCAG 2.1 A and AA): text contrast, names on buttons and
 // fields, and so on. A new screen or dialog should get a line here.
 import AxeBuilder from '@axe-core/playwright';
-import { duesOption, expect, PLAYER, signIn, test } from './helpers';
+import { duesOption, expect, openSection, PLAYER, signIn, test } from './helpers';
 
 async function expectAccessible(page, screen) {
   // Check what's on screen once it has settled (not halfway through fading in).
@@ -144,14 +144,33 @@ test("a player's screens", async ({ page }) => {
   await expectAccessible(page, 'My dues');
 });
 
+test('a new player sees where the field rules are, and a share that went up after paying', async ({ page }) => {
+  // Kelly joined five days ago.
+  await signIn(page, 'kelly@demo.test');
+  await expect(page.getByTestId('new-player-tip')).toBeVisible();
+  await expectAccessible(page, 'Schedule, new player tip');
+
+  // Sam paid his whole share, and it went up after.
+  await page.getByRole('link', { name: 'My profile' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.locator('#email').fill('sam@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await visit(page, '/dues', 'Dues');
+  await expect(page.getByTestId('share-why')).toBeVisible();
+  await expectAccessible(page, 'My dues, share went up');
+  await openSection(page, 'Payment details');
+  await expectAccessible(page, 'My dues, payment details');
+});
+
 test('asking who\'s playing a later session', async ({ page }) => {
   test.setTimeout(60_000);
   // A player: the question asked ahead, under the next game.
   await signIn(page, PLAYER);
   await expect(page.getByTestId('session-ahead')).toBeVisible();
   await expectAccessible(page, 'Schedule, asked ahead');
-  await page.getByTestId('session-ahead').getByRole('button', { name: 'Sitting out' }).click();
-  await expect(page.getByTestId('session-ahead')).toContainText('Session 3: Sitting out');
+  await page.getByTestId('session-ahead').getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByTestId('session-ahead')).toContainText('Session 3: Unavailable');
   await expectAccessible(page, 'Schedule, answered ahead');
 });
 
@@ -204,8 +223,8 @@ test('toggle buttons tell screen readers which one is picked', async ({ page }) 
 
   await visit(page, '/profile', 'Casey Captain');
   const status = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Roster status' }) });
-  await expect(status.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(status.getByRole('button', { name: 'Sub Pool' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(status.getByRole('button', { name: 'Playing' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(status.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('with reduce motion turned on, the menu, dialogs and game cards stay still', async ({ page }) => {

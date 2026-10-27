@@ -1632,7 +1632,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     async answer({ year, session, status }) {
       requireUser();
       failIfOffline();
-      if (!['active', 'sub_pool', 'on_break'].includes(status)) throw new Error("Pick I'm in, Sub only or Sitting out");
+      if (!['active', 'sub_pool', 'on_break'].includes(status)) throw new Error("Pick Playing, Available to sub or Unavailable");
       const me = currentUser();
       const profile = db.player_profiles.find((p) => p.user_id === me.id && !p.removed);
       if (!profile) throw new Error('Make your profile first');

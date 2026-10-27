@@ -17,7 +17,7 @@ export const test = base.extend({
   },
 });
 
-/** Signs in to the demo site (fresh sample data per test) and skips the welcome slides, chat tip and notifications card. */
+/** Signs in to the demo site (fresh sample data per test) and dismisses the chat tip and notifications card. */
 export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = false } = {}) {
   // A fixed midday start, so sample messages from "26 hours ago" are always Yesterday.
   await page.clock.install({ time: new Date('2026-10-08T12:00:00') });
@@ -27,7 +27,6 @@ export async function signIn(page, email = CAPTAIN, { tip = false, pushPrompt = 
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 
@@ -143,6 +142,13 @@ export async function tapMessage(page, text) {
 }
 
 /** A new account's first step: the team code (TURKEY in the sample data). */
+/** Opens a section that starts closed (Payment details, Recent changes), unless it's open already. */
+export async function openSection(page, name) {
+  const section = page.locator('details', { has: page.locator('summary', { hasText: name }) });
+  if (!(await section.evaluate((d) => d.open))) await section.locator('summary').click();
+  return section;
+}
+
 export async function enterTeamCode(page, code = 'TURKEY') {
   await expect(page.getByRole('heading', { name: 'Enter the team code' })).toBeVisible();
   await page.getByLabel('Team code').fill(code);

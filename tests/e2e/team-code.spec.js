@@ -33,7 +33,6 @@ test('a new account enters the team code before it sees anything', async ({ page
   await expect(page.getByText("That code isn't right. Check the invite from your captain.")).toBeVisible();
 
   await enterTeamCode(page, ' turkey ');
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
@@ -82,7 +81,7 @@ test('captains see the code, change it, and invites with the old one stop workin
   await page.getByRole('button', { name: 'Join the team' }).click();
   await expect(page.getByText("That code isn't right.")).toBeVisible();
   await enterTeamCode(page, code);
-  await expect(page.getByRole('button', { name: 'Skip' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Join the team' })).toBeVisible();
 });
 
 test('players do not see the team code settings', async ({ page }) => {
@@ -95,7 +94,6 @@ test('someone who already has an account is asked before making a second one', a
   // Jordan forgot she signed up with Google and makes an email account.
   await createAccount(page, 'jordan.rivera@demo.test');
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan Rivera');
   await page.getByRole('button', { name: 'Female' }).click();
@@ -108,7 +106,6 @@ test('someone who already has an account is asked before making a second one', a
   // A different Jordan says so and carries on.
   await createAccount(page, 'jordan.r@demo.test');
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan R');
   await page.getByRole('button', { name: 'Male', exact: true }).click();

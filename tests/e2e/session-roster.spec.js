@@ -3,10 +3,10 @@
 // were. Captains can correct a past session. The database enforces who can
 // change what (supabase/tests/roster.test.sql).
 //
-// Sample data: session 1 is over (Jamie played it and is sitting out session 2;
+// Sample data: session 1 is over (Jamie played it and is unavailable session 2;
 // Chris joined in session 2). Session 2 starts Saturday, and only some players
 // have answered: not the captain, Sam, Morgan, Riley, Kelly or Mike yet.
-import { expect, signIn, test } from './helpers';
+import { expect, openSection, signIn, test } from './helpers';
 
 const SAM = 'sam@demo.test';
 const JORDAN = 'jordan@demo.test'; // already answered for session 2
@@ -38,7 +38,7 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await signIn(page);
   await expect(prompt(page)).toContainText('Session 2 starts Sat, Oct 10');
   await expect(prompt(page)).toContainText('Playing session 2?');
-  await expect(prompt(page)).toContainText("You're down as Active for now.");
+  await expect(prompt(page)).toContainText("Currently Playing.");
 
   // Captains see who hasn't answered.
   await openTab(page, '/team', 'Team');
@@ -47,25 +47,25 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await expect(answers).toContainText('Still to answer: Casey Captain, Sam Okafor, Morgan Lee, Riley Novak, Kelly Moss, Mike Russo.');
 
   await openTab(page, '/', 'Schedule');
-  await prompt(page).getByRole('button', { name: 'Sitting out' }).click();
-  await expect(page.getByText("Sitting out session 2. You'll still get sub call-ups.")).toBeVisible();
+  await prompt(page).getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText("Unavailable for session 2. No sub requests.")).toBeVisible();
   await expect(prompt(page)).toHaveCount(0);
 
   await openTab(page, '/team', 'Team');
   await expect(answers).toContainText('9 of 14 answered');
   await expect(answers).not.toContainText('Casey Captain');
   // A captain answers for Mike, who hasn't joined the site, by confirming his status.
-  await page.getByRole('button', { name: 'Edit Mike Russo' }).locator('..').getByRole('button', { name: 'Active', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Mike Russo' }).locator('..').getByRole('button', { name: 'Playing', exact: true }).click();
   await expect(answers).toContainText('10 of 14 answered');
   await expect(answers).not.toContainText('Mike Russo');
 
   // Session 2 splits without the captain; session 1 is exactly as it was.
   await openTab(page, '/dues', 'Dues');
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
-  await expect(paidHeading(page, '6 of 11 paid')).toBeVisible();
+  await expect(paidHeading(page, '5 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
   // The dues history says why the split changed.
-  await expect(page.locator('section', { hasText: 'Recent changes' })).toContainText("You're sitting out");
+  await expect((await openSection(page, 'Recent changes'))).toContainText("You're unavailable");
   await page.getByRole('button', { name: 'Previous session' }).click();
   await expect(page.getByTestId('dues-session')).toHaveText('Session 1 · 2026–27');
   await expect(paidHeading(page, '12 of 12 paid')).toBeVisible();
@@ -82,13 +82,13 @@ test('a player answers for themselves; players who already answered are not aske
   // Players don't see the captains' list of who hasn't answered.
   await openTab(page, '/team', 'Team');
   await expect(page.getByTestId('session-answers')).toHaveCount(0);
-  await expect(page.getByText(/^Session 2 · 12 active · 2 subs/)).toBeVisible();
+  await expect(page.getByText(/^Session 2 · 12 playing · 1 available to sub/)).toBeVisible();
 });
 
 test('a player in the sub pool can say they are in', async ({ page }) => {
   await signIn(page, SAM);
-  await prompt(page).getByRole('button', { name: "I'm in" }).click();
-  await expect(page.getByText("You're in for session 2")).toBeVisible();
+  await prompt(page).getByRole('button', { name: 'Playing' }).click();
+  await expect(page.getByText("You're playing session 2")).toBeVisible();
   await expect(prompt(page)).toHaveCount(0);
   await openTab(page, '/profile', 'Sam Okafor');
   await expect(page.getByText('It counts for session 2')).toBeVisible();
@@ -112,7 +112,7 @@ test('captains can correct who was on a past session, and only that session chan
   await expect(page.getByText('$66 each')).toBeVisible();
 
   await page.getByRole('button', { name: 'Next session' }).click();
-  await expect(paidHeading(page, '6 of 12 paid')).toBeVisible();
+  await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
 
   // A session that hasn't started uses today's roster until it does.
   await page.getByRole('button', { name: 'Next session' }).click();
@@ -126,16 +126,16 @@ test('once a session is over, status changes count from the next one and its due
   await signIn(page);
   await offSeason(page);
   await openTab(page, '/team', 'Team');
-  await expect(page.getByText(/^12 active · 2 subs/)).toBeVisible();
+  await expect(page.getByText(/^12 playing · 1 available to sub/)).toBeVisible();
   await expect(page.getByText(/session 2 is over, so it counts from the next session/)).toBeVisible();
-  // A captain marks Kelly sitting out. Session 2's split doesn't change.
-  await playerCard(page, 'Kelly Moss').getByRole('button', { name: 'On Break' }).click();
-  await expect(page.getByText('Kelly Moss marked On Break')).toBeVisible();
-  await expect(page.getByText(/^11 active · 3 subs/)).toBeVisible();
+  // A captain marks Kelly unavailable. Session 2's split doesn't change.
+  await playerCard(page, 'Kelly Moss').getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText('Kelly Moss marked Unavailable')).toBeVisible();
+  await expect(page.getByText(/^11 playing · 1 available to sub · 2 unavailable/)).toBeVisible();
 
   await openTab(page, '/dues', 'Dues');
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
-  await expect(paidHeading(page, '6 of 12 paid')).toBeVisible();
+  await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
   // Adding players on the Team page doesn't change it any more; correcting it does.
   await expect(page.getByRole('link', { name: /Add players to the roster on the Team page/ })).toHaveCount(0);
@@ -145,7 +145,7 @@ test('once a session is over, status changes count from the next one and its due
   await dialog.getByLabel('Kelly Moss in session 2').selectOption('on_break');
   await dialog.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByText('Session 2 updated')).toBeVisible();
-  await expect(paidHeading(page, '6 of 11 paid')).toBeVisible();
+  await expect(paidHeading(page, '5 of 11 paid')).toBeVisible();
   await expect(page.getByText('$66 each')).toBeVisible();
 
   await openTab(page, '/profile', 'Casey Captain');

@@ -216,10 +216,15 @@ manages the GitHub, Cloudflare and Supabase accounts.
   the player stays paid with the difference to pay (`shortBy` in `splitDues()`), and players who paid but aren't on the
   session's active roster show under **Paid, not playing** and count in Collected (`notPlaying` in `teamDues()`).
   Anyone can record part of a payment (**Paid part of it?**, up to what's owed; a couple's is split by what each owes,
-  `partPayment()` / `splitPayment()`); the rest shows the same way as a share that went up. What moves the split is
+  `partPayment()` / `splitPayment()`). Each active player is `teamDues().stateOf()`: `paid`, `unpaid`, `part` (paid
+  less than their share was when they last marked paid: **Part paid**, under Still to pay) or `topUp` (paid it all,
+  then the share went up: **Paid · owes $X** on their chip, under Paid, counted in "N of M paid" and "N owe a top-up"). The share
+  then is `shareWhenPaid()`, which undoes the `dues_changes` made since, plus roster names a captain linked to an
+  account already on the list (`linked` in `sessionSlice()`, which `dues_changes` doesn't record). What moves the split is
   kept in `dues_changes`, written only by database triggers: the session fee, custom amounts, and anyone coming onto
   or off a session's active roster (a session's list starting isn't a change). It shows in Team dues' Recent changes
-  and players' history (`changeLine()`), and on My dues as **Why your share changed** (`shareChanges()`); the demo
+  and players' history (`changeLine()`), and on My dues as **Why your share changed** (`shareChanges()`: the latest one on
+  the card, all of them under Payment details, which opens on request with the player's history); the demo
   backend's `trackChange()` mirrors the triggers.
 - Seasons run November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and are filed under the year they start
   in: `season_year` 2026 is the 2026–27 season, so January games of session 2 are still 2026. Show a season with
@@ -234,7 +239,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   changes made on the Team page or My Profile while it's current (database triggers). Once its games are all played
   and nothing else is on the schedule it's over and keeps its list: status changes count for no session until the
   next one starts (`roster_open_session()` = `openSession()`). `player_profiles.status` and `team_guests.status`
-  stay each player's status right now. Dues and headcounts read the session's list
+  stay each player's status right now: **Playing** (`active`, splits the dues), **Available to sub** (`sub_pool`, gets
+  "We need subs") or **Unavailable** (`on_break`: still on the team and can RSVP, but no sub requests). Dues and headcounts read the session's list
   (`membersForSession()`); a session that hasn't started uses today's statuses. Before a new session's first game,
   players are asked **Playing session N?** on Schedule (`src/components/SessionPrompt.jsx`) and captains see who
   hasn't answered on Team. Captains can also ask ahead, before the schedule is out or with games still left
@@ -249,8 +255,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
   session from Team dues (`SessionRosterDialog.jsx`).
 - Roster players who haven't joined yet are `team_guests`: captains add the team by name on the Team page
   (`src/components/team/GuestDialog.jsx`), where they show as grey dashed cards with the usual statuses, counts
-  and positions, plus a **Copy invite** message. A new player picks their name in the walkthrough
-  (`src/components/Walkthrough.jsx`, `claim_team_guest()`), which brings over their status and moves their dues
+  and positions, plus a **Copy invite** message. A new player picks their name right after the team code (no slides;
+  `src/components/Walkthrough.jsx`, `claim_team_guest()`), then confirms name, gender and an optional phone (year
+  joined and position stay in My Profile). That brings over their status and moves their dues
   payments and history to their account; captains can also link one (`link_team_guest()`); both use
   `move_team_guest()`, which records exactly what it moved and overwrote in `team_guest_links`. Captains see
   "Joined as …" on a player's card and can **Unlink** a wrong pick (`unlink_team_guest()`, `UnlinkGuestDialog`):
@@ -289,7 +296,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   (`supabase/tests/reminders.test.sql`). Rules: `docs/games.md` section 5.
 - Notifications: players pick **Chat messages** and **Game alerts** separately (`player_profiles.notify_chat` /
   `notify_games`, both on by default) under the bell in Chat or on My Profile; the "turn on" offer shows on Schedule
-  and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
+  (under the Next game card, before the list) and in the chat. A site can't turn notifications on by itself: each device needs the player's own Allow tap.
   `src/lib/push.js` and `src/components/chat/Notifications.jsx` (the page side),
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
   The app icon shows the Chat tab's unread number: each chat notification carries it (`chat_push_unread()`), and

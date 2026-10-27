@@ -8,13 +8,16 @@ test('a new player has to set up their profile, which puts them on the team', as
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 
-  // Skip jumps past the slides to the profile, which can't be skipped.
-  await page.getByRole('button', { name: 'Skip' }).click();
+  // Joining opens directly on the roster name, without introductory slides.
   await expect(page.getByRole('heading', { name: 'Join the team' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Skip' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Next', exact: true })).toHaveCount(0);
 
   // Not one of the names the captain put on the roster.
   await page.getByRole('button', { name: "I'm not on the list" }).click();
+  // Name and gender, and a phone number if they like, so captains can tap to call.
+  await expect(page.getByLabel('Phone (optional)')).toBeVisible();
+  await expect(page.getByLabel('Year joined (optional)')).toHaveCount(0);
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -33,7 +36,6 @@ test('a new player can sign out instead of setting up a profile', async ({ page 
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login$/);
 });
@@ -46,7 +48,6 @@ test('a new player picks their name on the roster, and their spot and dues come 
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
 
   await expect(page.getByText('Find your name.')).toBeVisible();
   await page.getByRole('button', { name: 'Mike Russo' }).click();
@@ -60,7 +61,7 @@ test('a new player picks their name on the roster, and their spot and dues come 
 
   // On the roster as a joined player, no longer a grey card.
   await page.locator('a[href="/team"]:visible').first().click();
-  await expect(page.getByText('12 active · 2 subs (incl. on break) · 1 not joined yet')).toBeVisible();
+  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 1 not joined yet')).toBeVisible();
   await expect(page.getByTestId('not-joined')).toContainText("1 hasn't joined yet");
 
   // His paid session came with him.
@@ -80,7 +81,6 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('button', { name: 'Dana Wells' }).click();
   // Finishing the profile reloads the page; wait for that before using the menu.
   const reloaded = page.waitForEvent('load');
@@ -98,7 +98,6 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
   await expect(page.getByRole('button', { name: 'Mike Russo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Dana Wells' })).toHaveCount(0);
 });
@@ -110,7 +109,6 @@ async function register(page, email) {
   await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
-  await page.getByRole('button', { name: 'Skip' }).click();
 }
 
 async function finishProfile(page) {

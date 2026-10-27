@@ -264,7 +264,7 @@ export function TeamPage() {
                   STATUS_CLASS[p.status] || STATUS_CLASS.active,
                 )}
               >
-                {STATUS_LABEL[p.status] || 'Active'}
+                {STATUS_LABEL[p.status] || 'Playing'}
               </span>
               <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
               {p.guest && (
@@ -404,7 +404,7 @@ export function TeamPage() {
     <div className="space-y-5">
       <PageHeader
         title="Team"
-        subtitle={`${current && !over ? `Session ${current.session} · ` : ''}${totals.active} active · ${totals.subPool + totals.onBreak} subs (incl. on break)${
+        subtitle={`${current && !over ? `Session ${current.session} · ` : ''}${totals.active} playing · ${totals.subPool} available to sub · ${totals.onBreak} unavailable${
           totals.notJoined ? ` · ${totals.notJoined} not joined yet` : ''
         }`}
       >
@@ -419,7 +419,7 @@ export function TeamPage() {
 
       <div className="grid grid-cols-3 gap-2">
         {[
-          { l: 'Active', v: totals.active, tone: 'bg-lime-400 text-black' },
+          { l: 'Playing', v: totals.active, tone: 'bg-lime-400 text-black' },
           { l: 'Women', v: totals.women, tone: 'bg-zinc-950 text-lime-400' },
           { l: 'Men', v: totals.men, tone: 'bg-zinc-100 text-zinc-600' },
         ].map((tile) => (
@@ -499,9 +499,8 @@ export function TeamPage() {
       <Formation players={roster.filter((p) => !p.guest || p.position)} />
 
       <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
-        Set your own roster status anytime{countsFor}. On Break puts
-        you in the sub pool for call-ups. Captains can adjust anyone's status too, including teammates who haven't joined
-        yet. Active players split the dues.
+        Set your own roster status anytime{countsFor}. Unavailable gets no sub requests. Captains can adjust anyone's status too, including teammates who haven't joined
+        yet. Playing teammates split the dues.
       </p>
 
       <div className="space-y-2">
@@ -521,7 +520,7 @@ export function TeamPage() {
               {notJoined.length} {notJoined.length === 1 ? "hasn't" : "haven't"} joined yet
             </h3>
             <p className="mt-1 text-xs font-medium text-zinc-500">
-              {/* Nothing about splitting the dues: Sub Pool and On Break names are listed here too. */}
+              {/* Nothing about splitting the dues: Available to sub and Unavailable names are listed here too. */}
               Send them the invite. When they sign up and pick their name, their spot and dues move to their account.
             </p>
             <button

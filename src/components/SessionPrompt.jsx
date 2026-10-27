@@ -9,9 +9,9 @@ import { askFor, entryFor, isEarlier, sessionGames, sessionRows, stillAsking } f
 import { cn } from '@/lib/utils';
 
 const ANSWERS = [
-  { status: 'active', label: "I'm in", done: (n) => `You're in for session ${n}` },
-  { status: 'sub_pool', label: 'Sub only', done: (n) => `You're in the sub pool for session ${n}` },
-  { status: 'on_break', label: 'Sitting out', done: (n) => `Sitting out session ${n}. You'll still get sub call-ups.` },
+  { status: 'active', label: 'Playing', done: (n) => `You're playing session ${n}` },
+  { status: 'sub_pool', label: 'Available to sub', done: (n) => `You're available to sub for session ${n}` },
+  { status: 'on_break', label: 'Unavailable', done: (n) => `Unavailable for session ${n}. No sub requests.` },
 ];
 const ANSWER_LABEL = Object.fromEntries(ANSWERS.map((a) => [a.status, a.label]));
 
@@ -54,7 +54,7 @@ export function sessionAsk({ profile, roster, games }) {
 }
 
 /**
- * I'm in / Sub only / Sitting out. For the current session it's your status (the
+ * Playing / Available to sub / Unavailable. For the current session it's your status (the
  * session's list follows it); for a session asked about ahead it goes in that
  * session's list only, so the session still being played doesn't change.
  */
@@ -76,7 +76,7 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
     }
   };
 
-  // Before you answer, I'm in is the suggested one; after, your answer is the picked one.
+  // Before you answer, Playing is the suggested one; after, your answer is the picked one.
   const lit = (status) => (selected ? status === selected : status === 'active');
   return (
     <div className="grid grid-cols-3 gap-2" role="group" aria-label={`Playing session ${period.session}?`}>
@@ -102,7 +102,7 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
   );
 }
 
-/** How the answers for a session are coming in: in (and how many women), subs, sitting out, still to answer. */
+/** How the answers for a session are coming in: playing (and how many women), available to sub, unavailable, still to answer. */
 export function sessionTally(rows, period, players) {
   const list = sessionRows(rows, period).filter((r) => r.status !== 'off');
   const answered = list.filter((r) => r.answered_at);
@@ -127,8 +127,7 @@ export function SessionPrompt({ ask, onAnswered }) {
       </span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
       <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">
-        You're down as {STATUS_LABEL[entry.status]} for now. Active players split the session's dues. Sitting out
-        keeps you on the list for sub call-ups.
+        Currently {STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.
       </p>
       <SessionAnswers question={ask} onAnswered={onAnswered} />
     </section>
@@ -155,9 +154,9 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
         <span className={cn(chip, 'bg-lime-400 text-black')}>{tally.in} in</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.women} women</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>
-          {tally.subs} {tally.subs === 1 ? 'sub' : 'subs'}
+          {tally.subs} available to sub
         </span>
-        <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.out} sitting out</span>
+        <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.out} unavailable</span>
         <span className={cn(chip, 'bg-white/10 text-white/80')}>{tally.waiting} to answer</span>
       </div>
       <div className="mt-4 rounded-2xl bg-white p-3 text-zinc-900">
@@ -167,7 +166,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
         <p className="mb-2.5 mt-1 text-xs font-medium text-zinc-600">
           {answered
             ? 'You can change it until the first game.'
-            : `You're down as ${STATUS_LABEL[entry.status]}. Active players split the dues; sitting out still gets sub call-ups.`}
+            : `Currently ${STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.`}
         </p>
         <SessionAnswers compact question={ask} onAnswered={onAnswered} selected={answered ? entry.status : undefined} />
       </div>
@@ -226,8 +225,7 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
         {when} · {tally.in} in so far
       </p>
       <p className="mb-3 mt-1 text-xs font-medium text-zinc-600">
-        Your answer only counts for session {period.session}. Active players split the dues; sitting out still gets sub
-        call-ups.
+        For session {period.session} only. Playing splits the dues. Unavailable gets no sub requests.
       </p>
       <SessionAnswers
         question={ask}

@@ -31,8 +31,8 @@ export const playerKey = (player) =>
 /**
  * RSVP headcount for one game. Women playing GK don't count toward the
  * women-on-the-field minimum. Active players who haven't answered are "No
- * reply"; Sub Pool and On Break players who haven't are "Subs", so reminders
- * don't nag them. `profiles` can include roster names, and `rsvps` must be
+ * reply"; available subs who haven't are "Subs". Unavailable players without
+ * an answer have their own group. `profiles` can include roster names, and `rsvps` must be
  * keyed with keyedRow().
  */
 export function headcount({ game, rsvps, profiles, settings }) {
@@ -40,11 +40,12 @@ export function headcount({ game, rsvps, profiles, settings }) {
   const byUser = {};
   (rsvps || []).filter((r) => r.game_id === game?.id).forEach((r) => (byUser[r.user_id] = r));
 
-  const groups = { in: [], out: [], maybe: [], none: [], subs: [] };
+  const groups = { in: [], out: [], maybe: [], none: [], subs: [], unavailable: [] };
   roster.forEach((profile) => {
     const rsvp = byUser[profile.user_id];
     const entry = { profile, playing_gk: !!rsvp?.playing_gk };
     if (rsvp) (groups[rsvp.status] || groups.none).push(entry);
+    else if (profile.status === 'on_break') groups.unavailable.push(entry);
     else ((profile.status || 'active') === 'active' ? groups.none : groups.subs).push(entry);
   });
 

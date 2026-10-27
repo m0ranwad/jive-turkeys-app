@@ -50,6 +50,6 @@ test('changing your roster status with no signal says so', async ({ page }) => {
   await signIn(page);
   await page.goto('/profile');
   await goOffline(page);
-  await page.getByRole('button', { name: 'Sub Pool' }).click();
+  await page.getByRole('button', { name: 'Available to sub' }).click();
   await expect(page.getByText("That didn't save")).toBeVisible();
 });

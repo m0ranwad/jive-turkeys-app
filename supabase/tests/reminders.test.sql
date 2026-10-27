@@ -146,6 +146,16 @@ select rem_test.ok((select count(*) = 0 from public.game_reminder_targets(rem_te
 select public.game_reminders_tick();
 select rem_test.ok(rem_test.sent(rem_test.id('g1')) = '{rsvp,subs}', 'and the timer doesn''t ask again');
 
+-- Unavailable means no sub requests, even without an OUT answer or with MAYBE.
+delete from public.game_reminder_log where kind = 'subs';
+delete from public.rsvps where user_id = rem_test.id('ray');
+select rem_test.ok(rem_test.names(array(select subscription_id from public.game_reminder_targets(rem_test.id('g1'), 'subs'))) = '{sid,sue}',
+  'an unavailable player with no answer gets no sub request');
+delete from public.game_reminder_log where kind = 'subs';
+insert into public.rsvps (game_id, user_id, status) values (rem_test.id('g1'), rem_test.id('ray'), 'maybe');
+select rem_test.ok(rem_test.names(array(select subscription_id from public.game_reminder_targets(rem_test.id('g1'), 'subs'))) = '{sid,sue}',
+  'an unavailable player who said MAYBE still gets no sub request');
+
 -- ---------------------------------------------------------------------------
 -- Only women short: only women are asked.
 -- ---------------------------------------------------------------------------

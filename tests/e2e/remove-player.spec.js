@@ -26,7 +26,7 @@ test('players cannot remove anyone', async ({ page }) => {
 test('a captain removes a signed-up player, who loses access until added back', async ({ page }) => {
   await signIn(page);
   await openTeam(page);
-  await expect(page.getByText('12 active · 2 subs (incl. on break) · 2 not joined yet')).toBeVisible();
+  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
   // Not themselves.
   await expect(page.getByRole('button', { name: 'Remove Casey Captain' })).toHaveCount(0);
 
@@ -35,7 +35,7 @@ test('a captain removes a signed-up player, who loses access until added back', 
   await expect(dialog).toContainText("the team code won't let them back in");
   await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(page.getByText('Jordan Rivera removed from the team')).toBeVisible();
-  await expect(page.getByText('11 active · 2 subs (incl. on break) · 2 not joined yet')).toBeVisible();
+  await expect(page.getByText('11 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
   const removed = page.getByTestId('removed-players');
   await expect(removed).toContainText('Jordan Rivera');
 
@@ -52,6 +52,6 @@ test('a captain removes a signed-up player, who loses access until added back', 
   await openTeam(page);
   await page.getByTestId('removed-players').getByRole('button', { name: 'Add back' }).click();
   await expect(page.getByText('Jordan Rivera added back')).toBeVisible();
-  await expect(page.getByText('12 active · 2 subs (incl. on break) · 2 not joined yet')).toBeVisible();
+  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
   await expect(page.getByTestId('removed-players')).toHaveCount(0);
 });

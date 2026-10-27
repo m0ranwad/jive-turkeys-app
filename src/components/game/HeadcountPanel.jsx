@@ -99,12 +99,15 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
         {headcount.groups.subs.length > 0 && (
           <Group
             label="Subs"
-            note="Sub Pool and On Break, no reply"
+            note="Available to sub, no reply"
             entries={headcount.groups.subs}
             suspendedIds={suspendedIds}
             tone="bg-zinc-100 text-zinc-600"
             onPick={onPick}
           />
+        )}
+        {headcount.groups.unavailable.length > 0 && (
+          <Group label="Unavailable" note="No sub requests" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
         )}
       </div>
       {game.location && (

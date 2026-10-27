@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { InstallCard } from '@/components/InstallApp';
+import { NewPlayerTip } from '@/components/NewPlayerTip';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
@@ -72,51 +73,57 @@ export function SchedulePage() {
   const askedAhead =
     !!ask && !!nextGame && isEarlier({ year: nextGame.season_year, session: nextGame.session }, ask.period);
 
-  const sessionBlock = (s) => (
-    <section key={`${s.year}-${s.session}`} className="space-y-3">
-      <div className="flex items-center gap-3">
-        <h2 className="font-display text-lg font-extrabold uppercase tracking-[0.08em]">{seasonLabel(s.year, s.session)}</h2>
-        <span className="h-px flex-1 bg-zinc-200" />
-        <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
-          {s.games.length} game{s.games.length === 1 ? '' : 's'}
-        </span>
-      </div>
-      {s.upcoming.length > 0 && (
-        <div className="space-y-2.5">
-          {s.upcoming.map((g) => (
-            <div key={g.id} className="space-y-1.5">
-              <GameCard game={g} headcount={counts[g.id]} settings={data.settings} />
-              {/* Answer from the list (the next game's buttons are on its card above). */}
-              {onRoster && !g.has_result && g.id !== nextGame?.id && (
-                <AnswerButtons
-                  compact
-                  label={answerLabel(g)}
-                  status={rsvp.mine(g)?.status}
-                  onSet={(status) => rsvp.setStatus(g, status)}
-                  busy={rsvp.isBusy(g)}
-                />
-              )}
-            </div>
-          ))}
+  const sessionBlock = (s) => {
+    const upcoming = s.upcoming.filter((g) => g.id !== nextGame?.id);
+    if (!upcoming.length && !s.past.length) return null;
+    const more = s.games.some((g) => g.id === nextGame?.id);
+    const count = upcoming.length + s.past.length;
+    return (
+      <section key={`${s.year}-${s.session}`} className="space-y-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-lg font-extrabold uppercase tracking-[0.08em]">{seasonLabel(s.year, s.session)}</h2>
+          <span className="h-px flex-1 bg-zinc-200" />
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
+            {count}{more ? ' more' : ''} game{count === 1 ? '' : 's'}
+          </span>
         </div>
-      )}
-      {s.past.length > 0 && (
-        <div className="space-y-2.5 pt-1">
-          <span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-500">Played</span>
-          {s.past.map((g) => (
-            <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
+        {upcoming.length > 0 && (
+          <div className="space-y-2.5">
+            {upcoming.map((g) => (
+              <div key={g.id} className="space-y-1.5">
+                <GameCard game={g} headcount={counts[g.id]} settings={data.settings} />
+                {/* Answer from the list (the next game's buttons are on its card above). */}
+                {onRoster && !g.has_result && g.id !== nextGame?.id && (
+                  <AnswerButtons
+                    compact
+                    label={answerLabel(g)}
+                    status={rsvp.mine(g)?.status}
+                    onSet={(status) => rsvp.setStatus(g, status)}
+                    busy={rsvp.isBusy(g)}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {s.past.length > 0 && (
+          <div className="space-y-2.5 pt-1">
+            <span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-500">Played</span>
+            {s.past.map((g) => (
+              <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  };
 
   // New games go in the session being asked about ahead, the newest one on the schedule, or the next one.
   const defaultSession = sessionForNewGames(data.games, todayIso, data.roster?.asks);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Schedule" subtitle="Answer right here, or tap a game for the full headcount.">
+      <PageHeader title="Schedule">
         {data.isCaptain && (
           <div className="flex gap-2">
             <button
@@ -155,9 +162,11 @@ export function SchedulePage() {
       )}
       <PotmPrompt data={data} />
       {nextGame && ask && !askedAhead && !ask.answered && <SessionPrompt ask={ask} onAnswered={data.reload} />}
+      {/* After the next game's answer and before the full list, where a phone still shows them. */}
       <InstallCard onShowHow={showInstallGuide} />
       {/* In the iPhone browser notifications need the Home Screen app, so Get the app is the one offer (even once closed). */}
       {pushStatus !== 'needs-install' && <NotificationsPrompt state={pushStatus} variant="card" />}
+      <NewPlayerTip profile={data.profile} />
 
       {sessions.length === 0 && (
         <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">

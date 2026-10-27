@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POSITIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', busy = false, hidePosition = false }) {
+export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', busy = false, hidePosition = false, hideYearJoined = false }) {
   const id = useId();
   const [form, setForm] = useState({
     display_name: initial?.display_name || '',
@@ -105,17 +105,19 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         )}
       </div>
 
-      <div className="space-y-2 sm:max-w-[50%]">
-        <Label htmlFor={`${id}-year_joined`}>Year joined (optional)</Label>
-        <Input
-          id={`${id}-year_joined`}
-          type="number"
-          inputMode="numeric"
-          value={form.year_joined}
-          onChange={(e) => set({ year_joined: e.target.value })}
-          placeholder="2015"
-        />
-      </div>
+      {!hideYearJoined && (
+        <div className="space-y-2 sm:max-w-[50%]">
+          <Label htmlFor={`${id}-year_joined`}>Year joined (optional)</Label>
+          <Input
+            id={`${id}-year_joined`}
+            type="number"
+            inputMode="numeric"
+            value={form.year_joined}
+            onChange={(e) => set({ year_joined: e.target.value })}
+            placeholder="2015"
+          />
+        </div>
+      )}
 
       {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</p>}
 

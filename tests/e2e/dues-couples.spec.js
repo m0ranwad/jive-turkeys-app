@@ -67,7 +67,7 @@ test('a link counts from this session on, only offers its players, and asks befo
   await duesOption(sheet, 'Pay together');
   const picker = sheet.getByLabel('Pays together with');
   await expect(sheet).toContainText('From this session on; earlier sessions keep who paid together then.');
-  // Jamie is sitting out session 2.
+  // Jamie is unavailable session 2.
   await expect(picker.locator('option', { hasText: 'Jamie Fox' })).toHaveCount(0);
 
   await picker.selectOption({ label: 'Riley Novak' });
