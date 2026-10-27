@@ -254,6 +254,8 @@ export function teamDues(total, profiles, payments, everyone = profiles, { histo
 
   // Who still owes, with a couple who both still owe as one line and one amount.
   const stillToPay = [];
+  // The players on each stillToPay line, for naming them in Team Chat.
+  const owingPeople = [];
   const listed = new Set();
   for (const p of ordered) {
     if (listed.has(p.user_id) || !owing(p.user_id)) continue;
@@ -261,6 +263,7 @@ export function teamDues(total, profiles, payments, everyone = profiles, { histo
     const together = partner && owing(partner.user_id) ? partner : null;
     listed.add(p.user_id);
     if (together) listed.add(together.user_id);
+    owingPeople.push(together ? [p, together] : [p]);
     stillToPay.push({
       name: together ? `${name(p)} & ${name(together)}` : name(p),
       amount: fromCents(cents(due(p.user_id)) + (together ? cents(due(together.user_id)) : 0)),
@@ -303,6 +306,7 @@ export function teamDues(total, profiles, payments, everyone = profiles, { histo
     balanceOf,
     owingTogether,
     stillToPay,
+    owingPeople,
     notPlaying,
     notPlayingPaid,
     notPlayingOf,
@@ -472,13 +476,16 @@ export function payOptions(settings, amount, note) {
 }
 
 /**
- * A nudge for the team chat or group text naming who still owes. `unpaid` is
- * [{ name, amount, more }], `more` for the difference after a share went up.
+ * A nudge for Team Chat naming who still owes. `unpaid` is [{ name, people,
+ * amount, more }], `more` for the difference after a share went up. `nameOf`
+ * names each of `people` (a chat @mention, so their phones buzz); without
+ * `people`, `name` is used.
  */
-export function reminderText({ session, parts, perPlayer, activeCount, unpaid, link }) {
+export function reminderText({ session, parts, perPlayer, activeCount, unpaid, link, nameOf = null }) {
   const names = unpaid.map((p) => {
-    if (p.more) return `${p.name} (${dollars(p.amount)} more)`;
-    return p.amount === perPlayer ? p.name : `${p.name} (${dollars(p.amount)})`;
+    const who = nameOf && p.people ? p.people.map(nameOf).join(' & ') : p.name;
+    if (p.more) return `${who} (${dollars(p.amount)} more)`;
+    return p.amount === perPlayer ? who : `${who} (${dollars(p.amount)})`;
   });
   return [
     `🦃 Jive Turkeys — Session ${session} dues: ${dollars(perPlayer)} each`,

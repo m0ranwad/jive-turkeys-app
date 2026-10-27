@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Copy, Pencil, UserPlus } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { Megaphone, Pencil, UserPlus } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '@/api';
+import { PostToChatDialog } from '@/components/PostToChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
-import { copyText } from '@/lib/clipboard';
 import { CARD } from '@/lib/constants';
 import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues, topUps } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
@@ -60,8 +60,8 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
       <div className="mt-4 flex flex-wrap gap-2">
         {team.stillToPay.length > 0 && (
           <button type="button" onClick={onCopyReminder} className={DARK_BUTTON}>
-            <Copy className="h-3.5 w-3.5" />
-            Copy reminder
+            <Megaphone className="h-3.5 w-3.5" />
+            Remind who owes
           </button>
         )}
         {isCaptain && (
@@ -150,19 +150,21 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
     }
   };
 
-  const copyReminder = async () => {
-    await copyText(
+  // Who still owes, for Team Chat (each named with their @mention) or to copy.
+  const [reminding, setReminding] = useState(false);
+  const reminder = useCallback(
+    (nameOf) =>
       reminderText({
         session: period.session,
         parts: feeParts(row),
         perPlayer: team.perPlayer,
         activeCount: team.active.length,
-        unpaid: team.stillToPay,
+        unpaid: team.stillToPay.map((line, i) => ({ ...line, people: team.owingPeople[i] })),
         link: `${window.location.origin}/dues`,
+        nameOf,
       }),
-    );
-    toast({ title: 'Reminder copied', description: 'Paste it into the team chat or group text.' });
-  };
+    [period.session, row, team],
+  );
 
   const markedBy = (userId) => {
     const payment = payments.find((x) => x.user_id === userId);
@@ -365,7 +367,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         team={team}
         total={total}
         isCaptain={isCaptain}
-        onCopyReminder={copyReminder}
+        onCopyReminder={() => setReminding(true)}
         onEditFee={() => setFeeOpen(true)}
       />
 
@@ -433,6 +435,14 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
 
       {paymentLinksCard}
       {dialogs}
+      <PostToChatDialog
+        open={reminding}
+        onOpenChange={setReminding}
+        title="Remind who owes"
+        intro="Everyone still to pay is named, so their phone buzzes."
+        message={reminder}
+        about={team.owingPeople.flat()}
+      />
     </div>
   );
 }

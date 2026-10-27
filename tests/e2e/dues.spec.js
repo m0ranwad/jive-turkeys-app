@@ -267,8 +267,9 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Copy reminder' }).click();
-  await expect(page.getByText('Reminder copied')).toBeVisible();
+  await page.getByRole('button', { name: 'Remind who owes' }).click();
+  await page.getByRole('dialog', { name: 'Remind who owes' }).getByRole('button', { name: 'Copy instead' }).click();
+  await expect(page.getByText('Copied', { exact: true })).toBeVisible();
   const reminder = await page.evaluate(() => navigator.clipboard.readText());
   expect(reminder).toContain('Session 2 dues: $61 each');
   expect(reminder).toContain("That's the $595 league fee plus $18 refs × 7 games = $721, split across 12 players.");
