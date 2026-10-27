@@ -37,7 +37,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.08em]">
           <span className="rounded-full bg-lime-400 px-2.5 py-1 text-black">{headcount.totalIn} in</span>
           <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">
-            {headcount.womenFieldIn}/{headcount.minWomen} women
+            {headcount.womenFieldIn} of {headcount.minWomen} women
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">{headcount.groups.none.length} no reply</span>
           <ShortBanner

@@ -1,4 +1,5 @@
 import { ShortBanner } from '@/components/schedule/GameCard';
+import { shortageIsUrgent } from '@/lib/calendar';
 import { CARD } from '@/lib/constants';
 import { fmtDateShort, fmtTime, jerseyText, mapsUrl } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -47,20 +48,21 @@ function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   );
 }
 
-/** `onPick` (captains): tap a name to set that player's RSVP. */
+/**
+ * `onPick` (captains): tap a name to set that player's RSVP. How many more we need
+ * follows Schedule: grey until 48 hours before kickoff, then red, and gone once
+ * the game has a score.
+ */
 export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
-    { label: 'Women field', value: `${headcount.womenFieldIn}/${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
+    { label: 'Women on field', value: `${headcount.womenFieldIn} of ${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
     { label: 'MAYBE', value: headcount.groups.maybe.length, tone: 'bg-amber-300 text-black' },
     { label: 'OUT', value: headcount.groups.out.length, tone: 'bg-zinc-100 text-zinc-600' },
     { label: 'No reply', value: headcount.groups.none.length, tone: 'bg-zinc-100 text-zinc-600' },
     { label: 'Men', value: headcount.totalIn - headcount.womenIn, tone: 'bg-zinc-100 text-zinc-600' },
   ];
-  const shortParts = [
-    headcount.needTotal ? `${headcount.needTotal} player${headcount.needTotal === 1 ? '' : 's'}` : null,
-    headcount.needWomen ? `${headcount.needWomen} wom${headcount.needWomen === 1 ? 'an' : 'en'}` : null,
-  ].filter(Boolean);
+  const showNeed = !game.has_result && headcount.isShort;
 
   return (
     <section className={CARD}>
@@ -71,7 +73,9 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
             {fmtDateShort(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'} · {jerseyText(game.jersey, settings)}
           </p>
         </div>
-        <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+        {showNeed && (
+          <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={shortageIsUrgent(game)} />
+        )}
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {tiles.map((tile) => (
@@ -81,9 +85,10 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           </div>
         ))}
       </div>
-      {headcount.isShort && (
-        <p className="mt-3 rounded-2xl bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-red-700">
-          Short on {shortParts.join(' and ')} (min {headcount.minPlayers} players, {headcount.minWomen} women on the field).
+      {showNeed && (
+        <p className="mt-3 text-xs font-medium text-zinc-500">
+          We need at least {headcount.minPlayers} players, with {headcount.minWomen} women on the field (a woman in goal
+          doesn't count).
         </p>
       )}
       {onPick && (
@@ -110,6 +115,10 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, o
           <Group label="Unavailable" note="No sub requests" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
         )}
       </div>
+      <p className="mt-4 flex items-center gap-2 text-[11px] font-semibold text-zinc-500">
+        <span aria-hidden="true" className="h-3 w-6 shrink-0 rounded-full border border-lime-300 bg-lime-50" />
+        Green = women
+      </p>
       {game.location && (
         <a
           href={mapsUrl(game.location)}

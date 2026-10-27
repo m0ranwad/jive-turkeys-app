@@ -25,6 +25,31 @@ test('a shortage is a calm chip until two days before kickoff, then turns red', 
   await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
 });
 
+test("a game's own page shows the shortage the way Schedule does", async ({ page }) => {
+  await signIn(page);
+  const headcount = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Headcount' }) });
+
+  // FC Lightning is weeks away: grey, once, with the minimums as a note.
+  await page.getByRole('link', { name: /vs FC Lightning/ }).click();
+  await expect(headcount).toContainText('Need 8 more · 3 more women');
+  await expect(headcount).not.toContainText('Short');
+  await expect(headcount).toContainText('We need at least 8 players, with 3 women on the field');
+  await expect(headcount).toContainText('0 of 3');
+
+  // Goal Diggers, a day later: within 48 hours, so red.
+  await page.clock.fastForward('24:00:00');
+  await page.goto('/');
+  await nextGame(page).getByRole('link', { name: /Details/ }).click();
+  await expect(headcount).toContainText('Short · Need 2 more · 1 more woman');
+
+  // A played game has nothing to call for.
+  await page.goto('/');
+  await page.getByRole('link', { name: /vs The Hat Tricks/ }).click();
+  await expect(headcount).toBeVisible();
+  await expect(headcount).not.toContainText('Need');
+  await expect(headcount).not.toContainText('We need at least');
+});
+
 test('the next game is at the top of Schedule, and you answer right there', async ({ page }) => {
   await signIn(page);
   const card = nextGame(page);

@@ -15,7 +15,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
 | The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
-| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page always shows it in red. | `[unit]` `[browser]` |
+| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page follows the same rule, says it once (the minimums are a grey note under the counts), and shows none once the game has a score. | `[unit]` `[browser]` |
 | On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
