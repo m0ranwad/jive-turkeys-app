@@ -12,17 +12,17 @@ function RecordRow({ label, record: r, highlight }) {
   return (
     <div
       className={cn(
-        'grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 rounded-2xl px-3.5 py-3 sm:gap-3',
+        'grid grid-cols-3 items-center gap-2 rounded-2xl px-3.5 py-3 min-[360px]:grid-cols-[1fr_auto_auto_auto] sm:gap-3',
         highlight ? 'bg-zinc-950 text-white' : 'bg-zinc-50',
       )}
     >
-      {/* Wraps onto two lines on narrow phones rather than cutting off which session it is. */}
-      <span className="min-w-0 break-words font-display text-sm font-extrabold uppercase leading-tight tracking-tight">{label}</span>
-      <span className="w-14 text-center text-xs font-bold sm:w-20">
+      {/* Small phones give the label its own line, with the record beneath it. */}
+      <span className="col-span-3 min-w-0 font-display text-sm font-extrabold uppercase leading-tight tracking-tight min-[360px]:col-span-1">{label}</span>
+      <span className="w-14 justify-self-center text-center text-xs font-bold sm:w-20">
         {r.w}-{r.l}-{r.d}
       </span>
-      <span className={cn('w-12 text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.gf} GF</span>
-      <span className={cn('w-12 text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.ga} GA</span>
+      <span className={cn('w-12 justify-self-center text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.gf} GF</span>
+      <span className={cn('w-12 justify-self-center text-center text-xs font-semibold sm:w-16', highlight ? 'text-white/60' : 'text-zinc-500')}>{r.ga} GA</span>
     </div>
   );
 }

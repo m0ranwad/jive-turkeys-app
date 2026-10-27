@@ -26,3 +26,29 @@ test('the season filters hide on Legacy, which covers every season', async ({ pa
   await page.getByRole('tab', { name: 'Players' }).click();
   await expect(page.getByRole('combobox', { name: 'Season' })).toBeVisible();
 });
+
+test('session names stay readable on a 320px phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await signIn(page);
+  await page.goto('/stats');
+  const bySession = page.locator('section').filter({ has: page.getByRole('heading', { name: 'By session' }) });
+  const label = bySession.getByText('2026–27 · Session 2', { exact: true });
+  await expect(label).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+
+  // A readable label takes at most two lines; the old 50px column split it across four.
+  const size = await label.evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+    width: el.clientWidth,
+    scrollWidth: el.scrollWidth,
+  }));
+  expect(size.height).toBeLessThanOrEqual(size.lineHeight * 2);
+  expect(size.scrollWidth).toBeLessThanOrEqual(size.width);
+
+  const row = label.locator('..');
+  await expect(row.getByText('0-0-0', { exact: true })).toBeVisible();
+  await expect(row.getByText('0 GF', { exact: true })).toBeVisible();
+  await expect(row.getByText('0 GA', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
