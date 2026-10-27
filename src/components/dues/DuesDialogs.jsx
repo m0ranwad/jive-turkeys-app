@@ -77,6 +77,7 @@ export function FeeDialog({ open, onOpenChange, period, initial, previous, onSav
           type="number"
           inputMode={prefix ? 'decimal' : 'numeric'}
           min="0"
+          step={prefix ? '0.01' : '1'}
           value={form[key] ?? ''}
           onChange={(e) => {
             setForm((f) => ({ ...f, [key]: e.target.value }));
