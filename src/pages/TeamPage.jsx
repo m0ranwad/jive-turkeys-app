@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { CalendarPlus, Copy, MessageCircle, Pencil, Phone, UserPlus } from 'lucide-react';
+import { CalendarPlus, ChevronRight, Copy, MessageCircle, Pencil, Phone, UserPlus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
@@ -8,9 +8,10 @@ import { AskSessionDialog } from '@/components/team/AskSessionDialog';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
 import { PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { CARD, STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
+import { CARD, DIALOG, DIALOG_TITLE, STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer, stepSession } from '@/lib/dues';
@@ -39,6 +40,22 @@ function StatusButtons({ current, onPick }) {
   ));
 }
 
+/** A card's name area: for captains, a button that opens that player's options; otherwise just the name. */
+function PlayerButton({ openOptions, name, children }) {
+  if (!openOptions) return <div className="flex min-w-0 flex-1 items-center gap-3">{children}</div>;
+  return (
+    <button
+      type="button"
+      onClick={openOptions}
+      aria-haspopup="dialog"
+      aria-label={`${name} options`}
+      className="-m-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1.5 text-left transition hover:bg-zinc-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 export function TeamPage() {
   const data = useSeasonData();
   const { toast } = useToast();
@@ -52,6 +69,8 @@ export function TeamPage() {
   // Captains: the signed-up player being removed, and the pick being undone ({ guest, player }).
   const [removing, setRemoving] = useState(null);
   const [unlinking, setUnlinking] = useState(null);
+  // Captains: the player whose options (status, captain, remove or edit) are open, by card id.
+  const [optionsFor, setOptionsFor] = useState(null);
   // Captains: asking who's playing a later session, and answering it for teammates.
   const [askOpen, setAskOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
@@ -236,50 +255,56 @@ export function TeamPage() {
         )}
       >
         <div className="flex items-center gap-3">
-          <span
-            className={cn(
-              'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
-              p.guest
-                ? 'border-2 border-dashed border-zinc-300 bg-white text-zinc-600'
-                : p.gender === 'F'
-                  ? 'bg-lime-400 text-black'
-                  : 'bg-zinc-900 text-lime-400',
-            )}
+          <PlayerButton
+            openOptions={data.isCaptain && !isMe ? () => setOptionsFor(p.id) : null}
+            name={p.display_name}
           >
-            {initials(p.display_name)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{p.display_name}</span>
-              {isMe && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
-                  You
-                </span>
+            <span
+              className={cn(
+                'grid h-10 w-10 shrink-0 place-items-center rounded-full font-display text-xs font-extrabold uppercase',
+                p.guest
+                  ? 'border-2 border-dashed border-zinc-300 bg-white text-zinc-600'
+                  : p.gender === 'F'
+                    ? 'bg-lime-400 text-black'
+                    : 'bg-zinc-900 text-lime-400',
               )}
-            </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
-                  STATUS_CLASS[p.status] || STATUS_CLASS.active,
+            >
+              {initials(p.display_name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-display text-sm font-extrabold uppercase tracking-tight">{p.display_name}</span>
+                {isMe && (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
+                    You
+                  </span>
                 )}
-              >
-                {STATUS_LABEL[p.status] || 'Playing'}
-              </span>
-              <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
-              {p.guest && (
-                <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
-                  Not joined yet
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
+                    STATUS_CLASS[p.status] || STATUS_CLASS.active,
+                  )}
+                >
+                  {STATUS_LABEL[p.status] || 'Playing'}
                 </span>
-              )}
-              {p.year_joined && <span>Since {p.year_joined}</span>}
-              {p.is_captain && (
-                <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
-                  Captain
-                </span>
-              )}
+                <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
+                {p.guest && (
+                  <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                    Not joined yet
+                  </span>
+                )}
+                {p.year_joined && <span>Since {p.year_joined}</span>}
+                {p.is_captain && (
+                  <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
+                    Captain
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+            {data.isCaptain && !isMe && <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-zinc-400" />}
+          </PlayerButton>
           {/* A private chat with them (opens the one you already have, if there is one). */}
           {!isMe && !p.guest && p.user_id && (
             <Link
@@ -358,47 +383,19 @@ export function TeamPage() {
             )}
           </div>
         )}
-        {(isMe || data.isCaptain) && (
+        {/* Your own status stays on your card; captains change anyone else's from their options. */}
+        {isMe && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
-            {isMe && (
-              <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
-            )}
+            <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
             <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
-            {p.guest && data.isCaptain && (
-              <button
-                onClick={() => setGuestDialog(guests.find((g) => g.id === p.id))}
-                aria-label={`Edit ${p.display_name}`}
-                className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-600 transition hover:bg-zinc-200"
-              >
-                <Pencil className="h-3 w-3" />
-                Edit
-              </button>
-            )}
-            {!isMe && !p.guest && data.isCaptain && (
-              <button
-                onClick={() => toggleCaptain(p)}
-                className={cn(
-                  'ml-auto rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
-                  p.is_captain ? 'bg-lime-400 text-black' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
-                )}
-              >
-                {p.is_captain ? 'Captain ✓' : 'Make captain'}
-              </button>
-            )}
-            {!isMe && !p.guest && data.isCaptain && (
-              <button
-                onClick={() => setRemoving(p)}
-                aria-label={`Remove ${p.display_name}`}
-                className="rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
-              >
-                Remove
-              </button>
-            )}
           </div>
         )}
       </div>
     );
   };
+
+  // The player whose options are open, as they are now (so a status change shows right away).
+  const optionsPlayer = optionsFor ? roster.find((p) => p.id === optionsFor) || null : null;
 
   return (
     <div className="space-y-5">
@@ -579,6 +576,63 @@ export function TeamPage() {
             await data.reload();
           }}
         />
+      )}
+      {data.isCaptain && optionsPlayer && (
+        <Dialog open onOpenChange={(open) => !open && setOptionsFor(null)}>
+          <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+            <DialogHeader className="text-left">
+              <DialogTitle className={DIALOG_TITLE}>{optionsPlayer.display_name}</DialogTitle>
+            </DialogHeader>
+            <p className="-mt-2 text-sm text-zinc-500">
+              {optionsPlayer.guest ? "On the roster, hasn't joined the site yet" : optionsPlayer.is_captain ? 'Captain' : 'Player'}
+              {` · ${optionsPlayer.position || 'Floater'}`}
+            </p>
+            <div className="space-y-2" role="group" aria-label={`${optionsPlayer.display_name}'s status`}>
+              <span className="text-xs font-semibold text-zinc-500">Status{countsFor}</span>
+              <div className="flex flex-wrap gap-1.5">
+                <StatusButtons current={optionsPlayer.status} onPick={(status) => setStatus(optionsPlayer, status)} />
+              </div>
+            </div>
+            <div className="space-y-2 border-t border-zinc-100 pt-4">
+              {optionsPlayer.guest ? (
+                <button
+                  onClick={() => {
+                    setOptionsFor(null);
+                    setGuestDialog(guests.find((g) => g.id === optionsPlayer.id));
+                  }}
+                  aria-label={`Edit ${optionsPlayer.display_name}`}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-100 text-sm font-bold uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => toggleCaptain(optionsPlayer)}
+                    aria-pressed={!!optionsPlayer.is_captain}
+                    className={cn(
+                      'flex h-12 w-full items-center justify-center rounded-2xl text-sm font-bold uppercase tracking-[0.1em] transition',
+                      optionsPlayer.is_captain ? 'bg-lime-400 text-black hover:bg-lime-300' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200',
+                    )}
+                  >
+                    {optionsPlayer.is_captain ? 'Captain ✓' : 'Make captain'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOptionsFor(null);
+                      setRemoving(optionsPlayer);
+                    }}
+                    aria-label={`Remove ${optionsPlayer.display_name}`}
+                    className="flex h-11 w-full items-center justify-center rounded-2xl text-xs font-bold uppercase tracking-[0.1em] text-red-700 transition hover:bg-red-50"
+                  >
+                    Remove from the team
+                  </button>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
       {data.isCaptain && (
         <RemovePlayerDialog

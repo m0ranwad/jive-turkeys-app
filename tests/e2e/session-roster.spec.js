@@ -6,7 +6,7 @@
 // Sample data: session 1 is over (Jamie played it and is unavailable session 2;
 // Chris joined in session 2). Session 2 starts Saturday, and only some players
 // have answered: not the captain, Sam, Morgan, Riley, Kelly or Mike yet.
-import { expect, openSection, signIn, test } from './helpers';
+import { expect, openSection, signIn, test, playerOptions } from './helpers';
 
 const SAM = 'sam@demo.test';
 const JORDAN = 'jordan@demo.test'; // already answered for session 2
@@ -18,9 +18,6 @@ async function openTab(page, path, heading) {
 
 const prompt = (page) => page.getByTestId('session-prompt');
 const paidHeading = (page, text) => page.getByRole('heading', { name: text, exact: true });
-const playerCard = (page, name) =>
-  page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
-
 /** Session 2's games are all played, captains stopped asking about session 3, and nothing else is on the schedule. */
 async function offSeason(page) {
   await page.evaluate(() => {
@@ -55,7 +52,8 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await expect(answers).toContainText('9 of 14 answered');
   await expect(answers).not.toContainText('Casey Captain');
   // A captain answers for Mike, who hasn't joined the site, by confirming his status.
-  await page.getByRole('button', { name: 'Edit Mike Russo' }).locator('..').getByRole('button', { name: 'Playing', exact: true }).click();
+  await (await playerOptions(page, 'Mike Russo')).getByRole('button', { name: 'Playing', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(answers).toContainText('10 of 14 answered');
   await expect(answers).not.toContainText('Mike Russo');
 
@@ -129,8 +127,9 @@ test('once a session is over, status changes count from the next one and its due
   await expect(page.getByText(/^12 playing · 1 available to sub/)).toBeVisible();
   await expect(page.getByText(/session 2 is over, so it counts from the next session/)).toBeVisible();
   // A captain marks Kelly unavailable. Session 2's split doesn't change.
-  await playerCard(page, 'Kelly Moss').getByRole('button', { name: 'Unavailable' }).click();
+  await (await playerOptions(page, 'Kelly Moss')).getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText('Kelly Moss marked Unavailable')).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByText(/^11 playing · 1 available to sub · 2 unavailable/)).toBeVisible();
 
   await openTab(page, '/dues', 'Dues');
