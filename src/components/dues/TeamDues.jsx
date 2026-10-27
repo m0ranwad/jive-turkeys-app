@@ -186,7 +186,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
       partPaid
         ? `${dollars(share.paid_amount)} paid of ${dollars(share.amount)}`
         : topUp
-          ? `share went up · owes ${dollars(share.shortBy)}`
+          ? 'share went up'
           : changed && shareNote,
       share.paid && markedBy(p.user_id),
     ].filter(Boolean);

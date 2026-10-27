@@ -324,7 +324,8 @@ test('players keep what they paid when the fee changes, and the difference can b
   const paid = page.getByTestId('dues-paid');
   await expect(page.getByLabel('Amount for Sam Okafor')).toHaveText('$50');
   await expect(paid).toContainText('Sam Okafor');
-  await expect(paid).toContainText('share went up · owes $11');
+  await expect(paid).toContainText('share went up');
+  await expect(page.getByRole('button', { name: 'Mark $11 paid for Sam Okafor' })).toBeVisible();
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('1 owes a top-up')).toBeVisible();
   // Morgan gave the captain $30 of her $61: a part payment, still to pay.
@@ -352,7 +353,7 @@ test('players keep what they paid when the fee changes, and the difference can b
   await expect(page.getByLabel('Amount for Jordan Rivera')).toHaveText('$61');
   await expect(page.getByRole('button', { name: 'Mark $1 paid for Jordan Rivera' })).toBeVisible();
   await expect(page.getByLabel('Amount for Sam Okafor')).toHaveText('$50');
-  await expect(page.getByTestId('dues-paid')).toContainText('share went up · owes $12');
+  await expect(page.getByRole('button', { name: 'Mark $12 paid for Sam Okafor' })).toBeVisible();
   await expect(page.getByLabel('Amount for Morgan Lee')).toHaveText('$32left');
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('5 owe a top-up')).toBeVisible();

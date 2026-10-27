@@ -218,7 +218,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   Anyone can record part of a payment (**Paid part of it?**, up to what's owed; a couple's is split by what each owes,
   `partPayment()` / `splitPayment()`). Each active player is `teamDues().stateOf()`: `paid`, `unpaid`, `part` (paid
   less than their share was when they last marked paid: **Part paid**, under Still to pay) or `topUp` (paid it all,
-  then the share went up: **Paid · owes $X**, under Paid, counted in "N of M paid" and "N owe a top-up"). The share
+  then the share went up: **Paid · owes $X** on their chip, under Paid, counted in "N of M paid" and "N owe a top-up"). The share
   then is `shareWhenPaid()`, which undoes the `dues_changes` made since, plus roster names a captain linked to an
   account already on the list (`linked` in `sessionSlice()`, which `dues_changes` doesn't record). What moves the split is
   kept in `dues_changes`, written only by database triggers: the session fee, custom amounts, and anyone coming onto
