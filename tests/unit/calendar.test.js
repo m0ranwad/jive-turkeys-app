@@ -22,6 +22,17 @@ describe('shortage warnings on Schedule', () => {
     expect(shortageIsUrgent(game, new Date('2026-10-15T23:01:00Z'))).toBe(false);
     expect(shortageIsUrgent({ ...game, has_result: true }, new Date('2026-10-15T22:00:00Z'))).toBe(false);
   });
+
+  it('for a game with no time yet, stays urgent all through its day', () => {
+    const noTime = { ...game, time: '' };
+    // The 48 hours count back from 11:59 PM Eastern on game day.
+    expect(shortageIsUrgent(noTime, new Date('2026-10-14T03:58:00Z'))).toBe(false);
+    expect(shortageIsUrgent(noTime, new Date('2026-10-14T04:00:00Z'))).toBe(true);
+    // 9am and 6pm Eastern on game day, then just after midnight.
+    expect(shortageIsUrgent(noTime, new Date('2026-10-15T13:00:00Z'))).toBe(true);
+    expect(shortageIsUrgent(noTime, new Date('2026-10-15T22:00:00Z'))).toBe(true);
+    expect(shortageIsUrgent(noTime, new Date('2026-10-16T04:01:00Z'))).toBe(false);
+  });
 });
 
 describe('add to calendar', () => {

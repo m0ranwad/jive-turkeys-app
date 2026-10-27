@@ -4,20 +4,26 @@ import { resultOf } from '@/lib/team-logic';
 import { shortageIsUrgent } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
-export function ShortBanner({ needTotal = 0, needWomen = 0, className }) {
+/**
+ * How many more players (and women) a game needs. Red ("Short · …") when it's
+ * `urgent`; otherwise a calm chip in the `calm` colours, so a game days away
+ * doesn't look like an emergency.
+ */
+export function ShortBanner({ needTotal = 0, needWomen = 0, urgent = true, calm = 'bg-zinc-100 text-zinc-600', className }) {
   if (!needTotal && !needWomen) return null;
   const parts = [];
   if (needTotal) parts.push(`Need ${needTotal} more`);
-  if (needWomen) parts.push(`${needWomen} more ${needWomen === 1 ? 'woman' : 'women'}`);
+  if (needWomen) parts.push(`${needTotal ? '' : urgent ? '' : 'Need '}${needWomen} more ${needWomen === 1 ? 'woman' : 'women'}`);
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-white',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]',
+        urgent ? 'bg-red-600 text-white' : calm,
         className,
       )}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-white" />
-      Short · {parts.join(' · ')}
+      {urgent && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+      {urgent ? `Short · ${parts.join(' · ')}` : parts.join(' · ')}
     </span>
   );
 }
@@ -85,18 +91,19 @@ export function GameCard({ game, headcount, settings }) {
             </div>
             <ResultBadge result={result} className="h-9 w-9 rounded-2xl text-sm" />
           </div>
-        ) : urgent ? (
+        ) : (
           <ShortBanner
             className="hidden shrink-0 sm:inline-flex"
             needTotal={headcount?.needTotal}
             needWomen={headcount?.needWomen}
+            urgent={urgent}
           />
-        ) : null}
+        )}
       </div>
       {!final && headcount && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {/* On phones the banner sits with the counts so the opponent name has room. */}
-          {urgent && <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />}
+          <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={urgent} />
           <span className={cn(chip, 'bg-lime-100 text-lime-800')}>{headcount.totalIn} in</span>
           <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.womenFieldIn} women</span>
           <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.maybe.length} maybe</span>

@@ -15,7 +15,8 @@ test('a new player has to set up their profile, which puts them on the team', as
 
   // Not one of the names the captain put on the roster.
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await expect(page.getByLabel('Phone (optional)')).toHaveCount(0);
+  // Name and gender, and a phone number if they like, so captains can tap to call.
+  await expect(page.getByLabel('Phone (optional)')).toBeVisible();
   await expect(page.getByLabel('Year joined (optional)')).toHaveCount(0);
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();

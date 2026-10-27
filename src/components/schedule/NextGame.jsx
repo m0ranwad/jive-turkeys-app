@@ -40,7 +40,12 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
             {headcount.womenFieldIn}/{headcount.minWomen} women
           </span>
           <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">{headcount.groups.none.length} no reply</span>
-          {shortageIsUrgent(game) && <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} />}
+          <ShortBanner
+            needTotal={headcount.needTotal}
+            needWomen={headcount.needWomen}
+            urgent={shortageIsUrgent(game)}
+            calm="bg-white/10 text-white/80"
+          />
         </div>
       )}
 

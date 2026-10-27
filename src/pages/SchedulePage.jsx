@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import { api } from '@/api';
 import { InstallCard } from '@/components/InstallApp';
+import { NewPlayerTip } from '@/components/NewPlayerTip';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
@@ -161,6 +162,11 @@ export function SchedulePage() {
       )}
       <PotmPrompt data={data} />
       {nextGame && ask && !askedAhead && !ask.answered && <SessionPrompt ask={ask} onAnswered={data.reload} />}
+      {/* After the next game's answer and before the full list, where a phone still shows them. */}
+      <InstallCard onShowHow={showInstallGuide} />
+      {/* In the iPhone browser notifications need the Home Screen app, so Get the app is the one offer (even once closed). */}
+      {pushStatus !== 'needs-install' && <NotificationsPrompt state={pushStatus} variant="card" />}
+      <NewPlayerTip profile={data.profile} />
 
       {sessions.length === 0 && (
         <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center">
@@ -190,10 +196,6 @@ export function SchedulePage() {
           {showPast && pastSessions.map(sessionBlock)}
         </div>
       )}
-
-      <InstallCard onShowHow={showInstallGuide} />
-      {/* Offer device setup after the games, so it doesn't interrupt RSVPs. */}
-      {pushStatus !== 'needs-install' && <NotificationsPrompt state={pushStatus} variant="card" />}
 
       <GameFormDialog
         open={formOpen}

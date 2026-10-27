@@ -22,10 +22,13 @@ function gameTimes(game) {
   return { start: start.utc(), end: start.add(GAME_MINUTES, 'minute').utc() };
 }
 
-/** Schedule shortages become urgent within 48 hours of kickoff, in the team's time zone. */
+/**
+ * Schedule shortages become urgent within 48 hours of kickoff, in the team's
+ * time zone. A game with no time yet counts until the end of its day.
+ */
 export function shortageIsUrgent(game, now = new Date()) {
   if (game.has_result) return false;
-  const start = gameTimes(game)?.start ?? dayjs.tz(`${game.date} 00:00`, 'America/New_York');
+  const start = gameTimes(game)?.start ?? dayjs.tz(`${game.date} 23:59`, 'YYYY-MM-DD HH:mm', TEAM_ZONE);
   const hours = start.diff(dayjs(now), 'hour', true);
   return hours >= 0 && hours <= 48;
 }

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const STEPS = [
   { eyebrow: 'Welcome', title: 'Everything in one place', body: 'Schedule, RSVPs, and stats in one place. Team Chat keeps the banter going.' },
-  { eyebrow: 'Step 1', title: 'Set up your profile', body: 'Name and gender, plus optional phone and the year you joined.' },
+  { eyebrow: 'Step 1', title: 'Keep your status current', body: 'Playing, Available to sub or Unavailable, on My Profile. Captains plan subs around it.' },
   { eyebrow: 'Step 2', title: 'RSVP every game', body: 'Tap IN, OUT, or MAYBE. Captains count on this to know if we need subs.' },
   { eyebrow: 'Step 3', title: 'After games', body: 'Check scores, stats, Player of the Match, and our record against every team.' },
   { eyebrow: 'Step 4', title: 'New to the complex?', body: 'Check the Field Rules tab. Indoor rules are different.' },
@@ -189,7 +189,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                   </p>
                 ) : (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Add your name and gender for coed headcounts. You can add other details in My Profile later.
+                    Name and gender are for coed headcounts. A phone number is optional; it lets captains tap to call
+                    you. Everything else is in My Profile.
                     {names.length > 0 && (
                       <>
                         {' '}
@@ -272,7 +273,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       submitLabel="Start using the app"
                       busy={busy}
                       hidePosition
-                      requiredOnly
+                      hideYearJoined
                     />
                   </div>
                 )}

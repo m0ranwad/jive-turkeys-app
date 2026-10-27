@@ -2,7 +2,7 @@
 // accessibility basics (WCAG 2.1 A and AA): text contrast, names on buttons and
 // fields, and so on. A new screen or dialog should get a line here.
 import AxeBuilder from '@axe-core/playwright';
-import { duesOption, expect, PLAYER, signIn, test } from './helpers';
+import { duesOption, expect, openSection, PLAYER, signIn, test } from './helpers';
 
 async function expectAccessible(page, screen) {
   // Check what's on screen once it has settled (not halfway through fading in).
@@ -142,6 +142,25 @@ test("a player's screens", async ({ page }) => {
 
   await visit(page, '/dues', 'Dues');
   await expectAccessible(page, 'My dues');
+});
+
+test('a new player sees where the field rules are, and a share that went up after paying', async ({ page }) => {
+  // Kelly joined five days ago.
+  await signIn(page, 'kelly@demo.test');
+  await expect(page.getByTestId('new-player-tip')).toBeVisible();
+  await expectAccessible(page, 'Schedule, new player tip');
+
+  // Sam paid his whole share, and it went up after.
+  await page.getByRole('link', { name: 'My profile' }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.locator('#email').fill('sam@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await visit(page, '/dues', 'Dues');
+  await expect(page.getByTestId('share-why')).toBeVisible();
+  await expectAccessible(page, 'My dues, share went up');
+  await openSection(page, 'Payment details');
+  await expectAccessible(page, 'My dues, payment details');
 });
 
 test('asking who\'s playing a later session', async ({ page }) => {

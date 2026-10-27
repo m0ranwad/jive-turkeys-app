@@ -8,6 +8,23 @@ import { expect, signIn, test } from './helpers';
 
 const nextGame = (page) => page.getByRole('region', { name: 'Next game' });
 
+test('a shortage is a calm chip until two days before kickoff, then turns red', async ({ page }) => {
+  await signIn(page);
+  // Goal Diggers is more than two days away: how many more we need, without the alarm.
+  const card = nextGame(page);
+  await expect(card).toContainText('Need 2 more · 1 more woman');
+  await expect(card).not.toContainText('Short');
+  const later = page.getByRole('link', { name: /vs FC Lightning/ });
+  await expect(later).toContainText('Need 8 more · 3 more women');
+  await expect(later).not.toContainText('Short');
+
+  // A day later it's within 48 hours of kickoff.
+  await page.clock.fastForward('24:00:00');
+  await page.reload();
+  await expect(nextGame(page)).toContainText('Short · Need 2 more · 1 more woman');
+  await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
+});
+
 test('the next game is at the top of Schedule, and you answer right there', async ({ page }) => {
   await signIn(page);
   const card = nextGame(page);
@@ -15,7 +32,6 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
   await expect(card).toContainText('6 in');
   await expect(card).toContainText("You haven't answered");
   await expect(page.getByRole('link', { name: /vs Goal Diggers/ })).toHaveCount(1);
-  await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
 
   await card.getByRole('button', { name: 'IN', exact: true }).click();
   await expect(card.getByRole('button', { name: 'IN', exact: true })).toHaveAttribute('aria-pressed', 'true');
