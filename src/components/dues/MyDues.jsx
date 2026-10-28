@@ -142,7 +142,7 @@ function ShareCard({ mine, why }) {
           {refs > 0 && line(`Refs · ${parts.game_count} games × ${dollars(parts.ref_fee)}`, dollars(refs))}
           {line('Session total', dollars(feeTotal(parts)), true)}
           <p className="pt-1 text-xs text-white/50">
-            Split across {team.active.length} active players, rounded up to the next dollar.
+            Split across the {team.active.length} teammates playing, rounded up to the next dollar.
           </p>
         </div>
       </details>

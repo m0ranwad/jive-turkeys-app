@@ -71,7 +71,7 @@ export function JoinTeamPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Don't have it? Ask a captain, or check the team group text.
+        Don't have it? Ask the teammate who invited you, or a captain.
       </p>
       {isDemo && (
         <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-center text-xs font-semibold text-amber-900">

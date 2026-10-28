@@ -24,6 +24,8 @@ test('a player who still has a vote to cast is asked on Schedule, until they vot
 
   await card.getByRole('link').click();
   await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();
+  // It opens at the vote, not at the top of the game.
+  await expect(potm(page)).toBeInViewport();
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting open until Thu 9:00 PM');
   const man = potm(page).locator('div.rounded-2xl', { hasText: 'Man of the Match' });
   await man.getByRole('button').first().click();
@@ -72,8 +74,8 @@ test('posting a result opens voting for the time set in Team Settings', async ({
   await choice('Voting stays open for').getByRole('button', { name: '24 hours' }).click();
   await choice("Remind players who haven't voted").getByRole('button', { name: '6 hours before' }).click();
   await choice('Post the winners in Team Chat').getByRole('button', { name: 'Off' }).click();
-  await page.getByRole('button', { name: 'Save team settings' }).click();
-  await expect(page.getByText('Team settings saved')).toBeVisible();
+  // Each choice saves when it's tapped.
+  await expect(page.getByTestId('settings-status')).toHaveText('All changes saved');
   await page.reload();
   await expect(choice('Voting stays open for').getByRole('button', { name: '24 hours' })).toHaveAttribute('aria-pressed', 'true');
   await expect(choice("Remind players who haven't voted").getByRole('button', { name: '6 hours before' })).toHaveAttribute('aria-pressed', 'true');
@@ -107,8 +109,7 @@ test('captains set game reminders: on, 6 hours before kickoff unless changed', a
   const when = reminders.getByRole('group', { name: 'How long before kickoff' });
   await expect(when.getByRole('button', { name: '6 hours' })).toHaveAttribute('aria-pressed', 'true');
   await when.getByRole('button', { name: '12 hours' }).click();
-  await page.getByRole('button', { name: 'Save team settings' }).click();
-  await expect(page.getByText('Team settings saved')).toBeVisible();
+  await expect(page.getByTestId('settings-status')).toHaveText('All changes saved');
   await page.reload();
   await expect(when.getByRole('button', { name: '12 hours' })).toHaveAttribute('aria-pressed', 'true');
   await reminders.getByRole('group', { name: 'Send game reminders' }).getByRole('button', { name: 'Off' }).click();

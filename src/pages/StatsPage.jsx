@@ -13,6 +13,7 @@ export function StatsPage() {
   const data = useSeasonData();
   const [yearFilter, setYearFilter] = useState('all');
   const [sessionFilter, setSessionFilter] = useState('all');
+  const [tab, setTab] = useState('standings');
   const years = useMemo(
     () => [...new Set((data.games || []).map((g) => g.season_year))].sort((a, b) => b - a),
     [data.games],
@@ -28,35 +29,7 @@ export function StatsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Stats" subtitle="Results, leaders, and our record against everyone." />
-      <div className="grid grid-cols-2 gap-2">
-        <Select value={String(yearFilter)} onValueChange={setYearFilter}>
-          <SelectTrigger aria-label="Season">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All seasons</SelectItem>
-            {years.map((y) => (
-              <SelectItem key={y} value={String(y)}>
-                {seasonName(y)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={String(sessionFilter)} onValueChange={setSessionFilter}>
-          <SelectTrigger aria-label="Session">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All sessions</SelectItem>
-            {SESSIONS.map((s) => (
-              <SelectItem key={s} value={String(s)}>
-                Session {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <Tabs defaultValue="standings">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="standings" className={TAB_CLASS}>
             Standings
@@ -71,6 +44,37 @@ export function StatsPage() {
             Legacy
           </TabsTrigger>
         </TabsList>
+        {/* Legacy always covers every season, so the filters only show on the other tabs. */}
+        {tab !== 'legacy' && (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Select value={String(yearFilter)} onValueChange={setYearFilter}>
+              <SelectTrigger aria-label="Season">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All seasons</SelectItem>
+                {years.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {seasonName(y)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(sessionFilter)} onValueChange={setSessionFilter}>
+              <SelectTrigger aria-label="Session">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sessions</SelectItem>
+                {SESSIONS.map((s) => (
+                  <SelectItem key={s} value={String(s)}>
+                    Session {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <TabsContent value="standings" className="mt-4">
           <StandingsTab games={shared.games} year={year} session={session} />
         </TabsContent>

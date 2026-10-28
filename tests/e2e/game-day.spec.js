@@ -68,3 +68,20 @@ test('a Player of the Match vote can be changed', async ({ page }) => {
   await expect(man.getByRole('button', { name: second, exact: true })).toHaveClass(/bg-lime-400/);
   await expect(man.getByRole('button', { name: first, exact: true })).not.toHaveClass(/bg-lime-400/);
 });
+
+test('a played game leads with the result and the vote, with who said IN folded away', async ({ page }) => {
+  await signIn(page);
+  await openGame(page, 'Ball Busters');
+  const result = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Result', exact: true }) });
+  const vote = page.locator('#vote');
+  const rsvps = page.locator('details', { hasText: 'Who said they were in' });
+  const y = async (locator) => (await locator.boundingBox()).y;
+  expect(await y(result)).toBeLessThan(await y(vote));
+  expect(await y(vote)).toBeLessThan(await y(rsvps));
+  // Folded until tapped, and no shortage on a game that's been played.
+  await expect(rsvps.locator('[data-group="IN"]')).toBeHidden();
+  await rsvps.getByText('Who said they were in').click();
+  await expect(rsvps.locator('[data-group="IN"]')).toBeVisible();
+  await expect(rsvps).not.toContainText('Short');
+});
+
