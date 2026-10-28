@@ -7,7 +7,7 @@ import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
 import { NextSessionCard, SessionAheadCard, SessionPrompt, sessionAsk } from '@/components/SessionPrompt';
-import { GameCard } from '@/components/schedule/GameCard';
+import { LaterGameCard, PlayedList } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
 import { NextGameCard } from '@/components/schedule/NextGame';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
@@ -90,28 +90,26 @@ export function SchedulePage() {
         {upcoming.length > 0 && (
           <div className="space-y-2.5">
             {upcoming.map((g) => (
-              <div key={g.id} className="space-y-1.5">
-                <GameCard game={g} headcount={counts[g.id]} settings={data.settings} />
-                {/* Answer from the list (the next game's buttons are on its card above). */}
-                {onRoster && !g.has_result && g.id !== nextGame?.id && (
-                  <AnswerButtons
-                    compact
-                    label={answerLabel(g)}
-                    status={rsvp.mine(g)?.status}
-                    onSet={(status) => rsvp.setStatus(g, status)}
-                    busy={rsvp.isBusy(g)}
-                  />
-                )}
-              </div>
+              g.has_result ? <PlayedList key={g.id} games={[g]} /> : (
+                <LaterGameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings}>
+                  {onRoster && (
+                    <AnswerButtons
+                      compact
+                      label={answerLabel(g)}
+                      status={rsvp.mine(g)?.status}
+                      onSet={(status) => rsvp.setStatus(g, status)}
+                      busy={rsvp.isBusy(g)}
+                    />
+                  )}
+                </LaterGameCard>
+              )
             ))}
           </div>
         )}
         {s.past.length > 0 && (
           <div className="space-y-2.5 pt-1">
             <span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-500">Played</span>
-            {s.past.map((g) => (
-              <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
-            ))}
+            <PlayedList games={s.past} />
           </div>
         )}
       </section>

@@ -12,8 +12,8 @@ export const answerLabel = (game) => `Your answer for vs ${game.opponent}, ${fmt
 
 /**
  * IN / MAYBE / OUT: your own answer (Next game card, the Schedule list, the
- * game page) or a captain answering for someone. `compact` fits under a game
- * in the Schedule list.
+ * game page) or a captain answering for someone. `compact` fits inside a later
+ * game's card on Schedule, with the same minimum tap height.
  */
 export function AnswerButtons({ label, status, onSet, busy, compact = false }) {
   return (
@@ -27,7 +27,7 @@ export function AnswerButtons({ label, status, onSet, busy, compact = false }) {
           onClick={() => onSet(answer.value)}
           className={cn(
             'rounded-2xl border-2 font-display font-extrabold uppercase tracking-[0.1em] transition active:scale-[0.98] disabled:opacity-60',
-            compact ? 'py-1.5 text-[11px]' : 'py-3.5 text-[13px]',
+            compact ? 'min-h-11 py-1.5 text-[11px]' : 'py-3.5 text-[13px]',
             status === answer.value ? answer.active : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300',
           )}
         >
