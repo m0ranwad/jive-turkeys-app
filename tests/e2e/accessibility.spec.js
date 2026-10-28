@@ -63,6 +63,11 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'Unlink a roster name');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Unlink Kelly M?' })).toHaveCount(0);
+  await page.locator('button[data-options-for="Jordan Rivera"]').click();
+  await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toBeVisible();
+  await expectAccessible(page, "a player's options");
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toHaveCount(0);
 
   await visit(page, '/banter?room=team', 'Team Chat');
   await expectAccessible(page, 'Team Chat');

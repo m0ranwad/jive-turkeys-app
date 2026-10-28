@@ -1,7 +1,7 @@
 // Captains take a signed-up player off the team: they come off the roster and
 // the counts, can't get back in with the team code, and can be added back.
 // The database enforces who can do what (supabase/tests/membership.test.sql).
-import { enterTeamCode, expect, signIn, test } from './helpers';
+import { enterTeamCode, expect, signIn, test, playerOptions } from './helpers';
 
 async function openTeam(page) {
   await page.locator('a[href="/team"]:visible').first().click();
@@ -30,7 +30,7 @@ test('a captain removes a signed-up player, who loses access until added back', 
   // Not themselves.
   await expect(page.getByRole('button', { name: 'Remove Casey Captain' })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Remove Jordan Rivera' }).click();
+  await (await playerOptions(page, 'Jordan Rivera')).getByRole('button', { name: 'Remove Jordan Rivera' }).click();
   const dialog = page.getByRole('dialog', { name: 'Remove Jordan Rivera?' });
   await expect(dialog).toContainText("the team code won't let them back in");
   await dialog.getByRole('button', { name: 'Remove', exact: true }).click();

@@ -7,7 +7,7 @@
 // Sample data: session 2 starts with the next game; Casey already asked who's
 // playing session 3. Priya, Alex and Jamie said they're in, Riley sub only;
 // Jordan and the rest haven't answered.
-import { expect, PLAYER, signIn, test } from './helpers';
+import { expect, PLAYER, signIn, test, playerOptions } from './helpers';
 
 async function openTab(page, path, heading) {
   await page.locator(`a[href="${path}"]:visible`).first().click();
@@ -105,8 +105,9 @@ test('stopping the question keeps future dues current and preserves explicit ans
   // Casey hasn't answered session 3; Priya explicitly said she's in.
   await playerCard(page, 'Casey Captain').getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText('Casey Captain marked Unavailable')).toBeVisible();
-  await playerCard(page, 'Priya Shah').getByRole('button', { name: 'Unavailable' }).click();
+  await (await playerOptions(page, 'Priya Shah')).getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText('Priya Shah marked Unavailable')).toBeVisible();
+  await page.keyboard.press('Escape');
 
   await openTab(page, '/dues', 'Dues');
   await page.getByRole('tab', { name: 'Team dues' }).click();
@@ -217,8 +218,11 @@ test("between sessions, a captain's answer for someone is their status right now
   await answers.getByLabel('Sam Okafor in session 3').selectOption('on_break');
   await answers.getByRole('button', { name: 'Save 2 changes' }).click();
   await expect(page.getByText('Session 3 updated')).toBeVisible();
-  await expect(playerCard(page, 'Mike Russo').getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(playerCard(page, 'Sam Okafor').getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
+  const mike = await playerOptions(page, 'Mike Russo');
+  await expect(mike.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  const sam = await playerOptions(page, 'Sam Okafor');
+  await expect(sam.getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test("captains' new games go in the session they're asking about, with dates in the season's years", async ({ page }) => {

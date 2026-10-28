@@ -157,7 +157,7 @@ export function UnlinkGuestDialog({ unlinking, onOpenChange, onUnlinked }) {
     setBusy(true);
     try {
       await api.users.unlinkGuest(guest.id);
-      toast({ title: `${guest.display_name} is a grey card again`, description: 'Tap Edit on it to move it to the right account.' });
+      toast({ title: `${guest.display_name} is a grey card again`, description: 'Tap its name, then Edit, to move it to the right account.' });
       onOpenChange(false);
       await onUnlinked?.();
     } catch (err) {
