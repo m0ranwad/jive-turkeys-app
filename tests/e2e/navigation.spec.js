@@ -17,7 +17,7 @@ test('the menu works from the keyboard and with screen readers', async ({ page }
   await button.click();
   const menu = page.getByRole('dialog', { name: 'Menu' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('link', { name: 'Team Chat' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Announcements' })).toBeVisible();
 
   // Tab goes round the menu, not the page behind it.
   for (let i = 0; i < 12; i++) {
@@ -38,3 +38,21 @@ test('the menu works from the keyboard and with screen readers', async ({ page }
   await page.mouse.click(10, 300);
   await expect(menu).toHaveCount(0);
 });
+
+test("five tabs, and the menu holds only what isn't a tab", async ({ page }) => {
+  await signIn(page);
+  const tabs = page.locator('[data-bottom-nav] a:visible, header nav a:visible');
+  await expect(tabs.filter({ hasText: /Rules/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const menu = page.getByRole('dialog', { name: 'Menu' });
+  for (const name of ['Announcements', 'Field Rules', 'Team Settings', 'How to Use']) {
+    await expect(menu.getByRole('link', { name }).or(menu.getByRole('button', { name }))).toBeVisible();
+  }
+  for (const name of ['Team Chat', 'Dues', 'My Profile']) {
+    await expect(menu.getByRole('link', { name, exact: true })).toHaveCount(0);
+  }
+  // Your name at the top opens My Profile.
+  await menu.getByRole('link', { name: /Casey Captain/ }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+});
+
