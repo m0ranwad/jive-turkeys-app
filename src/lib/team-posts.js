@@ -46,9 +46,12 @@ export function subsToAsk({ game, profiles, rsvps }) {
   return (profiles || []).filter((p) => p.status === 'sub_pool' && !answered.has(p.user_id));
 }
 
-/** "Subs needed": the available subs by name, and how many more we need. */
-export function subsCall({ game, settings, profiles, rsvps, link, nameOf = plainName }) {
-  const gameRsvps = (rsvps || []).filter((r) => r.game_id === game.id);
+/**
+ * "Subs needed": the available subs by name, and how many more we need.
+ * `headcount` is the game's headcount() (src/lib/team-logic.js), the same
+ * shortage the game screen and Schedule show.
+ */
+export function subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf = plainName }) {
   const subs = subsToAsk({ game, profiles, rsvps }).map(nameOf);
   const lines = [
     `🦃 Jive Turkeys — subs needed for ${fmtDateShort(game.date)} · ${fmtTime(game.time)}`,
@@ -57,16 +60,9 @@ export function subsCall({ game, settings, profiles, rsvps, link, nameOf = plain
   if (subs.length) lines.push(`Available to sub: ${subs.join(', ')}`);
   else lines.push('No available subs left to ask.');
 
-  const minPlayers = Number(settings?.min_players ?? 8);
-  const minWomen = Number(settings?.min_women ?? 3);
-  const totalIn = gameRsvps.filter((r) => r.status === 'in').length;
-  const womenFieldIn = (profiles || []).filter((p) => {
-    const r = gameRsvps.find((x) => x.user_id === p.user_id);
-    return r?.status === 'in' && p.gender === 'F' && !r.playing_gk;
-  }).length;
   const needs = [];
-  if (totalIn < minPlayers) needs.push(`${minPlayers - totalIn} more`);
-  if (womenFieldIn < minWomen) needs.push(`${minWomen - womenFieldIn} more ${women(minWomen - womenFieldIn)}`);
+  if (headcount.needTotal) needs.push(`${headcount.needTotal} more`);
+  if (headcount.needWomen) needs.push(`${headcount.needWomen} more ${women(headcount.needWomen)}`);
   if (needs.length) lines.push(`Need ${needs.join(' / ')}. Tap IN if you can play.`);
   lines.push(`RSVP: ${link}`);
   return lines.join('\n');

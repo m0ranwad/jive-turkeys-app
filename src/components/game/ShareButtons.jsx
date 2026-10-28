@@ -2,11 +2,13 @@ import { useCallback, useState } from 'react';
 import { Megaphone, UserPlus } from 'lucide-react';
 import { PostToChatDialog } from '@/components/PostToChatDialog';
 import { gameReminder, subsCall, subsToAsk } from '@/lib/team-posts';
+import { cn } from '@/lib/utils';
 
 export const gameLink = (game) => `${window.location.origin}/games/${game.id}`;
 
 const BUTTON =
   'inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-white/20';
+const PRIMARY = 'bg-lime-400 text-black hover:bg-lime-300';
 
 /** "Are you in?" for Team Chat, @mentioning whoever hasn't answered (or to copy). */
 export function RemindTeamButton({ game, headcount, settings }) {
@@ -34,17 +36,21 @@ export function RemindTeamButton({ game, headcount, settings }) {
   );
 }
 
-/** "Subs needed" for Team Chat, @mentioning the available subs who haven't said IN or OUT (or to copy). */
-export function CallForSubsButton({ game, settings, profiles, rsvps }) {
+/**
+ * "Subs needed" for Team Chat, @mentioning the available subs who haven't said IN or OUT (or to copy).
+ * `headcount` is the game's headcount(), so the message says what the screen says. `primary`: the lime
+ * main button (before kickoff, when we're short).
+ */
+export function CallForSubsButton({ game, headcount, settings, profiles, rsvps, primary = false }) {
   const [open, setOpen] = useState(false);
   const message = useCallback(
-    (nameOf) => subsCall({ game, settings, profiles, rsvps, link: gameLink(game), nameOf }),
-    [game, settings, profiles, rsvps],
+    (nameOf) => subsCall({ game, headcount, settings, profiles, rsvps, link: gameLink(game), nameOf }),
+    [game, headcount, settings, profiles, rsvps],
   );
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className={BUTTON}>
+      <button onClick={() => setOpen(true)} className={cn(BUTTON, primary && PRIMARY)}>
         <UserPlus className="h-3.5 w-3.5" />
         Call for subs
       </button>

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { findMentions, mentionPeople } from '@/lib/mentions';
 import { chatNamer, gameReminder, plainName, subsCall, subsToAsk } from '@/lib/team-posts';
+import { headcount as computeHeadcount } from '@/lib/team-logic';
 
 const profiles = [
   { user_id: 'cc', display_name: 'Casey Captain', status: 'active', gender: 'M' },
@@ -57,9 +58,19 @@ describe('the call for subs', () => {
   });
 
   it('names them with their @mention, and says how many more we need', () => {
-    const text = subsCall({ game, settings, profiles, rsvps, link, nameOf: chatNamer(profiles) });
+    const headcount = computeHeadcount({ game, rsvps, profiles, settings });
+    const text = subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf: chatNamer(profiles) });
     expect(text).toContain('Available to sub: @Drew P., Mike Russo');
     expect(text).toContain('Need 7 more / 3 more women. Tap IN if you can play.');
     expect(text).toContain(`RSVP: ${link}`);
+  });
+
+  it("counts the shortage the way the game screen does, so an IN from someone off the roster doesn't hide it", () => {
+    // Seven on the session's roster are IN, and so is someone who's no longer on it.
+    const team = Array.from({ length: 7 }, (_, i) => ({ user_id: `p${i}`, display_name: `Player ${i}`, status: 'active', gender: i < 3 ? 'F' : 'M' }));
+    const ins = [...team.map((p) => ({ game_id: 'g1', user_id: p.user_id, status: 'in' })), { game_id: 'g1', user_id: 'gone', status: 'in' }];
+    const headcount = computeHeadcount({ game, rsvps: ins, profiles: team, settings });
+    expect(headcount.isShort).toBe(true);
+    expect(subsCall({ game, headcount, settings, profiles: team, rsvps: ins, link })).toContain('Need 1 more. Tap IN if you can play.');
   });
 });
