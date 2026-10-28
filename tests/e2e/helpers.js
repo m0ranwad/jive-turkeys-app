@@ -180,7 +180,7 @@ export async function expectTeam(page, { playing, sub = 0, unavailable = 0, notJ
     else await expect(heading(status)).toHaveCount(0);
   }
   if (notJoined !== undefined) {
-    await expect(page.locator('[data-roster-row]').filter({ hasText: 'Not joined yet' })).toHaveCount(notJoined);
+    await expect(notJoinedRows(page)).toHaveCount(notJoined);
   }
 }
 
@@ -188,4 +188,4 @@ export async function expectTeam(page, { playing, sub = 0, unavailable = 0, notJ
 export const rosterRow = (page, name) => page.locator(`[data-roster-row="${name}"]`);
 
 /** Team page rows for teammates who haven't joined the site yet. */
-export const notJoinedRows = (page) => page.locator('[data-roster-row]').filter({ hasText: 'Not joined yet' });
+export const notJoinedRows = (page) => page.locator('[data-roster-row][data-not-joined]');
