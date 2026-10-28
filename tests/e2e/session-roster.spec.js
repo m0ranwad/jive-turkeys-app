@@ -50,7 +50,7 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await signIn(page);
   await expect(prompt(page)).toContainText('Session 2 starts Sat, Oct 10');
   await expect(prompt(page)).toContainText('Playing session 2?');
-  await expect(prompt(page)).toContainText("Currently Playing.");
+  await expect(prompt(page)).toContainText("You're down as Playing.");
 
   // Captains see who hasn't answered.
   await openTab(page, '/team', 'Team');
