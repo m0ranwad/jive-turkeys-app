@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import dayjs from 'dayjs';
-import { Copy, Plus } from 'lucide-react';
+import { Copy, MessageSquare, Plus } from 'lucide-react';
 import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
+import { PostToChatDialog } from '@/components/PostToChatDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
@@ -18,6 +19,9 @@ export function AnnouncementsPage() {
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState({ title: '', body: '' });
   const [busy, setBusy] = useState(false);
+  // The announcement a captain is posting in Team Chat (offered right after a new one, too).
+  const [sharing, setSharing] = useState(null);
+  const shareMessage = useCallback(() => (sharing ? `📣 ${sharing.title}\n\n${sharing.body}` : ''), [sharing]);
 
   const load = useCallback(async () => {
     setPosts(await api.entities.Announcement.list('-created_date'));
@@ -31,7 +35,7 @@ export function AnnouncementsPage() {
     if (!draft.title.trim() || !draft.body.trim()) return;
     setBusy(true);
     try {
-      await api.entities.Announcement.create({
+      const created = await api.entities.Announcement.create({
         title: draft.title.trim(),
         body: draft.body.trim(),
         author_name: profile?.display_name || user?.full_name || 'Captain',
@@ -40,6 +44,7 @@ export function AnnouncementsPage() {
       setDraft({ title: '', body: '' });
       await load();
       toast({ title: 'Announcement posted' });
+      setSharing(created);
     } catch (err) {
       toast({ title: "That didn't post", description: err.message });
     } finally {
@@ -49,7 +54,7 @@ export function AnnouncementsPage() {
 
   const copy = async (a) => {
     await copyText(`🦃 ${a.title}\n\n${a.body}`);
-    toast({ title: 'Copied', description: 'Paste it into the team group text.' });
+    toast({ title: 'Copied' });
   };
 
   if (loading || !posts) return <PageSpinner />;
@@ -72,13 +77,24 @@ export function AnnouncementsPage() {
           <article key={a.id} className={CARD}>
             <div className="flex items-start justify-between gap-3">
               <h2 className="font-display text-lg font-extrabold uppercase leading-tight tracking-tight">{a.title}</h2>
-              <button
-                onClick={() => copy(a)}
-                aria-label="Copy announcement"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200"
-              >
-                <Copy className="h-4 w-4" />
-              </button>
+              {isCaptain ? (
+                <button
+                  onClick={() => setSharing(a)}
+                  aria-label="Post in Team Chat"
+                  title="Post in Team Chat"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => copy(a)}
+                  aria-label="Copy announcement"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              )}
             </div>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">{a.body}</p>
             <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
@@ -93,6 +109,15 @@ export function AnnouncementsPage() {
         )}
       </div>
 
+      <PostToChatDialog
+        open={!!sharing}
+        onOpenChange={(open) => !open && setSharing(null)}
+        title="Post in Team Chat?"
+        intro="So everyone sees it where they already are. @team buzzes everyone with notifications on."
+        message={shareMessage}
+        everyone
+      />
+
       <Dialog open={composing} onOpenChange={setComposing}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -100,12 +125,13 @@ export function AnnouncementsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+              <Label htmlFor="announcement-title">Title</Label>
+              <Input id="announcement-title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>Message</Label>
+              <Label htmlFor="announcement-body">Message</Label>
               <Textarea
+                id="announcement-body"
                 rows={6}
                 value={draft.body}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}

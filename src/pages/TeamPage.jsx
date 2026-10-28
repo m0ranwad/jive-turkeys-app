@@ -183,7 +183,7 @@ export function TeamPage() {
     }
   };
 
-  // A nudge for the group text, naming everyone still to join.
+  // An invite to send to whoever hasn't joined yet (they aren't in Team Chat), naming them.
   const copyInvite = async () => {
     const names = roster.filter((p) => p.guest).map((p) => p.display_name);
     await copyText(
@@ -198,7 +198,7 @@ export function TeamPage() {
         .filter(Boolean)
         .join('\n'),
     );
-    toast({ title: 'Invite copied', description: 'Paste it into the team group text.' });
+    toast({ title: 'Invite copied', description: "Text or email it to whoever hasn't joined. Once they're in, the team talks in Team Chat." });
   };
 
   const toggleCaptain = async (profile) => {

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Pencil, Target, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { ArrowLeft, ChevronDown, Pencil, Target, Trash2 } from 'lucide-react';
 import { api } from '@/api';
 import { HeadcountPanel } from '@/components/game/HeadcountPanel';
 import { PotmVoting } from '@/components/game/PotmVoting';
@@ -8,7 +8,7 @@ import { ResultCard } from '@/components/game/ResultCard';
 import { ResultDialog } from '@/components/game/ResultDialog';
 import { RsvpCard } from '@/components/game/RsvpCard';
 import { RsvpForDialog } from '@/components/game/RsvpForDialog';
-import { CallForSubsButton, CopyReminderButton } from '@/components/game/ShareButtons';
+import { CallForSubsButton, RemindTeamButton } from '@/components/game/ShareButtons';
 import { PageSpinner } from '@/components/PageSpinner';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
@@ -16,7 +16,7 @@ import { AddToCalendar } from '@/components/game/AddToCalendar';
 import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { saveFailedToast } from '@/lib/errors';
-import { hasKickedOff } from '@/lib/calendar';
+import { hasKickedOff, kickoff } from '@/lib/calendar';
 import { fmtDateLong, fmtTime, jerseyText, seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
@@ -26,6 +26,7 @@ const pill = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[11
 
 export function GameDetailPage() {
   const { id } = useParams();
+  const { hash } = useLocation();
   const navigate = useNavigate();
   const data = useSeasonData();
   const rsvp = useRsvp(data);
@@ -46,6 +47,25 @@ export function GameDetailPage() {
     () => (game ? computeHeadcount({ game, rsvps: data.rsvps, profiles: sessionProfiles, settings: data.settings }) : null),
     [game, data.rsvps, sessionProfiles, data.settings],
   );
+
+  // Captain tools reorder at kickoff (below), so a page left open re-renders then. Long waits go in steps,
+  // because a browser timer can't wait more than about 24 days.
+  const [now, setNow] = useState(() => Date.now());
+  const kickoffAt = game && !game.has_result ? kickoff(game).valueOf() : null;
+  useEffect(() => {
+    const wait = kickoffAt - Date.now();
+    if (kickoffAt == null || !(wait > 0)) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  }, [kickoffAt, now]);
+
+  // Vote on Schedule opens the game at its vote (#vote).
+  const votingShown = !!game?.has_result;
+  useEffect(() => {
+    if (hash !== '#vote' || !votingShown) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('vote')?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }, [hash, votingShown]);
 
   if (data.loading) return <PageSpinner />;
 
@@ -168,13 +188,14 @@ export function GameDetailPage() {
       {!game.has_result && (
         <CallForSubsButton
           game={game}
+          headcount={counts}
           settings={data.settings}
           profiles={sessionProfiles}
           rsvps={data.rsvps}
-          primary={!started && !!counts?.isShort}
+          primary={!started && counts.isShort}
         />
       )}
-      {!game.has_result && counts && <CopyReminderButton game={game} headcount={counts} settings={data.settings} />}
+      {!game.has_result && <RemindTeamButton game={game} headcount={counts} settings={data.settings} />}
       <button onClick={() => setEditOpen(true)} className={cn(pill, 'bg-white/5 text-white hover:bg-white/10')}>
         <Pencil className="h-3.5 w-3.5" /> Edit
       </button>
@@ -271,16 +292,7 @@ export function GameDetailPage() {
         </section>
       )}
 
-      {counts && (
-        <HeadcountPanel
-          game={game}
-          headcount={counts}
-          suspendedIds={suspended}
-          settings={data.settings}
-          onPick={data.isCaptain && !game.has_result ? setRsvpFor : null}
-        />
-      )}
-
+      {/* A played game leads with what happened: the score, then the vote, then who said they were in, folded. */}
       {game.has_result && (
         <>
           <ResultCard game={game} stats={statsWithNames} fillIns={data.fillIns} />
@@ -294,6 +306,30 @@ export function GameDetailPage() {
             onChanged={data.reload}
           />
         </>
+      )}
+
+      {counts && !game.has_result && (
+        <HeadcountPanel
+          game={game}
+          headcount={counts}
+          suspendedIds={suspended}
+          settings={data.settings}
+          onPick={data.isCaptain ? setRsvpFor : null}
+        />
+      )}
+      {counts && game.has_result && (
+        <details className="group rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Who said they were in</span>
+            <span className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
+              {counts.totalIn} in
+              <ChevronDown className="h-4 w-4 transition group-open:rotate-180 motion-reduce:transition-none" />
+            </span>
+          </summary>
+          <div className="-mt-2">
+            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} settings={data.settings} bare />
+          </div>
+        </details>
       )}
 
       <RsvpForDialog

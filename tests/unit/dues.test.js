@@ -647,6 +647,24 @@ describe('the reminder', () => {
       ].join('\n'),
     );
   });
+  it('names each person in a couple with nameOf, for @mentions in Team Chat', () => {
+    const jordan = { user_id: 'jr', display_name: 'Jordan Rivera' };
+    const sam = { user_id: 'so', display_name: 'Sam Okafor' };
+    const dana = { user_id: 'dw', display_name: 'Dana Wells', guest: true };
+    const text = reminderText({
+      session: 2,
+      parts: DUES_DEFAULTS,
+      perPlayer: 61,
+      activeCount: 12,
+      unpaid: [
+        { name: 'Jordan Rivera & Sam Okafor', people: [jordan, sam], amount: 122 },
+        { name: 'Dana Wells', people: [dana], amount: 61 },
+      ],
+      link: 'https://jiveturkeys.app/dues',
+      nameOf: (p) => (p.guest ? p.display_name : `@${p.display_name.split(' ')[0]}`),
+    });
+    expect(text).toContain('Still to pay: @Jordan & @Sam ($122), Dana Wells');
+  });
 });
 
 describe('stepping between sessions', () => {

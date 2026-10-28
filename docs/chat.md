@@ -50,6 +50,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | While typing on a phone, the chat fits the space above the keyboard: room name at the top, newest messages, and the message box with your words right above the keyboard. The site header and tab bar step aside until the keyboard closes. This holds when the iPhone keyboard covers the page without resizing it, and when Safari slides the page. Tapping Send or an emoji keeps the keyboard open. | `[browser]` (simulated keyboard), manual on a real iPhone |
 | A one-time tip at the top of the room list (never over the messages) explains tapping a message and **New**. It stays dismissed. | `[browser]` |
 | Unsent text is kept per room while you switch rooms (until the page is reloaded). | `[browser]` |
+| **Posting from other screens:** a game's **Remind team** and **Call for subs** (captains), **Remind who owes** on Team dues and an announcement (captains, also offered right after posting one) show the message first, then **Post in Team Chat** or **Copy instead**. It posts as you, naming teammates on the site with their @mention (whoever hasn't answered, the available subs who haven't said IN or OUT, whoever still owes; @team for an announcement) so their phones buzz. Roster names who haven't joined are plain names, and the window says to copy it for them. Copy gives plain names. (`PostToChatDialog`, `src/lib/team-posts.js`) | `[browser]` `[unit]` |
 
 ## 3. Message options: react, reply, copy, edit, delete
 

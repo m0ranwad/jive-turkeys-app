@@ -22,10 +22,14 @@ function gameTimes(game) {
   return { start: start.utc(), end: start.add(GAME_MINUTES, 'minute').utc() };
 }
 
-/** Whether a game has started, in the team's time zone. A game with no time yet starts at midnight. */
+/** When a game starts, in the team's time zone. A game with no time yet starts at midnight. */
+export function kickoff(game) {
+  return gameTimes(game)?.start ?? dayjs.tz(`${game.date} 00:00`, 'YYYY-MM-DD HH:mm', TEAM_ZONE);
+}
+
+/** Whether a game has started (kickoff()). */
 export function hasKickedOff(game, now = new Date()) {
-  const start = gameTimes(game)?.start ?? dayjs.tz(`${game.date} 00:00`, 'YYYY-MM-DD HH:mm', TEAM_ZONE);
-  return !dayjs(now).isBefore(start);
+  return !dayjs(now).isBefore(kickoff(game));
 }
 
 /**

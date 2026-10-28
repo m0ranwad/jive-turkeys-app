@@ -83,8 +83,25 @@ test("before kickoff a captain answers first, and Call for subs leads when we're
   await expect(buttons.last()).toHaveText('Enter result');
   await expect(buttons.last()).not.toHaveClass(/bg-lime-400/);
 
-  // Once it's started, Enter result leads.
+  // Once it's started, Enter result leads, without reloading a page left open since before kickoff.
   await page.clock.fastForward(72 * 60 * 60 * 1000);
-  await page.reload();
-  await expect(page.getByRole('region', { name: 'Captain tools' }).getByRole('button').first()).toHaveText('Enter result');
+  await expect(buttons.first()).toHaveText('Enter result');
+  await expect(buttons.first()).toHaveClass(/bg-lime-400/);
 });
+
+test('a played game leads with the result and the vote, with who said IN folded away', async ({ page }) => {
+  await signIn(page);
+  await openGame(page, 'Ball Busters');
+  const result = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Result', exact: true }) });
+  const vote = page.locator('#vote');
+  const rsvps = page.locator('details', { hasText: 'Who said they were in' });
+  const y = async (locator) => (await locator.boundingBox()).y;
+  expect(await y(result)).toBeLessThan(await y(vote));
+  expect(await y(vote)).toBeLessThan(await y(rsvps));
+  // Folded until tapped, and no shortage on a game that's been played.
+  await expect(rsvps.locator('[data-group="IN"]')).toBeHidden();
+  await rsvps.getByText('Who said they were in').click();
+  await expect(rsvps.locator('[data-group="IN"]')).toBeVisible();
+  await expect(rsvps).not.toContainText('Short');
+});
+
