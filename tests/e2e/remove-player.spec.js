@@ -1,7 +1,7 @@
 // Captains take a signed-up player off the team: they come off the roster and
 // the counts, can't get back in with the team code, and can be added back.
 // The database enforces who can do what (supabase/tests/membership.test.sql).
-import { enterTeamCode, expect, signIn, test, playerOptions } from './helpers';
+import { enterTeamCode, expect, expectTeam, signIn, test, playerOptions } from './helpers';
 
 async function openTeam(page) {
   await page.locator('a[href="/team"]:visible').first().click();
@@ -26,7 +26,7 @@ test('players cannot remove anyone', async ({ page }) => {
 test('a captain removes a signed-up player, who loses access until added back', async ({ page }) => {
   await signIn(page);
   await openTeam(page);
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 2 });
   // Not themselves.
   await expect(page.getByRole('button', { name: 'Remove Casey Captain' })).toHaveCount(0);
 
@@ -35,7 +35,7 @@ test('a captain removes a signed-up player, who loses access until added back', 
   await expect(dialog).toContainText("the team code won't let them back in");
   await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(page.getByText('Jordan Rivera removed from the team')).toBeVisible();
-  await expect(page.getByText('11 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 11, sub: 1, unavailable: 1, notJoined: 2 });
   const removed = page.getByTestId('removed-players');
   await expect(removed).toContainText('Jordan Rivera');
 
@@ -52,6 +52,6 @@ test('a captain removes a signed-up player, who loses access until added back', 
   await openTeam(page);
   await page.getByTestId('removed-players').getByRole('button', { name: 'Add back' }).click();
   await expect(page.getByText('Jordan Rivera added back')).toBeVisible();
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 2 });
   await expect(page.getByTestId('removed-players')).toHaveCount(0);
 });

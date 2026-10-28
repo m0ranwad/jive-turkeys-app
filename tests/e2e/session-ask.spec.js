@@ -7,7 +7,7 @@
 // Sample data: session 2 starts with the next game; Casey already asked who's
 // playing session 3. Priya, Alex and Jamie said they're in, Riley sub only;
 // Jordan and the rest haven't answered.
-import { expect, PLAYER, signIn, test, playerOptions } from './helpers';
+import { expect, PLAYER, rosterRow, signIn, test, playerOptions } from './helpers';
 
 async function openTab(page, path, heading) {
   await page.locator(`a[href="${path}"]:visible`).first().click();
@@ -15,8 +15,6 @@ async function openTab(page, path, heading) {
 }
 
 const ahead = (page) => page.getByTestId('session-ahead');
-const playerCard = (page, name) =>
-  page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
 const rosterStatus = (page) => page.locator('section').filter({ has: page.getByRole('heading', { name: 'Roster status' }) });
 
 /** Session 2's games are all played: between sessions, before session 3's schedule is out. */
@@ -103,8 +101,10 @@ test('stopping the question keeps future dues current and preserves explicit ans
   await expect(page.getByText('Stopped asking about session 3')).toBeVisible();
 
   // Casey hasn't answered session 3; Priya explicitly said she's in.
-  await playerCard(page, 'Casey Captain').getByRole('button', { name: 'Unavailable' }).click();
-  await expect(page.getByText('Casey Captain marked Unavailable')).toBeVisible();
+  // Your own status: Change on your row.
+  await rosterRow(page, 'Casey Captain').getByRole('button', { name: /^Change your status/ }).click();
+  await page.getByRole('dialog', { name: 'Your status' }).getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText("You're now Unavailable. No sub requests.")).toBeVisible();
   await (await playerOptions(page, 'Priya Shah')).getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText('Priya Shah marked Unavailable')).toBeVisible();
   await page.keyboard.press('Escape');

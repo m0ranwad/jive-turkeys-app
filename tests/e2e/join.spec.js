@@ -1,4 +1,4 @@
-import { enterTeamCode, expect, test } from './helpers';
+import { enterTeamCode, expect, expectTeam, notJoinedRows, test } from './helpers';
 
 test('a new player has to set up their profile, which puts them on the team', async ({ page }) => {
   await page.goto('/register');
@@ -61,8 +61,8 @@ test('a new player picks their name on the roster, and their spot and dues come 
 
   // On the roster as a joined player, no longer a grey card.
   await page.locator('a[href="/team"]:visible').first().click();
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 1 not joined yet')).toBeVisible();
-  await expect(page.getByTestId('not-joined')).toContainText("1 hasn't joined yet");
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 1 });
+  await expect(notJoinedRows(page)).toHaveCount(1);
 
   // His paid session came with him.
   await page.locator('a[href="/dues"]:visible').first().click();
@@ -138,7 +138,7 @@ test('a new player who taps the wrong name, or says they are not on the list, ca
   await page.locator('a[href="/team"]:visible').first().click();
   await expect(page.getByText('Dana W.', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Dana Wells', { exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('not-joined')).toContainText("1 hasn't joined yet");
+  await expect(notJoinedRows(page)).toHaveCount(1);
   await expect(page.getByText('Mike Russo', { exact: true }).last()).toBeVisible();
 });
 
@@ -177,7 +177,7 @@ test('a new player who types their name instead of picking it is asked if that i
 
   // Her spot came with her: no grey card for Dana Wells, and her payments are hers.
   await page.locator('a[href="/team"]:visible').first().click();
-  await expect(page.getByTestId('not-joined')).toContainText("1 hasn't joined yet");
+  await expect(notJoinedRows(page)).toHaveCount(1);
   await expect(page.getByText('Dana Wells', { exact: true })).toHaveCount(0);
   await page.locator('a[href="/dues"]:visible').first().click();
   await page.getByRole('tab', { name: 'Team dues' }).click();
@@ -205,7 +205,7 @@ test('someone else with the same first name can say so', async ({ page }) => {
   await finishAnswer(page, "No, that's someone else");
   // Mike Russo is still waiting for his own sign-up.
   await page.locator('a[href="/team"]:visible').first().click();
-  await expect(page.getByTestId('not-joined')).toContainText("2 haven't joined yet");
+  await expect(notJoinedRows(page)).toHaveCount(2);
   await expect(page.getByText('Mike Russo', { exact: true }).last()).toBeVisible();
 });
 

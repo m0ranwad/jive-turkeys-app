@@ -32,15 +32,7 @@ export function Formation({ players = [] }) {
 
   return (
     <section className={cn(CARD, 'overflow-hidden')}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">On the field</h3>
-          <p className="mt-1 text-xs font-medium text-zinc-500">Where everyone likes to play.</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
-          {placed.length} placed
-        </span>
-      </div>
+      <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">On the field</h3>
       <div className="relative mt-3 aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#123c22] sm:aspect-[16/11]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(163,230,53,0.14),transparent_60%)]" />
         <div className="absolute left-0 right-0 top-1/2 h-px bg-white/20" />
@@ -76,10 +68,8 @@ export function Formation({ players = [] }) {
         </p>
       )}
       {floaters.length > 0 && (
-        <div className="mt-3">
-          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
-            Floaters · none chosen · {floaters.length}
-          </span>
+        <div className="mt-3" data-testid="floaters">
+          <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">Floaters</span>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {floaters.map((p) => (
               <span
