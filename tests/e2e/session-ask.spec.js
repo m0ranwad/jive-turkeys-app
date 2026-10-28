@@ -29,6 +29,21 @@ async function endSession2(page) {
   await page.reload();
 }
 
+test('the session answers fit their buttons on any phone', async ({ page }) => {
+  await signIn(page, PLAYER);
+  const card = ahead(page);
+  await expect(card).toContainText('Playing session 3?');
+  // Below 360px the three stack; above, each is at least as wide as its longest word.
+  for (const width of [430, 412, 390, 375, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const fits = (el) => el.scrollWidth <= el.clientWidth;
+    expect(await card.evaluate(fits), `the card at ${width}px`).toBe(true);
+    for (const button of await card.getByRole('button').all()) {
+      expect(await button.evaluate(fits), `${await button.innerText()} at ${width}px`).toBe(true);
+    }
+  }
+});
+
 test("a player answers for the next session ahead, and only that session changes", async ({ page }) => {
   await signIn(page, PLAYER);
   await expect(ahead(page)).toContainText('Asking ahead');

@@ -79,7 +79,13 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
   // Before you answer, Playing is the suggested one; after, your answer is the picked one.
   const lit = (status) => (selected ? status === selected : status === 'active');
   return (
-    <div className="grid grid-cols-3 gap-2" role="group" aria-label={`Playing session ${period.session}?`}>
+    // Each column is at least as wide as its longest word ("Unavailable" never gets cut off);
+    // phones narrower than 360px stack the three.
+    <div
+      className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-[repeat(3,minmax(min-content,1fr))]"
+      role="group"
+      aria-label={`Playing session ${period.session}?`}
+    >
       {ANSWERS.map((choice) => (
         <button
           key={choice.status}
@@ -88,8 +94,8 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
           aria-pressed={selected ? choice.status === selected : undefined}
           onClick={() => answer(choice)}
           className={cn(
-            'rounded-2xl border-2 px-1 py-3 font-display font-extrabold uppercase transition active:scale-[0.98] disabled:opacity-60',
-            compact ? 'text-[11px] tracking-[0.02em]' : 'text-[12px] tracking-[0.06em]',
+            'min-h-12 rounded-2xl border-2 px-1 py-2 font-display font-extrabold uppercase leading-tight transition motion-safe:active:scale-[0.98] disabled:opacity-60',
+            compact ? 'text-[11px] tracking-normal' : 'text-[12px] tracking-[0.02em]',
             lit(choice.status)
               ? 'border-lime-400 bg-lime-400 text-black hover:bg-lime-300'
               : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
@@ -126,9 +132,7 @@ export function SessionPrompt({ ask, onAnswered }) {
         Session {period.session} starts {startsOn ? fmtDateShort(startsOn) : 'soon'}
       </span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
-      <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">
-        Currently {STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.
-      </p>
+      <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">You're down as {STATUS_LABEL[entry.status]}.</p>
       <SessionAnswers question={ask} onAnswered={onAnswered} />
     </section>
   );
@@ -164,9 +168,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
           {answered ? 'Your answer' : `Playing session ${period.session}?`}
         </span>
         <p className="mb-2.5 mt-1 text-xs font-medium text-zinc-600">
-          {answered
-            ? 'You can change it until the first game.'
-            : `Currently ${STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.`}
+          {answered ? 'You can change it until the first game.' : `You're down as ${STATUS_LABEL[entry.status]}.`}
         </p>
         <SessionAnswers compact question={ask} onAnswered={onAnswered} selected={answered ? entry.status : undefined} />
       </div>
@@ -221,11 +223,8 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
     >
       <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">Asking ahead</span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
-      <p className="mt-0.5 text-xs font-bold text-zinc-700">
-        {when} · {tally.in} in so far
-      </p>
       <p className="mb-3 mt-1 text-xs font-medium text-zinc-600">
-        For session {period.session} only. Playing splits the dues. Unavailable gets no sub requests.
+        {when} · {tally.in} in so far
       </p>
       <SessionAnswers
         question={ask}
