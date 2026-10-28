@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, LoaderCircle } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { api, isDemo, DEMO_TEAM_CODE } from '@/api';
 import { AuthShell, FormError } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,6 @@ export function JoinTeamPage() {
 
   return (
     <AuthShell
-      icon={KeyRound}
       title="Enter the team code"
       subtitle="It's in the invite from your captain."
       footer={
@@ -72,7 +71,7 @@ export function JoinTeamPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Don't have it? Ask a captain, or check the team group text.
+        Don't have it? Ask the teammate who invited you, or a captain.
       </p>
       {isDemo && (
         <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-center text-xs font-semibold text-amber-900">

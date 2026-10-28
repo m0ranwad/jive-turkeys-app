@@ -3,6 +3,7 @@ import { Trophy } from 'lucide-react';
 import { api } from '@/api';
 import { useToast } from '@/components/ui/toast';
 import { AWARD_LABEL, CARD } from '@/lib/constants';
+import { fmtDateShort } from '@/lib/format';
 import { closesLabel, potmAwards, votingOpen } from '@/lib/potm';
 import { playerKey } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
@@ -75,7 +76,8 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
   };
 
   return (
-    <section className={CARD}>
+    // #vote: where Vote on Schedule lands, clear of the sticky header.
+    <section id="vote" className={cn(CARD, 'scroll-mt-24')}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Player of the Match</h3>
         {game.potm_closes_at && (
@@ -90,6 +92,9 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
           </span>
         )}
       </div>
+      <p data-testid="potm-game" className="mt-1 break-words text-xs font-semibold text-zinc-600">
+        vs {game.opponent}{game.date && <> · {fmtDateShort(game.date)}</>}
+      </p>
       <div className="mt-3 space-y-4">
         {awards.map((award) => {
           const ranked = tally(award);
@@ -104,12 +109,12 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
 
           return (
             <div key={award} className="rounded-2xl bg-zinc-50 p-3.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 <span className="text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">{AWARD_LABEL[award]}</span>
                 {mine && !voting && canVote && (
                   <button
                     onClick={() => setChanging(award)}
-                    className="text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500 transition hover:text-zinc-900"
+                    className="min-h-11 px-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500 transition hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
                     Change vote
                   </button>
@@ -143,7 +148,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                   {eligible.length === 0 ? (
                     <p className="text-xs font-medium text-zinc-500">No eligible teammates.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                       {eligible.map((p) => (
                         <button
                           key={p.user_id}
@@ -151,7 +156,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                           disabled={busy}
                           onClick={() => castVote(award, p)}
                           className={cn(
-                            'rounded-full border-2 px-3 py-1.5 text-xs font-bold transition disabled:opacity-50',
+                            'min-h-11 min-w-11 max-w-full break-words rounded-full border-2 px-3 py-2 text-xs font-bold transition disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
                             mine?.voted_for_id === p.user_id
                               ? 'border-black bg-lime-400 text-black'
                               : p.guest
@@ -167,7 +172,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                   {mine && (
                     <button
                       onClick={() => setChanging(null)}
-                      className="mt-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500"
+                      className="mt-2 min-h-11 min-w-11 px-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       Cancel
                     </button>

@@ -11,9 +11,10 @@ test('captains change the line under "Jive Turkeys" in the header', async ({ pag
   await page.getByRole('link', { name: 'Team Settings' }).click();
   // The menu keeps focus while it slides away, then hands it back to the Menu button. Typing before then loses letters.
   await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
+  // It saves when you leave the box (or press Enter); there's no Save button.
   await page.getByLabel('Header line (under "Jive Turkeys")').fill('Fall 2026 · Thursday Coed');
-  await page.getByRole('button', { name: 'Save team settings' }).click();
-  await expect(page.getByText('Team settings saved')).toBeVisible();
+  await page.getByLabel('Header line (under "Jive Turkeys")').press('Enter');
+  await expect(page.getByTestId('settings-status')).toHaveText('All changes saved');
   await expect(header).toContainText('Fall 2026 · Thursday Coed');
 });
 

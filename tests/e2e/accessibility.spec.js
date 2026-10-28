@@ -128,6 +128,12 @@ test('a game, its result, the menu and the walkthrough', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Game result' })).toHaveCount(0);
 
+  await page.getByRole('button', { name: 'Call for subs' }).click();
+  await expect(page.getByRole('dialog', { name: 'Call for subs' })).toBeVisible();
+  await expectAccessible(page, 'Call for subs');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Call for subs' })).toHaveCount(0);
+
   await page.getByRole('button', { name: 'Menu' }).click();
   await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
   await expectAccessible(page, 'the menu');

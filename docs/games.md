@@ -15,11 +15,12 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
 | The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
-| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page always shows it in red. | `[unit]` `[browser]` |
+| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page follows the same rule, says it once (the minimums are a grey note under the counts), and shows none once the game has a score. | `[unit]` `[browser]` |
 | On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
 | A woman playing goalie doesn't count toward the women-on-the-field minimum. | `[unit]` |
+| In the game's headcount, women have green name chips whether or not they've joined. A dashed outline separately means not joined, with both cues explained in the key and in text for screen readers. | `[browser]` |
 | The game is short when IN is under the minimum players or women on the field (8 and 3 unless captains change them). | `[unit]` |
 | Players off the roster (removed, or roster names who joined under their own account) aren't counted. | `[unit]` |
 | A roster name's RSVPs, stat lines and Player of the Match votes move to the account that picks it, and go back to the grey card if a captain unlinks that pick (`supabase/tests/unlink.test.sql`). | `[db]` |
@@ -33,11 +34,14 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is filed under the year it starts in. It's shown as both years, "2026–27 · Session 2", on Schedule, game pages, Stats and Dues, and in the note on dues payments. | `[unit]` `[browser]` |
 | A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. With no games at all, it's the session today is in, the same as the current session (section 6). Captains can pick another season or session. | `[unit]` `[browser]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
+| On a game before kickoff, a captain's own RSVP comes first and their tools after it: **Call for subs** leads (lime when we're short), and **Enter result** is last and plain, still there in case the game's time is wrong. Once the game has started, Enter result leads, also on a page left open since before kickoff. | `[unit]` `[browser]` |
+| A played game's page leads with the result, then Player of the Match, then **Who said they were in**, folded (tap to open). **Vote** on Schedule opens it at the vote. | `[browser]` |
 | A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
 | Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |
 | The record counts wins, losses, draws and goals from games with a result only, overall, per season and session, and per opponent. | `[unit]` |
 | The leaderboard and career stats add up games played, goals, assists, cards and Player of the Match awards. | `[unit]` |
+| Stats shows the full season/session labels in Standings and full names in the Player leaderboard. On small phones, the standings labels sit above the record numbers so words stay readable. Season and session filters appear under the tabs, except on Legacy, which always covers every season. | `[browser]` |
 
 ## 3. Player of the Match
 
@@ -45,9 +49,12 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 |---|---|
 | Players who played vote for a teammate who played (roster names included), never themselves, and only as themselves. | `[db]` |
 | A vote can be changed until voting closes. | `[browser]` `[db]` |
+| The voting card keeps the opponent and game date beside the choices, including when **Vote** on Schedule opens it and after voting closes. | `[browser]` |
+| Candidate names, **Change vote** and **Cancel** have touch areas at least 44px tall. Names wrap on narrow phones, and the choices keep their selected, disabled and keyboard-focus states in both award modes. | `[browser]` |
 | Voting opens when the result is posted and closes after the team's window (12 hours unless changed). After that, votes can't be cast, changed or taken back, and the buttons go away. | `[db]` `[browser]` |
 | The most votes wins each award; ties share it. | `[unit]` `[db]` |
 | Notifications and the winners post: see section 7 of `docs/chat.md`. | |
+| Team Settings choices save when tapped; typed fields save after a short pause, on blur or Enter, and when leaving Settings (including browser Back). Saves run in order so a slower earlier save can't replace the latest choice. Failed edits stay available when returning to Settings, with an unsaved status and **Retry saving** until they succeed. | `[unit]` `[browser]` |
 
 ## 4. Importing a league schedule
 
