@@ -42,7 +42,7 @@ test("a player answers for the next session ahead, and only that session changes
 
   // Jordan is still Active for session 2.
   await openTab(page, '/profile', 'Jordan Rivera');
-  await expect(page.getByText('It counts for session 2')).toBeVisible();
+  await expect(page.getByText('Counts for session 2')).toBeVisible();
   await expect(rosterStatus(page).getByRole('button', { name: 'Playing' })).toHaveAttribute('aria-pressed', 'true');
 
   // The answer stays, and can be changed.
@@ -203,7 +203,7 @@ test('between sessions, the question is at the top of Schedule and status change
   await expect(next.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
 
   await openTab(page, '/profile', 'Casey Captain');
-  await expect(page.getByText('It counts for session 3')).toBeVisible();
+  await expect(page.getByText('Counts for session 3')).toBeVisible();
   await expect(rosterStatus(page).getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
 });
 

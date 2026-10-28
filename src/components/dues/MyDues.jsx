@@ -10,7 +10,7 @@ import { seasonName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { isEarlier } from '@/lib/roster';
 import { PayTogetherDialog } from './DuesDialogs';
-import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip, shortDate } from './DuesParts';
+import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip } from './DuesParts';
 
 const round = (value) => Math.round(value * 100) / 100;
 
@@ -371,10 +371,8 @@ export function MyDues({ data, period, current, over = false, user, settings, on
               <span className="block font-display text-base font-extrabold uppercase tracking-tight">
                 {mine.partner ? "You're both paid up" : "You're paid up"}
               </span>
-              <span className="block text-xs font-semibold text-zinc-500">
-                Marked paid {shortDate(mine.paidDate)}
-                {markedBy ? ` by ${markedBy}` : ''}. Thanks!
-              </span>
+              {/* The date is on the share card's chip. */}
+              {markedBy && <span className="block text-xs font-semibold text-zinc-500">Marked by {markedBy}</span>}
             </span>
           </div>
           <button

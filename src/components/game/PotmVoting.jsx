@@ -95,6 +95,7 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
       <p data-testid="potm-game" className="mt-1 break-words text-xs font-semibold text-zinc-600">
         vs {game.opponent}{game.date && <> · {fmtDateShort(game.date)}</>}
       </p>
+      {open && !canVote && <p className="mt-1 text-xs font-medium text-zinc-500">Only players from this game vote.</p>}
       <div className="mt-3 space-y-4">
         {awards.map((award) => {
           const ranked = tally(award);
@@ -180,11 +181,6 @@ export function PotmVoting({ game, profiles, stats, votes, user, settings, onCha
                 </div>
               )}
 
-              {open && !canVote && leaders.length > 0 && (
-                <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
-                  Voting is open to players who played this game
-                </p>
-              )}
             </div>
           );
         })}

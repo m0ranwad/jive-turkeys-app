@@ -3,7 +3,8 @@ import { AnswerButtons, SuspendedBadge } from '@/components/game/AnswerButtons';
 import { CARD } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
+/** `womenMinimum`: set for women only, who are told a woman in goal doesn't count toward it. */
+export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy, womenMinimum = null }) {
   const status = rsvp?.status;
   return (
     <div className={CARD}>
@@ -27,9 +28,11 @@ export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
         >
           <span>
             <span className="block text-sm font-bold">Playing GK</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
-              A woman in goal doesn't count toward the 3-women minimum
-            </span>
+            {womenMinimum != null && (
+              <span className={cn('mt-0.5 block text-[11px] font-medium', rsvp?.playing_gk ? 'text-white/70' : 'text-zinc-500')}>
+                Doesn't count toward the {womenMinimum} women
+              </span>
+            )}
           </span>
           <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition', rsvp?.playing_gk ? 'bg-lime-400' : 'bg-zinc-200')}>
             <span

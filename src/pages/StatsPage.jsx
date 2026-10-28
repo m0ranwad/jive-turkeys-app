@@ -28,7 +28,7 @@ export function StatsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Stats" subtitle="Results, leaders, and our record against everyone." />
+      <PageHeader title="Stats" />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="standings" className={TAB_CLASS}>

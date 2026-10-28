@@ -104,7 +104,7 @@ test('marking yourself paid is one tap; marking not paid asks first and stays in
   await page.getByRole('button', { name: 'Mark us paid' }).click();
   await expect(card).toContainText('Paid in full Oct 8');
   await expect(page.getByText("You're both paid up")).toBeVisible();
-  await expect(page.getByText('Marked paid Oct 8 by you. Thanks!')).toBeVisible();
+  await expect(page.getByText('Marked by you', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
 
   // A slip of the finger changes nothing: it asks first.
@@ -125,12 +125,12 @@ test('marking yourself paid is one tap; marking not paid asks first and stays in
   await expect(history).toContainText('You marked yourself paid');
 });
 
-test('a player who has paid sees a thank-you instead of pay buttons', async ({ page }) => {
+test('a player who has paid sees they are paid up instead of pay buttons', async ({ page }) => {
   await signIn(page, JORDAN);
   await openDues(page);
   await expect(page.getByTestId('my-dues')).toContainText('Paid in full Oct 6');
   await expect(page.getByText("You're paid up")).toBeVisible();
-  await expect(page.getByText('Marked paid Oct 6 by you. Thanks!')).toBeVisible();
+  await expect(page.getByText('Marked by you', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /with Venmo/ })).toHaveCount(0);
 });
 

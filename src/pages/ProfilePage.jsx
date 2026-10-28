@@ -45,7 +45,8 @@ export function ProfilePage() {
     try {
       await api.entities.PlayerProfile.update(profile.id, { status });
       await reload();
-      toast({ title: `You're now ${STATUS_LABEL[status]}` });
+      // What it means is said here, after the tap, not on the screen.
+      toast({ title: `You're now ${STATUS_LABEL[status]}${status === 'on_break' ? '. No sub requests.' : ''}` });
     } catch (err) {
       toast(saveFailedToast(err));
     } finally {
@@ -57,10 +58,10 @@ export function ProfilePage() {
   // Which session a status change counts for. Once a session's games are all played, it keeps its list.
   const session = roster?.current?.session;
   const statusCounts = !session
-    ? ''
+    ? null
     : roster.over
-    ? `. Session ${session} is over, so it counts from the next session`
-    : `. It counts for session ${session}`;
+    ? `Session ${session} is over, so it counts from the next session.`
+    : `Counts for session ${session}`;
 
   return (
     <div className="space-y-5">
@@ -77,51 +78,27 @@ export function ProfilePage() {
           <div className="min-w-0">
             <h1 className="truncate font-display text-xl font-extrabold uppercase tracking-tight">{name}</h1>
             <p className="mt-0.5 truncate text-xs font-medium text-white/50">{user?.email}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
-                {isCaptain ? 'Captain' : 'Player'}
+            {isCaptain && (
+              <span className="mt-2 inline-block rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
+                Captain
               </span>
-              {profile?.status && (
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-white/70">
-                  {STATUS_LABEL[profile.status]}
-                </span>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </section>
 
       <section className={CARD}>
-        <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
+        <h2 className="mb-4 font-display text-sm font-extrabold uppercase tracking-[0.12em]">
           {profile ? 'Your details' : 'Set up your profile'}
         </h2>
-        <p className="mb-4 mt-1 text-xs font-medium text-zinc-500">Your phone number is visible only to logged-in teammates.</p>
         <ProfileForm key={profile?.id || 'new'} initial={profile} onSubmit={saveProfile} busy={busy} />
       </section>
-
-      {pushStatus && (
-        <section className={CARD} aria-label="Notifications">
-          <h2 className="mb-3 font-display text-sm font-extrabold uppercase tracking-[0.12em]">Notifications</h2>
-          <NotificationSettings state={pushStatus} />
-        </section>
-      )}
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <button onClick={() => setWalkthroughOpen(true)} className={cn(softButton, 'text-zinc-700')}>
-          <CircleHelp className="h-4 w-4" /> How to use
-        </button>
-        <button onClick={signOut} className={cn(softButton, 'text-zinc-500')}>
-          <LogOut className="h-4 w-4" /> Sign out
-        </button>
-      </div>
 
       {profile && (
         <section className={CARD}>
           <h2 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Roster status</h2>
-          <p className="mb-3 mt-1 text-xs font-medium text-zinc-500">
-            Set this anytime{statusCounts}. Unavailable gets no sub requests.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
+          {statusCounts && <p className="mt-1 text-xs font-medium text-zinc-500">{statusCounts}</p>}
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -139,6 +116,22 @@ export function ProfilePage() {
           </div>
         </section>
       )}
+
+      {pushStatus && (
+        <section className={CARD} aria-label="Notifications">
+          <h2 className="mb-3 font-display text-sm font-extrabold uppercase tracking-[0.12em]">Notifications</h2>
+          <NotificationSettings state={pushStatus} />
+        </section>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button onClick={() => setWalkthroughOpen(true)} className={cn(softButton, 'text-zinc-700')}>
+          <CircleHelp className="h-4 w-4" /> How to use
+        </button>
+        <button onClick={signOut} className={cn(softButton, 'text-zinc-500')}>
+          <LogOut className="h-4 w-4" /> Sign out
+        </button>
+      </div>
 
       <Walkthrough open={walkthroughOpen} needsProfile={false} profile={profile} onClose={() => setWalkthroughOpen(false)} />
     </div>

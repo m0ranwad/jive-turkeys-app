@@ -10,6 +10,7 @@ import { RsvpCard } from '@/components/game/RsvpCard';
 import { RsvpForDialog } from '@/components/game/RsvpForDialog';
 import { CallForSubsButton, RemindTeamButton } from '@/components/game/ShareButtons';
 import { PageSpinner } from '@/components/PageSpinner';
+import { JerseyDot } from '@/components/schedule/GameCard';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
 import { useToast } from '@/components/ui/toast';
 import { AddToCalendar } from '@/components/game/AddToCalendar';
@@ -225,7 +226,7 @@ export function GameDetailPage() {
             {fmtDateLong(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'}
           </p>
           {game.has_result && (
-            <div className="mt-4 flex items-baseline gap-3">
+            <div className="mt-4 flex items-baseline gap-3" data-testid="final-score">
               <span className="font-display text-4xl font-extrabold leading-none">{game.score_us ?? 0}</span>
               <span className="text-white/30">–</span>
               <span className="font-display text-4xl font-extrabold leading-none text-white/40">{game.score_them ?? 0}</span>
@@ -243,29 +244,36 @@ export function GameDetailPage() {
           )}
           {!game.has_result && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 rounded-full bg-white/5 p-1">
-                {['primary', 'backup'].map((jersey) => (
-                  <button
-                    key={jersey}
-                    aria-pressed={game.jersey === jersey}
-                    disabled={!data.isCaptain || busy}
-                    onClick={() => setJersey(jersey)}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
-                      game.jersey === jersey ? 'bg-white text-black' : 'text-white/50',
-                      !data.isCaptain && 'opacity-70',
-                    )}
-                  >
-                    <span
+              {/* Captains pick the jersey; everyone else just sees which one. */}
+              {data.isCaptain ? (
+                <div className="flex items-center gap-1.5 rounded-full bg-white/5 p-1">
+                  {['primary', 'backup'].map((jersey) => (
+                    <button
+                      key={jersey}
+                      aria-pressed={game.jersey === jersey}
+                      disabled={busy}
+                      onClick={() => setJersey(jersey)}
                       className={cn(
-                        'h-2.5 w-2.5 rounded-full',
-                        jersey === 'backup' ? 'bg-zinc-900 ring-1 ring-white/30' : 'bg-lime-400',
+                        'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
+                        game.jersey === jersey ? 'bg-white text-black' : 'text-white/50',
                       )}
-                    />
-                    {jerseyText(jersey, data.settings)}
-                  </button>
-                ))}
-              </div>
+                    >
+                      <span
+                        className={cn(
+                          'h-2.5 w-2.5 rounded-full',
+                          jersey === 'backup' ? 'bg-zinc-900 ring-1 ring-white/30' : 'bg-lime-400',
+                        )}
+                      />
+                      {jerseyText(jersey, data.settings)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em]">
+                  <JerseyDot jersey={game.jersey} className="h-2.5 w-2.5 ring-1 ring-white/30" />
+                  {jerseyText(game.jersey, data.settings)}
+                </span>
+              )}
               {game.date >= today() && <AddToCalendar game={game} settings={data.settings} />}
             </div>
           )}
@@ -280,6 +288,7 @@ export function GameDetailPage() {
           rsvp={myRsvp}
           onSet={setRsvp}
           onToggleGk={toggleGk}
+          womenMinimum={data.profile?.gender === 'F' ? counts?.minWomen : null}
           suspended={suspended.includes(data.user.id)}
           busy={busy || rsvp.isBusy(game)}
         />
@@ -313,7 +322,6 @@ export function GameDetailPage() {
           game={game}
           headcount={counts}
           suspendedIds={suspended}
-          settings={data.settings}
           onPick={data.isCaptain ? setRsvpFor : null}
         />
       )}
@@ -327,7 +335,7 @@ export function GameDetailPage() {
             </span>
           </summary>
           <div className="-mt-2">
-            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} settings={data.settings} bare />
+            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} bare />
           </div>
         </details>
       )}

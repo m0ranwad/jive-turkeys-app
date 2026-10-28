@@ -4,7 +4,7 @@
 //
 // Sample data: the next game is vs Goal Diggers (6 IN, the captain hasn't
 // answered), then FC Lightning, in session 2; session 1 is over, and last season's game is older.
-import { expect, signIn, test } from './helpers';
+import { PLAYER, expect, signIn, test } from './helpers';
 
 const nextGame = (page) => page.getByRole('region', { name: 'Next game' });
 
@@ -52,12 +52,18 @@ test("a game's own page keeps the full shortage and headcount", async ({ page })
   await signIn(page);
   const headcount = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Headcount' }) });
 
-  // FC Lightning is weeks away: grey, once, with the minimums as a note.
+  // FC Lightning is weeks away: grey, once, and no sentence repeating the minimums.
   await page.getByRole('link', { name: /vs FC Lightning/ }).click();
   await expect(headcount).toContainText('Need 8 more · 3 more women');
   await expect(headcount).not.toContainText('Short');
-  await expect(headcount).toContainText('We need at least 8 players, with 3 women on the field');
+  await expect(headcount).not.toContainText('We need at least');
   await expect(headcount).toContainText('0 of 3');
+  // Two counts (In, Women on field); the groups carry the rest. Nobody's answered, so only IN shows, saying so.
+  await expect(headcount.locator('[data-group="IN"]')).toContainText('Nobody yet');
+  await expect(headcount.locator('[data-group="MAYBE"]')).toHaveCount(0);
+  await expect(headcount.locator('[data-group="OUT"]')).toHaveCount(0);
+  // The date, time and field are in the header, not repeated here.
+  await expect(headcount).not.toContainText('Field 3');
 
   // Goal Diggers, a day later: within 48 hours, so red.
   await page.clock.fastForward('24:00:00');
@@ -73,6 +79,30 @@ test("a game's own page keeps the full shortage and headcount", async ({ page })
   await expect(rsvps.locator('[data-group="IN"]')).toBeVisible();
   await expect(rsvps).not.toContainText('Need');
   await expect(rsvps).not.toContainText('We need at least');
+});
+
+test("players see the game's jersey, and only women see the goalie note", async ({ page }) => {
+  // Jordan (a woman) said IN for Goal Diggers.
+  await signIn(page, PLAYER);
+  await nextGame(page).getByRole('link', { name: /Details/ }).click();
+  await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
+  // One chip, not a switch only captains can use.
+  await expect(page.getByRole('button', { name: /Bright green\/yellow|Black/ })).toHaveCount(0);
+  await expect(page.locator('section').first()).toContainText('Bright green/yellow');
+  await expect(page.getByRole('button', { name: /Playing GK/ })).toContainText("Doesn't count toward the 3 women");
+
+  // On a played game she didn't play, one line says who votes.
+  await page.goto('/');
+  await page.getByRole('list', { name: 'Game results' }).getByRole('link', { name: /vs The Hat Tricks/ }).click();
+  await expect(page.getByText('Only players from this game vote.')).toHaveCount(1);
+});
+
+test('men see no goalie note', async ({ page }) => {
+  // Sam said IN for Goal Diggers too.
+  await signIn(page, 'sam@demo.test');
+  await nextGame(page).getByRole('link', { name: /Details/ }).click();
+  await expect(page.getByRole('button', { name: /Playing GK/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Playing GK/ })).not.toContainText("Doesn't count");
 });
 
 test('the next game is at the top of Schedule, and you answer right there', async ({ page }) => {
