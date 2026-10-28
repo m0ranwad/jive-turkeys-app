@@ -26,7 +26,7 @@ export function AnswerButtons({ label, status, onSet, busy, compact = false }) {
           aria-pressed={status === answer.value}
           onClick={() => onSet(answer.value)}
           className={cn(
-            'rounded-2xl border-2 font-display font-extrabold uppercase tracking-[0.1em] transition active:scale-[0.98] disabled:opacity-60',
+            'rounded-2xl border-2 font-display font-extrabold uppercase tracking-[0.1em] transition motion-safe:active:scale-[0.98] disabled:opacity-60',
             compact ? 'min-h-11 py-1.5 text-[11px]' : 'py-3.5 text-[13px]',
             status === answer.value ? answer.active : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300',
           )}

@@ -99,7 +99,11 @@ export function PlayedList({ games }) {
         const label = { W: 'Won', L: 'Lost', D: 'Draw' }[result];
         return (
           <li key={g.id}>
-            <Link to={`/games/${g.id}`} className="flex min-h-[60px] items-center gap-3 px-4 py-3 transition hover:bg-zinc-50">
+            {/* An inset ring: the list's rounded corners would clip an outline drawn outside the row. */}
+            <Link
+              to={`/games/${g.id}`}
+              className="flex min-h-[60px] items-center gap-3 px-4 py-3 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
               {result && (
                 <span aria-hidden="true">
                   <ResultBadge result={result} className="h-8 w-8 rounded-xl text-xs" />
@@ -111,7 +115,7 @@ export function PlayedList({ games }) {
                 <span className="block text-[11px] font-semibold text-zinc-500">{fmtDateShort(g.date)}</span>
               </span>
               {result ? (
-                <span className="shrink-0 font-display text-xl font-extrabold">{g.score_us}–{g.score_them}</span>
+                <span className="shrink-0 font-display text-xl font-extrabold">{g.score_us ?? 0}–{g.score_them ?? 0}</span>
               ) : (
                 <span className="text-right text-[11px] font-semibold text-zinc-500">No result yet</span>
               )}

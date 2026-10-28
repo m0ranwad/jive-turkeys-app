@@ -38,11 +38,15 @@ export function SchedulePage() {
     });
     return [...bySession.values()]
       .sort((a, b) => b.year - a.year || b.session - a.session)
-      .map((s) => ({
-        ...s,
-        upcoming: s.games.filter((g) => g.date >= todayIso).sort((a, b) => (a.date < b.date ? -1 : 1)),
-        past: s.games.filter((g) => g.date < todayIso).sort((a, b) => (a.date < b.date ? 1 : -1)),
-      }));
+      .map((s) => {
+        // Tonight's game moves to Played as soon as its result is saved.
+        const played = (g) => g.has_result || g.date < todayIso;
+        return {
+          ...s,
+          upcoming: s.games.filter((g) => !played(g)).sort((a, b) => (a.date < b.date ? -1 : 1)),
+          past: s.games.filter(played).sort((a, b) => (a.date < b.date ? 1 : -1)),
+        };
+      });
   }, [data.games, todayIso]);
 
   const counts = useMemo(() => {
@@ -90,19 +94,17 @@ export function SchedulePage() {
         {upcoming.length > 0 && (
           <div className="space-y-2.5">
             {upcoming.map((g) => (
-              g.has_result ? <PlayedList key={g.id} games={[g]} /> : (
-                <LaterGameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings}>
-                  {onRoster && (
-                    <AnswerButtons
-                      compact
-                      label={answerLabel(g)}
-                      status={rsvp.mine(g)?.status}
-                      onSet={(status) => rsvp.setStatus(g, status)}
-                      busy={rsvp.isBusy(g)}
-                    />
-                  )}
-                </LaterGameCard>
-              )
+              <LaterGameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings}>
+                {onRoster && (
+                  <AnswerButtons
+                    compact
+                    label={answerLabel(g)}
+                    status={rsvp.mine(g)?.status}
+                    onSet={(status) => rsvp.setStatus(g, status)}
+                    busy={rsvp.isBusy(g)}
+                  />
+                )}
+              </LaterGameCard>
             ))}
           </div>
         )}

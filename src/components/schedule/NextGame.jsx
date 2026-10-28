@@ -15,7 +15,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
     <section className="overflow-hidden rounded-3xl bg-zinc-950 p-4 text-white" aria-label="Next game">
       <Link
         to={`/games/${game.id}`}
-        className="flex items-start justify-between gap-3 rounded-2xl transition hover:text-lime-100"
+        className="group flex items-start justify-between gap-3 rounded-2xl transition hover:text-lime-100"
       >
         <div className="min-w-0">
           <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">Next game</span>
@@ -29,7 +29,7 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
           </div>
         </div>
         <span
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white transition group-hover:bg-white/20"
         >
           Details <ChevronRight className="h-3 w-3" aria-hidden="true" />
         </span>

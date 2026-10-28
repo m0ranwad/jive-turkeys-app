@@ -128,6 +128,25 @@ test('played games are readable result rows that open the game', async ({ page }
   await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();
 });
 
+test("tonight's game moves to Played as soon as its result is saved", async ({ page }) => {
+  await signIn(page);
+  // Goal Diggers played today (signIn's clock: Thu Oct 8) and has a result.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const game = db.games.find((g) => g.opponent === 'Goal Diggers' && !g.has_result);
+    Object.assign(game, { date: '2026-10-08', has_result: true, score_us: 3, score_them: 1 });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  await expect(nextGame(page)).toContainText('vs FC Lightning');
+  const session = page.locator('section').filter({ has: page.getByRole('heading', { name: /2026–27 · Session 2$/ }) });
+  await expect(session.getByText('Played', { exact: true })).toBeVisible();
+  const results = session.getByRole('list', { name: 'Game results' });
+  await expect(results).toHaveCount(1);
+  await expect(results.getByRole('link', { name: /^Won, vs Goal Diggers/ })).toContainText('3–1');
+});
+
 test('a past game without a saved score does not pretend to have a result', async ({ page }) => {
   await signIn(page);
   await page.evaluate(() => {
