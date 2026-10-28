@@ -258,7 +258,7 @@ export function TeamPage() {
     const lookalikeNames = nameList(lookalikes.map((o) => o.display_name));
     const skipped = data.isCaptain && !p.guest && skippedRosterName(p, guests, checks);
     return (
-      <li key={p.id} data-roster-row={p.display_name} className="px-3.5 py-3">
+      <li key={p.id} data-roster-row={p.display_name} data-not-joined={p.guest ? '' : undefined} className="px-3.5 py-3">
         <div className="flex items-center gap-3">
           <PlayerButton
             openOptions={data.isCaptain && !isMe ? () => setOptionsFor(p.id) : null}
