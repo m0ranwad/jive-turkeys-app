@@ -6,8 +6,10 @@ test('season and session names show in full, even on a phone', async ({ page }) 
   await signIn(page);
   await page.goto('/stats');
   const bySession = page.locator('section').filter({ has: page.getByRole('heading', { name: 'By session' }) });
-  await expect(bySession).toContainText('2026–27 · Session 2');
   await expect(bySession).toContainText('2026–27 · Session 1');
+  await expect(bySession).toContainText('2025–26 · Session 3');
+  // Session 2 hasn't had a game yet, so it has no row (no "0-0-0 · 0 GF · 0 GA").
+  await expect(bySession).not.toContainText('2026–27 · Session 2');
   // Nothing in the list is clipped with "…".
   const clipped = await page.evaluate(() =>
     [...document.querySelectorAll('section span')]
@@ -32,7 +34,7 @@ test('session names stay readable on a 320px phone', async ({ page }) => {
   await signIn(page);
   await page.goto('/stats');
   const bySession = page.locator('section').filter({ has: page.getByRole('heading', { name: 'By session' }) });
-  const label = bySession.getByText('2026–27 · Session 2', { exact: true });
+  const label = bySession.getByText('2026–27 · Session 1', { exact: true });
   await expect(label).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
 
@@ -47,8 +49,8 @@ test('session names stay readable on a 320px phone', async ({ page }) => {
   expect(size.scrollWidth).toBeLessThanOrEqual(size.width);
 
   const row = label.locator('..');
-  await expect(row.getByText('0-0-0', { exact: true })).toBeVisible();
-  await expect(row.getByText('0 GF', { exact: true })).toBeVisible();
-  await expect(row.getByText('0 GA', { exact: true })).toBeVisible();
+  await expect(row.getByText('2-1-1', { exact: true })).toBeVisible();
+  await expect(row.getByText('10 GF', { exact: true })).toBeVisible();
+  await expect(row.getByText('9 GA', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
