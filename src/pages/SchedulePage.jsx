@@ -7,7 +7,7 @@ import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { PotmPrompt } from '@/components/PotmPrompt';
 import { NotificationsPrompt, showInstallGuide, usePush } from '@/components/chat/Notifications';
 import { NextSessionCard, SessionAheadCard, SessionPrompt, sessionAsk } from '@/components/SessionPrompt';
-import { GameCard } from '@/components/schedule/GameCard';
+import { LaterGameCard, PlayedList } from '@/components/schedule/GameCard';
 import { AnswerButtons, answerLabel } from '@/components/game/AnswerButtons';
 import { NextGameCard } from '@/components/schedule/NextGame';
 import { GameFormDialog } from '@/components/schedule/GameFormDialog';
@@ -38,11 +38,15 @@ export function SchedulePage() {
     });
     return [...bySession.values()]
       .sort((a, b) => b.year - a.year || b.session - a.session)
-      .map((s) => ({
-        ...s,
-        upcoming: s.games.filter((g) => g.date >= todayIso).sort((a, b) => (a.date < b.date ? -1 : 1)),
-        past: s.games.filter((g) => g.date < todayIso).sort((a, b) => (a.date < b.date ? 1 : -1)),
-      }));
+      .map((s) => {
+        // Tonight's game moves to Played as soon as its result is saved.
+        const played = (g) => g.has_result || g.date < todayIso;
+        return {
+          ...s,
+          upcoming: s.games.filter((g) => !played(g)).sort((a, b) => (a.date < b.date ? -1 : 1)),
+          past: s.games.filter(played).sort((a, b) => (a.date < b.date ? 1 : -1)),
+        };
+      });
   }, [data.games, todayIso]);
 
   const counts = useMemo(() => {
@@ -90,10 +94,8 @@ export function SchedulePage() {
         {upcoming.length > 0 && (
           <div className="space-y-2.5">
             {upcoming.map((g) => (
-              <div key={g.id} className="space-y-1.5">
-                <GameCard game={g} headcount={counts[g.id]} settings={data.settings} />
-                {/* Answer from the list (the next game's buttons are on its card above). */}
-                {onRoster && !g.has_result && g.id !== nextGame?.id && (
+              <LaterGameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings}>
+                {onRoster && (
                   <AnswerButtons
                     compact
                     label={answerLabel(g)}
@@ -102,16 +104,14 @@ export function SchedulePage() {
                     busy={rsvp.isBusy(g)}
                   />
                 )}
-              </div>
+              </LaterGameCard>
             ))}
           </div>
         )}
         {s.past.length > 0 && (
           <div className="space-y-2.5 pt-1">
             <span className="text-[11px] font-black uppercase tracking-[0.16em] text-zinc-500">Played</span>
-            {s.past.map((g) => (
-              <GameCard key={g.id} game={g} headcount={counts[g.id]} settings={data.settings} />
-            ))}
+            <PlayedList games={s.past} />
           </div>
         )}
       </section>

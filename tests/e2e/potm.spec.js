@@ -1,5 +1,5 @@
 // Player of the Match voting closes a set time after the result is posted.
-// Players who played and still have a vote to cast see a card on Schedule;
+// Players who played and still have a vote to cast see a reminder row on Schedule;
 // the game shows when voting closes; votes lock after that; captains set the
 // timing and notifications in Team Settings. The database enforces the deadline
 // and sends the notifications (supabase/tests/potm.test.sql).
@@ -20,7 +20,7 @@ test('a player who still has a vote to cast is asked on Schedule, until they vot
   await signIn(page);
   const card = page.getByTestId('potm-prompt');
   await expect(card).toContainText('Vote for Player of the Match');
-  await expect(card).toContainText('2–5 L vs The Hat Tricks · Voting closes Thu 9:00 PM');
+  await expect(card).toContainText('2–5 L vs The Hat Tricks · closes Thu 9:00 PM');
 
   await card.getByRole('link').click();
   await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();

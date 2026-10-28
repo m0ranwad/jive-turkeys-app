@@ -13,7 +13,10 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
   const status = rsvp?.status;
   return (
     <section className="overflow-hidden rounded-3xl bg-zinc-950 p-4 text-white" aria-label="Next game">
-      <div className="flex items-start justify-between gap-3">
+      <Link
+        to={`/games/${game.id}`}
+        className="group flex items-start justify-between gap-3 rounded-2xl transition hover:text-lime-100"
+      >
         <div className="min-w-0">
           <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">Next game</span>
           <div className="mt-1 truncate font-display text-2xl font-extrabold uppercase tracking-tight">vs {game.opponent}</div>
@@ -25,13 +28,12 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
             {jerseyText(game.jersey, settings)}
           </div>
         </div>
-        <Link
-          to={`/games/${game.id}`}
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white transition hover:bg-white/20"
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-white transition group-hover:bg-white/20"
         >
-          <span className="sr-only">vs {game.opponent}, </span>Details <ChevronRight className="h-3 w-3" />
-        </Link>
-      </div>
+          Details <ChevronRight className="h-3 w-3" aria-hidden="true" />
+        </span>
+      </Link>
 
       {headcount && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.08em]">

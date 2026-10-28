@@ -56,60 +56,73 @@ export function JerseyDot({ jersey, className }) {
   );
 }
 
-export function GameCard({ game, headcount, settings }) {
-  const final = game.has_result;
-  const urgent = shortageIsUrgent(game);
-  const result = final ? resultOf(game) : null;
-  const chip = 'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em]';
-
+/** Later upcoming games: a link above your answer buttons, all inside one card. */
+export function LaterGameCard({ game, headcount, settings, children }) {
   return (
-    <Link
-      to={`/games/${game.id}`}
-      className="block rounded-3xl border border-black/5 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition motion-safe:hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.07)] active:translate-y-0"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-            {fmtDateShort(game.date)} · {fmtTime(game.time)}
-          </div>
-          <div className="mt-1 truncate font-display text-lg font-extrabold uppercase tracking-tight">vs {game.opponent}</div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-500">
-            <span>Field {game.field_number || 'TBD'}</span>
-            <span className="inline-flex items-center gap-1.5">
-              <JerseyDot jersey={game.jersey} className="h-2.5 w-2.5" />
-              {jerseyText(game.jersey, settings)}
-            </span>
-          </div>
-        </div>
-        {final ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="text-right">
-              <div className="font-display text-2xl font-extrabold leading-none">
-                {game.score_us ?? 0}–{game.score_them ?? 0}
-              </div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">Final</div>
+    <div className="rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <Link to={`/games/${game.id}`} className="block rounded-3xl p-4 transition hover:bg-zinc-50">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              {fmtDateShort(game.date)} · {fmtTime(game.time)}
             </div>
-            <ResultBadge result={result} className="h-9 w-9 rounded-2xl text-sm" />
+            <div className="mt-1 break-words font-display text-lg font-extrabold uppercase tracking-tight">vs {game.opponent}</div>
           </div>
-        ) : (
-          <ShortBanner
-            className="hidden shrink-0 sm:inline-flex"
-            needTotal={headcount?.needTotal}
-            needWomen={headcount?.needWomen}
-            urgent={urgent}
-          />
-        )}
-      </div>
-      {!final && headcount && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {/* On phones the banner sits with the counts so the opponent name has room. */}
-          <ShortBanner className="sm:hidden" needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={urgent} />
-          <span className={cn(chip, 'bg-lime-100 text-lime-800')}>{headcount.totalIn} in</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.womenFieldIn} women</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.maybe.length} maybe</span>
-          <span className={cn(chip, 'bg-zinc-100 text-zinc-600')}>{headcount.groups.none.length} no reply</span>
+          {headcount && (
+            <span className="shrink-0 rounded-full bg-lime-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-lime-800">
+              {headcount.totalIn} in
+            </span>
+          )}
         </div>
-      )}
-    </Link>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-500">
+          <span>Field {game.field_number || 'TBD'}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <JerseyDot jersey={game.jersey} className="h-2.5 w-2.5" />
+            {jerseyText(game.jersey, settings)}
+          </span>
+        </div>
+        {headcount && shortageIsUrgent(game) && (
+          <ShortBanner className="mt-3" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+        )}
+      </Link>
+      {children && <div className="px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
+/** Compact results; a past game without a saved score must not look like a draw. */
+export function PlayedList({ games }) {
+  return (
+    <ul aria-label="Game results" className="divide-y divide-zinc-100 overflow-hidden rounded-3xl border border-black/5 bg-white">
+      {games.map((g) => {
+        const result = g.has_result ? resultOf(g) : null;
+        const label = { W: 'Won', L: 'Lost', D: 'Draw' }[result];
+        return (
+          <li key={g.id}>
+            {/* An inset ring: the list's rounded corners would clip an outline drawn outside the row. */}
+            <Link
+              to={`/games/${g.id}`}
+              className="flex min-h-[60px] items-center gap-3 px-4 py-3 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              {result && (
+                <span aria-hidden="true">
+                  <ResultBadge result={result} className="h-8 w-8 rounded-xl text-xs" />
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                {label && <span className="sr-only">{label}, </span>}
+                <span className="block break-words font-display text-sm font-extrabold uppercase tracking-tight">vs {g.opponent}</span>
+                <span className="block text-[11px] font-semibold text-zinc-500">{fmtDateShort(g.date)}</span>
+              </span>
+              {result ? (
+                <span className="shrink-0 font-display text-xl font-extrabold">{g.score_us ?? 0}–{g.score_them ?? 0}</span>
+              ) : (
+                <span className="text-right text-[11px] font-semibold text-zinc-500">No result yet</span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

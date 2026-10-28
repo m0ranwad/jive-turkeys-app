@@ -14,8 +14,9 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Players answer IN, MAYBE or OUT for themselves; the headcount updates right away and after a reload. | `[browser]` |
-| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; each later upcoming game can be answered under its card in the list. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
-| A game that's short shows how many more it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. A game with no time yet counts until the end of its day. The game's own page follows the same rule, says it once (the minimums are a grey note under the counts), and shows none once the game has a score. | `[unit]` `[browser]` |
+| The soonest game without a result is the **Next game** card at the top of Schedule, with its headcount and the player's answer. It appears once; tapping its opponent, date or **Details** opens the game. Each later upcoming game shows how many are in and can be answered inside its card, with the details link separate from the answer buttons. The offers to add the app and turn on notifications come after the cards at the top, before the list. | `[browser]` |
+| On the Next game card and a game's own page, a shortage shows how many more players it needs (and how many women): a calm grey chip until 48 hours before kickoff (Eastern), then red **Short**. Later games on Schedule show a shortage only within those 48 hours, in red. A game with no time yet counts until the end of its day. The game's own page keeps the full headcount, says the shortage once (the minimums are a grey note under the counts), and shows none once the game has a score. | `[unit]` `[browser]` |
+| Played games on Schedule are a short list: result, opponent, date and score. A game moves there as soon as its result is saved, even on the day it was played. Each row opens the game, is at least 44px tall and says Won, Lost or Draw for screen readers. A past game without a saved score says **No result yet** instead. | `[browser]` |
 | On Schedule, the next game's session and the one before it stay open; older sessions fold under **Past sessions**. | `[browser]` |
 | Players can't answer, change or take back anyone else's RSVP. Captains can answer for anyone, including roster names who haven't joined. | `[db]` |
 | Playing teammates without an answer are **No reply**; available subs are **Subs**; unavailable teammates have a separate **Unavailable** group and receive no sub requests. Explicit game answers still count. | `[unit]` |
@@ -35,7 +36,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | A captain's new games (Add game, Import) start on the session captains are asking about ahead; otherwise the newest session on the schedule while it has games to come, else the one after it. With no games at all, it's the session today is in, the same as the current session (section 6). Captains can pick another season or session. | `[unit]` `[browser]` |
 | A captain's result shows on the game and in Stats. | `[browser]` |
 | On a game before kickoff, a captain's own RSVP comes first and their tools after it: **Call for subs** leads (lime when we're short), and **Enter result** is last and plain, still there in case the game's time is wrong. Once the game has started, Enter result leads, also on a page left open since before kickoff. | `[unit]` `[browser]` |
-| A played game's page leads with the result, then Player of the Match, then **Who said they were in**, folded (tap to open). **Vote** on Schedule opens it at the vote. | `[browser]` |
+| A played game's page leads with the result, then Player of the Match, then **Who said they were in**, folded (tap to open). The vote reminder on Schedule opens it at the vote. | `[browser]` |
 | A result saves whole or not at all: the score, stat lines and fill-ins together (`save_game_result()`). If it doesn't go through, the captain is told why and keeps what they entered. | `[db]` `[browser]` |
 | Our score adds up the players' and fill-ins' goals until a captain changes it; men stop at two goals. | `[unit]` `[browser]` |
 | Deleting a game takes its RSVPs, stat lines, votes and fill-ins with it, and nothing else. | `[db]` |
@@ -48,8 +49,9 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Players who played vote for a teammate who played (roster names included), never themselves, and only as themselves. | `[db]` |
+| Players who still have a vote to cast see a slim white reminder row on Schedule, with a trophy, score, opponent and closing time. Tapping anywhere on the row opens the game at the vote. | `[browser]` |
 | A vote can be changed until voting closes. | `[browser]` `[db]` |
-| The voting card keeps the opponent and game date beside the choices, including when **Vote** on Schedule opens it and after voting closes. | `[browser]` |
+| The voting card keeps the opponent and game date beside the choices, including when the vote reminder on Schedule opens it and after voting closes. | `[browser]` |
 | Candidate names, **Change vote** and **Cancel** have touch areas at least 44px tall. Names wrap on narrow phones, and the choices keep their selected, disabled and keyboard-focus states in both award modes. | `[browser]` |
 | Voting opens when the result is posted and closes after the team's window (12 hours unless changed). After that, votes can't be cast, changed or taken back, and the buttons go away. | `[db]` `[browser]` |
 | The most votes wins each award; ties share it. | `[unit]` `[db]` |

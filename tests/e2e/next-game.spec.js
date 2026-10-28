@@ -15,7 +15,11 @@ test('a shortage is a calm chip until two days before kickoff, then turns red', 
   await expect(card).toContainText('Need 2 more · 1 more woman');
   await expect(card).not.toContainText('Short');
   const later = page.getByRole('link', { name: /vs FC Lightning/ });
-  await expect(later).toContainText('Need 8 more · 3 more women');
+  await expect(later).toContainText('0 in');
+  await expect(later).not.toContainText('Need');
+  await expect(later).not.toContainText('women');
+  await expect(later).not.toContainText('maybe');
+  await expect(later).not.toContainText('no reply');
   await expect(later).not.toContainText('Short');
 
   // A day later it's within 48 hours of kickoff.
@@ -25,7 +29,26 @@ test('a shortage is a calm chip until two days before kickoff, then turns red', 
   await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
 });
 
-test("a game's own page shows the shortage the way Schedule does", async ({ page }) => {
+test('a later game still warns when short within 48 hours of kickoff', async ({ page }) => {
+  await signIn(page);
+  // Two games on the same night: the later one must warn too, without becoming Next game.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const next = db.games.find((g) => g.opponent === 'Goal Diggers' && !g.has_result);
+    const later = db.games.find((g) => g.opponent === 'FC Lightning');
+    Object.assign(later, { date: next.date, time: '23:00' });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.clock.fastForward('24:00:00');
+  await page.reload();
+  await expect(nextGame(page)).toContainText('vs Goal Diggers');
+  const later = page.getByRole('link', { name: /vs FC Lightning/ });
+  await expect(later).toContainText('Short · Need 8 more · 3 more women');
+  await expect(later).toContainText('0 in');
+});
+
+test("a game's own page keeps the full shortage and headcount", async ({ page }) => {
   await signIn(page);
   const headcount = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Headcount' }) });
 
@@ -66,7 +89,7 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
   await expect(card).toContainText('Your answer');
 
   // The game page agrees, and so does a reload.
-  await card.getByRole('link', { name: /Details/ }).click();
+  await card.getByText('vs Goal Diggers', { exact: true }).click();
   await expect(page.locator('[data-group="IN"] [data-player="Casey Captain"]')).toBeVisible();
   await page.goBack();
   await page.reload();
@@ -75,13 +98,71 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
 
 test('later games can be answered from the list', async ({ page }) => {
   await signIn(page);
-  // The game after the next one, answered under its card in the list (not on the Next game card).
+  // The game after the next one, answered inside its card in the list.
   const later = page.getByRole('group', { name: /^Your answer for vs FC Lightning, / });
+  expect((await later.getByRole('button', { name: 'IN', exact: true }).boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await later.getByRole('button', { name: 'IN', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Schedule', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /vs FC Lightning/ })).toContainText('1 in');
   await later.getByRole('button', { name: 'OUT', exact: true }).click();
   await expect(later.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.reload();
   await expect(later.getByRole('button', { name: 'OUT', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(nextGame(page)).toContainText("You haven't answered");
+});
+
+test('played games are readable result rows that open the game', async ({ page }) => {
+  await signIn(page);
+  const session = page.locator('section').filter({ has: page.getByRole('heading', { name: /2026–27 · Session 1$/ }) });
+  const results = session.getByRole('list', { name: 'Game results' });
+  await expect(results.getByRole('link')).toHaveCount(4);
+  const loss = results.getByRole('link', { name: /Lost, vs The Hat Tricks/ });
+  await expect(loss).toContainText('2–5');
+  await expect(results.getByRole('link', { name: /Won, vs Ball Busters/ })).toContainText('4–1');
+  await expect(results.getByRole('link', { name: /Draw, vs Grass Kickers/ })).toContainText('1–1');
+  await expect(results).not.toContainText('Field');
+  for (const row of await results.getByRole('link').all()) {
+    expect((await row.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  }
+  await loss.click();
+  await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();
+});
+
+test("tonight's game moves to Played as soon as its result is saved", async ({ page }) => {
+  await signIn(page);
+  // Goal Diggers played today (signIn's clock: Thu Oct 8) and has a result.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const game = db.games.find((g) => g.opponent === 'Goal Diggers' && !g.has_result);
+    Object.assign(game, { date: '2026-10-08', has_result: true, score_us: 3, score_them: 1 });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  await expect(nextGame(page)).toContainText('vs FC Lightning');
+  const session = page.locator('section').filter({ has: page.getByRole('heading', { name: /2026–27 · Session 2$/ }) });
+  await expect(session.getByText('Played', { exact: true })).toBeVisible();
+  const results = session.getByRole('list', { name: 'Game results' });
+  await expect(results).toHaveCount(1);
+  await expect(results.getByRole('link', { name: /^Won, vs Goal Diggers/ })).toContainText('3–1');
+});
+
+test('a past game without a saved score does not pretend to have a result', async ({ page }) => {
+  await signIn(page);
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const game = db.games.find((g) => g.opponent === 'The Hat Tricks');
+    Object.assign(game, { has_result: false, score_us: null, score_them: null });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  const row = page.getByRole('link', { name: /vs The Hat Tricks/ });
+  await expect(row).toContainText('No result yet');
+  await expect(row).not.toContainText('0–0');
+  await expect(row).not.toHaveAccessibleName(/Won|Lost|Draw/);
+  await row.click();
+  await expect(page.getByRole('button', { name: 'Enter result' })).toBeVisible();
 });
 
 test('sessions before the last one are folded away until you open them', async ({ page }) => {
