@@ -48,6 +48,8 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 |---|---|
 | Players who played vote for a teammate who played (roster names included), never themselves, and only as themselves. | `[db]` |
 | A vote can be changed until voting closes. | `[browser]` `[db]` |
+| The voting card keeps the opponent and game date beside the choices, including when **Vote** on Schedule opens it and after voting closes. | `[browser]` |
+| Candidate names, **Change vote** and **Cancel** have touch areas at least 44px tall. Names wrap on narrow phones, and the choices keep their selected, disabled and keyboard-focus states in both award modes. | `[browser]` |
 | Voting opens when the result is posted and closes after the team's window (12 hours unless changed). After that, votes can't be cast, changed or taken back, and the buttons go away. | `[db]` `[browser]` |
 | The most votes wins each award; ties share it. | `[unit]` `[db]` |
 | Notifications and the winners post: see section 7 of `docs/chat.md`. | |

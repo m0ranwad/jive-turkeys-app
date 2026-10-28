@@ -26,6 +26,8 @@ test('a player who still has a vote to cast is asked on Schedule, until they vot
   await expect(page.getByRole('heading', { name: 'vs The Hat Tricks' })).toBeVisible();
   // It opens at the vote, not at the top of the game.
   await expect(potm(page)).toBeInViewport();
+  await expect(page.getByTestId('potm-game')).toHaveText('vs The Hat Tricks · Thu, Oct 1');
+  await expect(page.getByTestId('potm-game')).toBeInViewport();
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting open until Thu 9:00 PM');
   const man = potm(page).locator('div.rounded-2xl', { hasText: 'Man of the Match' });
   await man.getByRole('button').first().click();
@@ -40,6 +42,7 @@ test('once voting has closed, the game shows the winners and takes no votes', as
   await signIn(page);
   await openGame(page, 'Ball Busters');
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting closed');
+  await expect(page.getByTestId('potm-game')).toHaveText('vs Ball Busters · Thu, Sep 24');
   await expect(potm(page).getByRole('button', { name: 'Change vote' })).toHaveCount(0);
   await expect(potm(page)).toContainText('votes');
 });
