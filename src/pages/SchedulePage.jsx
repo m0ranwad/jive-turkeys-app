@@ -160,8 +160,9 @@ export function SchedulePage() {
       {askedAhead && (
         <SessionAheadCard ask={ask} rows={data.roster.rows} players={data.players || []} onAnswered={data.reload} />
       )}
-      <PotmPrompt data={data} />
+      {/* Before the vote reminder, so a phone shows its answers on the first screen. */}
       {nextGame && ask && !askedAhead && !ask.answered && <SessionPrompt ask={ask} onAnswered={data.reload} />}
+      <PotmPrompt data={data} />
       {/* After the next game's answer and before the full list, where a phone still shows them. */}
       <InstallCard onShowHow={showInstallGuide} />
       {/* In the iPhone browser notifications need the Home Screen app, so Get the app is the one offer (even once closed). */}

@@ -1,6 +1,5 @@
 import { Check } from 'lucide-react';
 import { CARD } from '@/lib/constants';
-import { jerseyText } from '@/lib/format';
 
 const RED = '#ef4444';
 const LIME = '#a3e635';
@@ -115,18 +114,9 @@ export function CardsExplainer() {
   );
 }
 
-/** What to sort out before heading to a game. */
-export function GameDayChecklist({ settings }) {
-  const items = [
-    { title: 'Waiver on file', body: 'The complex won’t let you play without one.' },
-    { title: 'Shin guards', body: 'Everyone wears them, every game.' },
-    { title: 'Jewelry off', body: 'Or taped over.' },
-    {
-      title: 'Right jersey',
-      body: `${jerseyText('primary', settings)}, or ${jerseyText('backup', settings)} when the schedule says so.`,
-    },
-    { title: 'Get there early', body: 'The clock starts on time and never stops.' },
-  ];
+/** What to sort out before heading to a game: labels only (the rules below say the rest). */
+export function GameDayChecklist() {
+  const items = ['Waiver on file', 'Shin guards', 'Jewelry off or taped', 'Right jersey', 'Get there early'];
   return (
     <section className={CARD} aria-labelledby="game-day-checklist">
       <h2 id="game-day-checklist" className="font-display text-sm font-extrabold uppercase tracking-[0.18em]">
@@ -134,14 +124,11 @@ export function GameDayChecklist({ settings }) {
       </h2>
       <ul className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
         {items.map((item) => (
-          <li key={item.title} className="flex gap-2.5">
-            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
+          <li key={item} className="flex items-center gap-2.5">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
               <Check className="h-3 w-3" strokeWidth={3.5} />
             </span>
-            <div className="min-w-0">
-              <div className="text-sm font-bold leading-snug text-zinc-900">{item.title}</div>
-              <div className="text-xs leading-snug text-zinc-500">{item.body}</div>
-            </div>
+            <span className="text-sm font-bold leading-snug text-zinc-900">{item}</span>
           </li>
         ))}
       </ul>

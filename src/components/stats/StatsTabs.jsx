@@ -35,12 +35,17 @@ export function StandingsTab({ games, year, session }) {
       const [y, s] = key.split('-').map(Number);
       return { y, s, record: record(games.filter((g) => g.season_year === y && g.session === s)) };
     })
+    // A session with nothing played yet has no record to show.
+    .filter((s) => s.record.played > 0)
     .sort((a, b) => b.y - a.y || b.s - a.s);
+  const seasons = years
+    .map((y) => ({ y, record: record(games.filter((g) => g.season_year === y)) }))
+    .filter((s) => s.record.played > 0);
 
   const title =
     session === 'all'
       ? year === 'all'
-        ? `All-time record (as of ${new Date().getFullYear()})`
+        ? 'All-time record'
         : `${seasonName(year)} season`
       : seasonLabel(year, session);
 
@@ -48,15 +53,16 @@ export function StandingsTab({ games, year, session }) {
     <div className="space-y-5">
       <section className={CARD}>
         <h3 className={sectionTitle}>{title}</h3>
-        <div className="mt-3 grid grid-cols-2 gap-2 min-[360px]:grid-cols-4">
+        {/* Two by two on phones, so goals like 105–98 fit on one line. */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
             { l: 'Won', v: overall.w, tone: 'bg-lime-400 text-black' },
             { l: 'Lost', v: overall.l, tone: 'bg-zinc-950 text-white' },
             { l: 'Draw', v: overall.d, tone: 'bg-zinc-100 text-zinc-600' },
-            { l: 'Goals', v: `${overall.gf}-${overall.ga}`, tone: 'bg-zinc-100 text-zinc-600' },
+            { l: 'Goals', v: `${overall.gf}–${overall.ga}`, tone: 'bg-zinc-100 text-zinc-600' },
           ].map((tile) => (
             <div key={tile.l} className={cn('rounded-2xl px-3 py-3', tile.tone)}>
-              <div className="font-display text-xl font-extrabold leading-none">{tile.v}</div>
+              <div className="whitespace-nowrap font-display text-xl font-extrabold leading-none">{tile.v}</div>
               <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em]">{tile.l}</div>
             </div>
           ))}
@@ -70,10 +76,10 @@ export function StandingsTab({ games, year, session }) {
         <section className={CARD}>
           <h3 className={sectionTitle}>By season</h3>
           <div className="mt-3 space-y-2">
-            {years.map((y) => (
-              <RecordRow key={y} label={seasonName(y)} record={record(games.filter((g) => g.season_year === y))} />
+            {seasons.map(({ y, record: r }) => (
+              <RecordRow key={y} label={seasonName(y)} record={r} />
             ))}
-            {years.length === 0 && <p className="text-sm text-zinc-500">No results yet.</p>}
+            {seasons.length === 0 && <p className="text-sm text-zinc-500">No results yet.</p>}
           </div>
         </section>
       )}

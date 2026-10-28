@@ -1,30 +1,18 @@
-import { ResultBadge } from '@/components/schedule/GameCard';
 import { CARD } from '@/lib/constants';
 import { fillInLabel, gameFillIns } from '@/lib/results';
-import { resultOf } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
-/** Final score plus who scored, assisted, and got carded, and any fill-ins from outside the team. */
+/** Who played, scored, assisted and got carded, and any fill-ins from outside the team. The score is in the game's header. */
 export function ResultCard({ game, stats, fillIns = [] }) {
   const byGoals = (a, b) => (b.goals || 0) - (a.goals || 0) || (b.assists || 0) - (a.assists || 0);
   const rows = stats.filter((s) => s.game_id === game.id && s.played).sort(byGoals);
   const ours = gameFillIns(game, fillIns);
   const fillInRows = ours.map((f, i) => ({ ...f, fillIn: true, player_name: fillInLabel(f, i, ours.length) })).sort(byGoals);
-  const result = resultOf(game);
 
   return (
     <section className={CARD}>
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Result</h3>
-        <ResultBadge result={result} className="h-8 w-8 rounded-xl text-xs" />
-      </div>
-      <div className="mt-3 flex items-baseline gap-3">
-        <span className="font-display text-4xl font-extrabold leading-none">{game.score_us ?? 0}</span>
-        <span className="text-sm font-bold text-zinc-300">–</span>
-        <span className="font-display text-4xl font-extrabold leading-none text-zinc-500">{game.score_them ?? 0}</span>
-        <span className="ml-1 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">vs {game.opponent}</span>
-      </div>
-      <div className="mt-4 space-y-2">
+      <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Result</h3>
+      <div className="mt-3 space-y-2">
         {rows.length + fillInRows.length === 0 && <p className="text-sm text-zinc-500">No player stats recorded.</p>}
         {[...rows, ...fillInRows].map((row) => (
           <div key={row.id} className="flex items-center gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">

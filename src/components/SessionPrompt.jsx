@@ -79,7 +79,13 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
   // Before you answer, Playing is the suggested one; after, your answer is the picked one.
   const lit = (status) => (selected ? status === selected : status === 'active');
   return (
-    <div className="grid grid-cols-3 gap-2" role="group" aria-label={`Playing session ${period.session}?`}>
+    // Each column is at least as wide as its longest word ("Unavailable" never gets cut off);
+    // phones narrower than 360px stack the three.
+    <div
+      className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-[repeat(3,minmax(min-content,1fr))]"
+      role="group"
+      aria-label={`Playing session ${period.session}?`}
+    >
       {ANSWERS.map((choice) => (
         <button
           key={choice.status}
@@ -88,8 +94,8 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
           aria-pressed={selected ? choice.status === selected : undefined}
           onClick={() => answer(choice)}
           className={cn(
-            'rounded-2xl border-2 px-1 py-3 font-display font-extrabold uppercase transition active:scale-[0.98] disabled:opacity-60',
-            compact ? 'text-[11px] tracking-[0.02em]' : 'text-[12px] tracking-[0.06em]',
+            'min-h-12 rounded-2xl border-2 px-1 py-2 font-display font-extrabold uppercase leading-tight transition motion-safe:active:scale-[0.98] disabled:opacity-60',
+            compact ? 'text-[11px] tracking-normal' : 'text-[12px] tracking-[0.02em]',
             lit(choice.status)
               ? 'border-lime-400 bg-lime-400 text-black hover:bg-lime-300'
               : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
@@ -123,12 +129,10 @@ export function SessionPrompt({ ask, onAnswered }) {
   return (
     <section className="rounded-3xl border-2 border-lime-400 bg-lime-50 p-4" data-testid="session-prompt">
       <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-800">
-        Session {period.session} starts {startsOn ? fmtDateShort(startsOn) : 'soon'}
+        {startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Starts soon'}
       </span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
-      <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">
-        Currently {STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.
-      </p>
+      <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">You're down as {STATUS_LABEL[entry.status]}.</p>
       <SessionAnswers question={ask} onAnswered={onAnswered} />
     </section>
   );
@@ -148,7 +152,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
       <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">Next up</span>
       <h2 className="mt-1 font-display text-2xl font-extrabold uppercase tracking-tight">Session {period.session}</h2>
       <p className="mt-1 text-xs font-semibold text-white/70">
-        {startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Start date to come'} · Games show here when the schedule is out
+        {startsOn ? `Starts ${fmtDateShort(startsOn)}.` : 'Start date to come.'} Games show here when the schedule is out.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.08em]">
         <span className={cn(chip, 'bg-lime-400 text-black')}>{tally.in} in</span>
@@ -164,9 +168,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
           {answered ? 'Your answer' : `Playing session ${period.session}?`}
         </span>
         <p className="mb-2.5 mt-1 text-xs font-medium text-zinc-600">
-          {answered
-            ? 'You can change it until the first game.'
-            : `Currently ${STATUS_LABEL[entry.status]}. Playing splits the dues. Unavailable gets no sub requests.`}
+          {answered ? 'You can change it until the first game.' : `You're down as ${STATUS_LABEL[entry.status]}.`}
         </p>
         <SessionAnswers compact question={ask} onAnswered={onAnswered} selected={answered ? entry.status : undefined} />
       </div>
@@ -198,9 +200,7 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
           <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
             Session {period.session}: {ANSWER_LABEL[entry.status]}
           </span>
-          <span className="block truncate text-[11px] font-semibold text-zinc-500">
-            {when} · {tally.in} in so far
-          </span>
+          <span className="block truncate text-[11px] font-semibold text-zinc-500">{when}</span>
         </span>
         <button
           type="button"
@@ -219,14 +219,14 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
       aria-label={`Session ${period.session}`}
       data-testid="session-ahead"
     >
-      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">Asking ahead</span>
-      <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
-      <p className="mt-0.5 text-xs font-bold text-zinc-700">
-        {when} · {tally.in} in so far
-      </p>
-      <p className="mb-3 mt-1 text-xs font-medium text-zinc-600">
-        For session {period.session} only. Playing splits the dues. Unavailable gets no sub requests.
-      </p>
+      {/* The date and how many are in, the way a later game's card shows its count. */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">{when}</span>
+        <span className="shrink-0 rounded-full bg-lime-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-lime-800">
+          {tally.in} in<span className="sr-only"> so far</span>
+        </span>
+      </div>
+      <h2 className="mb-3 mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
       <SessionAnswers
         question={ask}
         selected={answered ? entry.status : undefined}

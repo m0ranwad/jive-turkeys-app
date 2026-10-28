@@ -7,11 +7,11 @@ import { sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
-  { eyebrow: 'Welcome', title: 'Everything in one place', body: 'Schedule, RSVPs, and stats in one place. Team Chat keeps the banter going.' },
-  { eyebrow: 'Step 1', title: 'Keep your status current', body: 'Playing, Available to sub or Unavailable, on My Profile. Captains plan subs around it.' },
-  { eyebrow: 'Step 2', title: 'RSVP every game', body: 'Tap IN, OUT, or MAYBE. Captains count on this to know if we need subs.' },
-  { eyebrow: 'Step 3', title: 'After games', body: 'Check scores, stats, Player of the Match, and our record against every team.' },
-  { eyebrow: 'Step 4', title: 'New to the complex?', body: 'Field Rules are in the ☰ menu. Indoor rules are different.' },
+  { eyebrow: 'Welcome', title: 'The team site', body: 'Schedule, RSVPs, stats and team chat.' },
+  { eyebrow: 'Step 1', title: 'Keep your status current', body: 'Playing, Available to sub or Unavailable, on My Profile.' },
+  { eyebrow: 'Step 2', title: 'RSVP every game', body: 'IN, MAYBE or OUT, so we know if we need subs.' },
+  { eyebrow: 'Step 3', title: 'After games', body: 'Scores, stats and Player of the Match.' },
+  { eyebrow: 'Step 4', title: 'New to the complex?', body: 'Field Rules are in the ☰ menu.' },
 ];
 
 /**

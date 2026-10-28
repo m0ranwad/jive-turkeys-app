@@ -11,7 +11,7 @@ import { PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/compo
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
-import { CARD, DIALOG, DIALOG_TITLE, STATUS_CLASS, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
+import { CARD, DIALOG, DIALOG_TITLE, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer, stepSession } from '@/lib/dues';
@@ -74,6 +74,8 @@ export function TeamPage() {
   const [unlinking, setUnlinking] = useState(null);
   // Captains: the player whose options (status, captain, remove or edit) are open, by card id.
   const [optionsFor, setOptionsFor] = useState(null);
+  // Your own status, from Change on your row.
+  const [changingMine, setChangingMine] = useState(false);
   // Captains: asking who's playing a later session, and answering it for teammates.
   const [askOpen, setAskOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
@@ -112,23 +114,19 @@ export function TeamPage() {
     [data.profiles, guests],
   );
 
-  const totals = useMemo(() => {
-    const active = roster.filter((p) => p.status === 'active');
-    return {
-      notJoined: roster.filter((p) => p.guest).length,
-      active: active.length,
-      onBreak: roster.filter((p) => p.status === 'on_break').length,
-      subPool: roster.filter((p) => p.status === 'sub_pool').length,
-      women: active.filter((p) => p.gender === 'F').length,
-      men: active.filter((p) => p.gender === 'M').length,
-    };
-  }, [roster]);
+  // Everyone by status, joined or not: the group says the status, so rows don't.
+  const groups = useMemo(
+    () =>
+      STATUS_OPTIONS.map((opt) => ({ ...opt, players: roster.filter((p) => (p.status || 'active') === opt.value) })).filter(
+        (g) => g.players.length,
+      ),
+    [roster],
+  );
 
   if (data.loading) return <PageSpinner />;
 
-  // Players on the site first, then everyone still to join, under the invite.
   const joined = roster.filter((p) => !p.guest);
-  const notJoined = roster.filter((p) => p.guest);
+  const me = roster.find((p) => !p.guest && p.user_id === data.user.id) || null;
 
   const removedPlayers = data.isCaptain ? (data.profiles || []).filter((p) => p.removed) : [];
   // Captains: the roster name an account picked (or was linked to), and whether that can be undone here.
@@ -163,6 +161,12 @@ export function TeamPage() {
     : over
     ? ` — session ${current.session} is over, so it counts from the next session`
     : ` — it counts for session ${current.session}`;
+  // The same, on its own line (your own status).
+  const countsLine = !current
+    ? null
+    : over
+    ? `Session ${current.session} is over, so it counts from the next session.`
+    : `Counts for session ${current.session}`;
   const asking = !!current && data.isCaptain && beforeFirstGame(data.games, current, today());
   const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
   const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
@@ -199,7 +203,12 @@ export function TeamPage() {
         await api.entities.PlayerProfile.update(profile.id, { status });
         await data.reload();
       }
-      toast({ title: `${profile.display_name} marked ${STATUS_LABEL[status]}` });
+      const mine = !profile.guest && profile.user_id === data.user.id;
+      toast({
+        title: mine
+          ? `You're now ${STATUS_LABEL[status]}${status === 'on_break' ? '. No sub requests.' : ''}`
+          : `${profile.display_name} marked ${STATUS_LABEL[status]}`,
+      });
     } catch (err) {
       toast({ title: "That didn't save", description: err.message });
     }
@@ -237,8 +246,8 @@ export function TeamPage() {
     }
   };
 
-  // One roster card: a player on the site, or a grey dashed one for a teammate who hasn't joined yet.
-  const rosterCard = (p) => {
+  // One roster row: a player on the site, or a teammate who hasn't joined yet (dashed initials, "Not joined yet").
+  const rosterRow = (p) => {
     const isMe = p.user_id === data.user.id;
     // Captains: someone on the app with a name like this one probably joined without picking it.
     const joinedAs = p.guest && data.isCaptain ? likelyAccount(p, data.profiles || [], guests, links) : null;
@@ -249,14 +258,7 @@ export function TeamPage() {
     const lookalikeNames = nameList(lookalikes.map((o) => o.display_name));
     const skipped = data.isCaptain && !p.guest && skippedRosterName(p, guests, checks);
     return (
-      <div
-        key={p.id}
-        className={cn(
-          'rounded-3xl p-3.5',
-          // Not joined yet: a grey dashed outline.
-          p.guest ? 'border-2 border-dashed border-zinc-300 bg-zinc-50' : 'border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]',
-        )}
-      >
+      <li key={p.id} data-roster-row={p.display_name} data-not-joined={p.guest ? '' : undefined} className="px-3.5 py-3">
         <div className="flex items-center gap-3">
           <PlayerButton
             openOptions={data.isCaptain && !isMe ? () => setOptionsFor(p.id) : null}
@@ -284,31 +286,37 @@ export function TeamPage() {
                   </span>
                 )}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-semibold text-zinc-500">
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]',
-                    STATUS_CLASS[p.status] || STATUS_CLASS.active,
-                  )}
-                >
-                  {STATUS_LABEL[p.status] || 'Playing'}
+              {/* No status here: the group the row is in says it. Tags sit on this line so names aren't cut short. */}
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-zinc-500">
+                <span>
+                  {p.position || 'Floater'}
+                  {p.year_joined && ` · Since ${p.year_joined}`}
                 </span>
-                <span className={cn(!p.position && 'text-zinc-500')}>{p.position || 'Floater'}</span>
-                {p.guest && (
-                  <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
-                    Not joined yet
-                  </span>
-                )}
-                {p.year_joined && <span>Since {p.year_joined}</span>}
                 {p.is_captain && (
                   <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-lime-400">
                     Captain
+                  </span>
+                )}
+                {p.guest && (
+                  <span className="rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-500">
+                    Not joined yet
                   </span>
                 )}
               </div>
             </div>
             {data.isCaptain && !isMe && <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-zinc-400" />}
           </PlayerButton>
+          {/* Your status: Change opens the three choices. */}
+          {isMe && (
+            <button
+              type="button"
+              onClick={() => setChangingMine(true)}
+              aria-label={`Change your status (${STATUS_LABEL[p.status] || 'Playing'})`}
+              className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
+            >
+              Change
+            </button>
+          )}
           {/* A private chat with them (opens the one you already have, if there is one). */}
           {!isMe && !p.guest && p.user_id && (
             <Link
@@ -319,7 +327,7 @@ export function TeamPage() {
               <MessageCircle className="h-4 w-4" />
             </Link>
           )}
-          {p.phone && (
+          {p.phone && !isMe && (
             <a
               href={`tel:${p.phone}`}
               aria-label={`Call ${p.display_name}`}
@@ -358,7 +366,7 @@ export function TeamPage() {
         {skipped && (
           <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-900" data-testid="no-roster-name">
             <p>
-              Didn't pick a roster name. If they're one of the grey cards, tap that name, then Edit, to move it to
+              Didn't pick a roster name. If they're one marked Not joined yet, tap that name, then Edit, to move it to
               this account.
             </p>
             <button
@@ -387,14 +395,7 @@ export function TeamPage() {
             )}
           </div>
         )}
-        {/* Your own status stays on your card; captains change anyone else's from their options. */}
-        {isMe && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-3">
-            <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">My status</span>
-            <StatusButtons current={p.status} onPick={(status) => setStatus(p, status)} />
-          </div>
-        )}
-      </div>
+      </li>
     );
   };
 
@@ -403,12 +404,7 @@ export function TeamPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Team"
-        subtitle={`${current && !over ? `Session ${current.session} · ` : ''}${totals.active} playing · ${totals.subPool} available to sub · ${totals.onBreak} unavailable${
-          totals.notJoined ? ` · ${totals.notJoined} not joined yet` : ''
-        }`}
-      >
+      <PageHeader title="Team">
         {/* Emailed invites aren't switched on yet (idea #1), so new players get the site and the team code. */}
         <button
           onClick={copyInvite}
@@ -418,19 +414,6 @@ export function TeamPage() {
         </button>
       </PageHeader>
 
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { l: 'Playing', v: totals.active, tone: 'bg-lime-400 text-black' },
-          { l: 'Women', v: totals.women, tone: 'bg-zinc-950 text-lime-400' },
-          { l: 'Men', v: totals.men, tone: 'bg-zinc-100 text-zinc-600' },
-        ].map((tile) => (
-          <div key={tile.l} className={cn('rounded-2xl px-3 py-3', tile.tone)}>
-            <div className="font-display text-xl font-extrabold leading-none">{tile.v}</div>
-            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.12em]">{tile.l}</div>
-          </div>
-        ))}
-      </div>
-
       {waiting.length > 0 && (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4" data-testid="session-answers">
           <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-amber-950">
@@ -438,7 +421,7 @@ export function TeamPage() {
           </h3>
           <p className="mt-1 text-xs font-medium text-amber-900">
             Still to answer: {waiting.map((p) => p.display_name).join(', ')}. If they don't, their status carries over.
-            Tap a status below to answer for someone.
+            Tap a name to answer for someone.
           </p>
           {codeIsStale(joinCode, data.roster) && (
             <p className="mt-2 text-xs font-semibold text-amber-950" data-testid="team-code-stale">
@@ -496,43 +479,24 @@ export function TeamPage() {
       )}
 
       {data.profile && <PickPositionCard profile={data.profile} onSaved={data.reload} />}
-      {/* Teammates who haven't joined only show on the field once a captain sets their position. */}
+      {/* Where everyone likes to play, then the list. Roster names only show once a captain sets their position. */}
       <Formation players={roster.filter((p) => !p.guest || p.position)} />
 
-      <p className="rounded-2xl bg-lime-50 px-4 py-3 text-xs font-semibold text-lime-900">
-        Set your own roster status anytime{countsFor}. Unavailable gets no sub requests. Captains can adjust anyone's status too, including teammates who haven't joined
-        yet. Playing teammates split the dues.
-      </p>
-
-      <div className="space-y-2">
-        {joined.length > 0 && <h3 className={SECTION_LABEL}>On the site · {joined.length}</h3>}
-        {joined.map(rosterCard)}
-        {roster.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-            No players yet. Teammates appear here once they sign up.
-          </div>
-        )}
-      </div>
-
-      {notJoined.length > 0 && (
-        <div className="space-y-2">
-          <section className="rounded-3xl border-2 border-dashed border-zinc-300 bg-white p-4" data-testid="not-joined">
-            <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-              {notJoined.length} {notJoined.length === 1 ? "hasn't" : "haven't"} joined yet
-            </h3>
-            <p className="mt-1 text-xs font-medium text-zinc-500">
-              {/* Nothing about splitting the dues: Available to sub and Unavailable names are listed here too. */}
-              Send them the invite. When they sign up and pick their name, their spot and dues move to their account.
-            </p>
-            <button
-              onClick={copyInvite}
-              className="mt-3 inline-flex items-center gap-2 rounded-full bg-zinc-950 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Copy invite
-            </button>
-          </section>
-          {notJoined.map(rosterCard)}
+      {/* Everyone on the team by status: Playing (with how many women), Available to sub, Unavailable. */}
+      {groups.map((g) => (
+        <section key={g.value} aria-labelledby={`group-${g.value}`} data-status-group={g.value} className="space-y-2">
+          <h3 id={`group-${g.value}`} className={SECTION_LABEL}>
+            {g.label} · {g.players.length}
+            {g.value === 'active' && ` · ${g.players.filter((p) => p.gender === 'F').length} women`}
+          </h3>
+          <ul className="divide-y divide-zinc-100 rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            {g.players.map(rosterRow)}
+          </ul>
+        </section>
+      ))}
+      {roster.length === 0 && (
+        <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+          No players yet. Teammates appear here once they sign up.
         </div>
       )}
 
@@ -633,6 +597,25 @@ export function TeamPage() {
                   </button>
                 </>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {me && changingMine && (
+        <Dialog open onOpenChange={(open) => !open && setChangingMine(false)}>
+          <DialogContent className={DIALOG}>
+            <DialogHeader className="text-left">
+              <DialogTitle className={DIALOG_TITLE}>Your status</DialogTitle>
+            </DialogHeader>
+            {countsLine && <p className="-mt-2 text-sm text-zinc-500">{countsLine}</p>}
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Your status">
+              <StatusButtons
+                current={me.status}
+                onPick={async (status) => {
+                  setChangingMine(false);
+                  await setStatus(me, status);
+                }}
+              />
             </div>
           </DialogContent>
         </Dialog>

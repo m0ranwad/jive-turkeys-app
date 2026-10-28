@@ -61,7 +61,7 @@ export function AnnouncementsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Announcements" subtitle="Team news from the captains.">
+      <PageHeader title="Announcements">
         {isCaptain && (
           <button
             onClick={() => setComposing(true)}

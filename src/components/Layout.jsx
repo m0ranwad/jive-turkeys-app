@@ -26,8 +26,8 @@ import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
 import { lastChatRoom } from '@/lib/chat';
 import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
-import { DEFAULT_SETTINGS, STATUS_LABEL } from '@/lib/constants';
-import { initials } from '@/lib/format';
+import { STATUS_LABEL } from '@/lib/constants';
+import { initials, seasonLabel, sessionOf, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const CHAT_PATH = '/banter';
@@ -58,7 +58,9 @@ function Badge({ n, mention, className }) {
 }
 
 export function Layout() {
-  const { user, profile, isCaptain, loading, reload, settings } = useTeam();
+  const { user, profile, isCaptain, loading, reload, roster } = useTeam();
+  // The season and session the site is on, e.g. "2026–27 · Session 2".
+  const period = roster?.current || sessionOf(today());
   const [menuOpen, setMenuOpen] = useState(false);
   const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
@@ -134,7 +136,7 @@ export function Layout() {
                   Jive Turkeys
                 </span>
                 <span className="mt-0.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-lime-400">
-                  {settings?.season_label || DEFAULT_SETTINGS.season_label}
+                  {seasonLabel(period.year, period.session)}
                 </span>
               </span>
             </Link>

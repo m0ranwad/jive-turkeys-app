@@ -4,7 +4,7 @@
 //
 // Sample data: the next game is vs Goal Diggers (6 IN, the captain hasn't
 // answered), then FC Lightning, in session 2; session 1 is over, and last season's game is older.
-import { expect, signIn, test } from './helpers';
+import { PLAYER, expect, signIn, test } from './helpers';
 
 const nextGame = (page) => page.getByRole('region', { name: 'Next game' });
 
@@ -73,6 +73,19 @@ test("a game's own page keeps the full shortage and headcount", async ({ page })
   await expect(rsvps.locator('[data-group="IN"]')).toBeVisible();
   await expect(rsvps).not.toContainText('Need');
   await expect(rsvps).not.toContainText('We need at least');
+});
+
+test('Playing GK has no rule note, and a played game says once who votes', async ({ page }) => {
+  // Jordan said IN for Goal Diggers, and didn't play The Hat Tricks game.
+  await signIn(page, PLAYER);
+  await nextGame(page).getByRole('link', { name: /Details/ }).click();
+  await expect(page.getByRole('button', { name: /Playing GK/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Playing GK/ })).not.toContainText("doesn't count");
+
+  await page.goto('/');
+  await page.getByRole('link', { name: /vs The Hat Tricks/ }).filter({ hasNotText: 'Vote for Player of the Match' }).first().click();
+  await expect(page.getByText('Only players from this game vote.')).toHaveCount(1);
+  await expect(page.getByText('Voting is open to players who played this game')).toHaveCount(0);
 });
 
 test('the next game is at the top of Schedule, and you answer right there', async ({ page }) => {

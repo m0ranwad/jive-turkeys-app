@@ -70,7 +70,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500">Used only for coed headcount rules.</p>
+        <p className="text-xs text-zinc-500">For coed headcounts.</p>
       </div>
 
       <div className={cn('grid gap-5', !hidePosition && 'sm:grid-cols-2')}>
@@ -83,7 +83,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
             onChange={(e) => set({ phone: e.target.value })}
             placeholder="(555) 555-5555"
           />
-          <p className="text-xs text-zinc-500">Visible to logged-in teammates only.</p>
+          <p className="text-xs text-zinc-500">Only teammates see this.</p>
         </div>
         {!hidePosition && (
           <div className="space-y-2">

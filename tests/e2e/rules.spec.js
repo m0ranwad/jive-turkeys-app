@@ -18,7 +18,9 @@ test('players see the rules in sections, with directions, a checklist and pictur
 
   const checklist = page.getByRole('region', { name: 'Game-day checklist' });
   await expect(checklist).toContainText('Waiver on file');
-  await expect(checklist).toContainText('Bright green/yellow, or Black when the schedule says so.');
+  // Labels only: the rules below explain them.
+  await expect(checklist).not.toContainText('The complex won’t let you play without one.');
+  await expect(checklist).not.toContainText('never stops');
 
   const sections = page.getByRole('navigation', { name: 'Rule sections' });
   await expect(sections.getByRole('button')).toHaveText([

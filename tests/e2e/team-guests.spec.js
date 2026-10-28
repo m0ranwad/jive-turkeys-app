@@ -4,7 +4,7 @@
 // them off the team. Their roster status decides whether they split the dues, like
 // everyone else's.
 // The database enforces who can do what (supabase/tests/dues.test.sql).
-import { enterTeamCode, expect, openSection, playerOptions, signIn, test } from './helpers';
+import { enterTeamCode, expect, expectTeam, notJoinedRows, openSection, playerOptions, rosterRow, signIn, test } from './helpers';
 
 // Mike Russo (man, Defense) and Dana Wells (woman, Forward) are Active and haven't joined yet in the sample data.
 // Kelly Moss picked "Kelly M" on the roster when she joined.
@@ -44,35 +44,33 @@ async function signOutAndInAsCaptain(page) {
 
 const field = (page) => page.locator('section').filter({ has: page.getByRole('heading', { name: 'On the field' }) });
 
-const card = (page, name) => page.locator('div.rounded-3xl', { hasText: name }).filter({ has: page.getByText(name, { exact: true }) }).last();
+const card = (page, name) => rosterRow(page, name);
 
-test('everyone sees players who have not joined yet as grey cards, in the counts, with an invite to copy', async ({ page, context }) => {
+test('everyone sees players who have not joined yet in their status group, in the counts, with an invite to copy', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await signIn(page, 'jordan@demo.test');
   await openTeam(page);
   // 10 active app players plus Mike and Dana.
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 2 });
   await expect(card(page, 'Mike Russo')).toContainText('Not joined yet');
-  await expect(card(page, 'Mike Russo')).toHaveClass(/border-dashed/);
+  // Dashed initials, like everywhere else for "not joined".
+  await expect(card(page, 'Mike Russo').locator('.border-dashed').first()).toBeVisible();
   await expect(card(page, 'Dana Wells')).toContainText('Forward');
   // Players can't change them, or see which roster name someone joined as.
   await expect(page.getByRole('button', { name: 'Edit Mike Russo' })).toHaveCount(0);
   await expect(page.getByTestId('joined-as')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add players to the roster' })).toHaveCount(0);
 
-  const notJoined = page.getByTestId('not-joined');
-  await expect(notJoined).toContainText("2 haven't joined yet");
-  // Players on the site come first; everyone still to join is listed under the invite.
-  await expect(page.getByText('On the site · 12')).toBeVisible();
-  const top = async (locator) => (await locator.boundingBox()).y;
-  expect(await top(card(page, 'Kelly Moss'))).toBeLessThan(await top(notJoined));
-  expect(await top(card(page, 'Dana Wells'))).toBeGreaterThan(await top(notJoined));
-  expect(await top(card(page, 'Mike Russo'))).toBeGreaterThan(await top(notJoined));
+  // They're Playing, so they're in that group with everyone else, by name; rows don't repeat the status.
+  const playing = page.locator('[data-status-group="active"]');
+  await expect(playing.locator('[data-roster-row="Mike Russo"]')).toBeVisible();
+  await expect(playing.locator('[data-roster-row="Dana Wells"]')).toBeVisible();
+  await expect(playing.locator('[data-roster-row]').getByText('Playing', { exact: true })).toHaveCount(0);
   // They have positions, so they're on the field too: dashed, with a note (and screen reader text) saying why.
   await expect(page.getByTestId('field-legend')).toHaveText("Dashed outline = hasn't joined yet");
   await expect(field(page)).toContainText("Mike Russo (hasn't joined yet)");
   await expect(field(page)).not.toContainText("Kelly Moss (hasn't joined yet)");
-  await notJoined.getByRole('button', { name: 'Copy invite' }).click();
+  await page.getByRole('button', { name: 'Copy invite' }).click();
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
   expect(invite).toContain("You're on the Jive Turkeys roster!");
@@ -89,10 +87,12 @@ test('a captain adds several players at once, and they split the dues', async ({
   await expect(dialog).toContainText('Already on the roster, so skipped: mike russo');
   await dialog.getByRole('button', { name: 'Add 2 players' }).click();
   await expect(page.getByText('2 players added to the roster')).toBeVisible();
-  await expect(page.getByText('14 playing · 1 available to sub · 1 unavailable · 4 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 14, sub: 1, unavailable: 1, notJoined: 4 });
   await expect(card(page, 'Pat Lee')).toContainText('Not joined yet');
   // They haven't picked a position, so they aren't listed as floaters on the field (Riley and Chris are).
-  await expect(page.getByText('Floaters · none chosen · 2')).toBeVisible();
+  await expect(page.getByTestId('floaters')).toContainText('Chris Dunn');
+  await expect(page.getByTestId('floaters')).toContainText('Riley Novak');
+  await expect(page.getByTestId('floaters')).not.toContainText('Pat Lee');
 
   // Man / woman and position can be set with Edit (or by them when they join).
   await (await playerOptions(page, 'Pat Lee')).getByRole('button', { name: 'Edit Pat Lee' }).click();
@@ -125,7 +125,7 @@ test('pasting someone already on the app under a different name asks before coun
   await lookalikes.getByLabel("They're different people. Add them too.").check();
   await dialog.getByRole('button', { name: 'Add 4 players' }).click();
   await expect(page.getByText('4 players added to the roster')).toBeVisible();
-  await expect(page.getByText('16 playing · 1 available to sub · 1 unavailable · 6 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 16, sub: 1, unavailable: 1, notJoined: 6 });
   await expect(card(page, 'Jamie F.')).toContainText('Not joined yet');
 });
 
@@ -174,7 +174,7 @@ test("a captain's status change takes a player who has not joined out of the spl
   await expect(page.getByText('Mike Russo marked Available to sub')).toBeVisible();
   await expect(mike.getByRole('button', { name: 'Available to sub' })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
-  await expect(page.getByText('11 playing · 2 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 11, sub: 2, unavailable: 1, notJoined: 2 });
 
   // $721 across 11: $65.55, rounded up.
   await openDues(page);
@@ -197,7 +197,7 @@ test('a captain links a player who joined without picking their name', async ({ 
   await expect(dialog).toContainText("Chris Dunn's account takes over Mike Russo's spot");
   await dialog.getByRole('button', { name: 'Move them' }).click();
   await expect(page.getByText("Mike Russo moved to Chris Dunn's account")).toBeVisible();
-  await expect(page.getByText('11 playing · 1 available to sub · 1 unavailable · 1 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 11, sub: 1, unavailable: 1, notJoined: 1 });
   // The grey card is gone; captains see the name on Chris's card instead.
   await expect(page.getByRole('button', { name: 'Edit Mike Russo' })).toHaveCount(0);
   await expect(card(page, 'Chris Dunn').getByTestId('joined-as')).toHaveText(/Joined as Mike Russo/);
@@ -224,13 +224,13 @@ test('a captain edits a player who has not joined, removes them, and adds them b
   await expect(edit).toContainText('comes off the roster and out of the dues split');
   await edit.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(page.getByText('Dana Wells-Ortiz removed from the team')).toBeVisible();
-  await expect(page.getByText('11 playing · 1 available to sub · 1 unavailable · 1 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 11, sub: 1, unavailable: 1, notJoined: 1 });
 
   await page.getByRole('button', { name: 'Add players to the roster' }).click();
   const add = page.getByRole('dialog', { name: 'Add players to the roster' });
   await add.getByRole('button', { name: 'Add back' }).click();
   await expect(page.getByText('Dana Wells-Ortiz added back')).toBeVisible();
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 2 });
 });
 
 test('a captain undoes a pick: the roster name goes back to a grey card with its dues', async ({ page }) => {
@@ -243,7 +243,7 @@ test('a captain undoes a pick: the roster name goes back to a grey card with its
   await expect(dialog).toContainText("Kelly M's spot and dues go back to a grey card. Kelly Moss keeps their account.");
   await dialog.getByRole('button', { name: 'Unlink', exact: true }).click();
   await expect(page.getByText('Kelly M is a grey card again')).toBeVisible();
-  await expect(page.getByText('13 playing · 1 available to sub · 1 unavailable · 3 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 13, sub: 1, unavailable: 1, notJoined: 3 });
   await expect(card(page, 'Kelly M')).toContainText('Not joined yet');
   await expect(page.getByTestId('joined-as')).toHaveCount(0);
   // Kelly Moss isn't suggested for it again: a captain just took it off her account.
@@ -262,7 +262,7 @@ test('a captain undoes a pick: the roster name goes back to a grey card with its
   await edit.getByRole('button', { name: 'Move', exact: true }).click();
   await edit.getByRole('button', { name: 'Move them' }).click();
   await expect(page.getByText("Kelly M moved to Kelly Moss's account")).toBeVisible();
-  await expect(page.getByText('12 playing · 1 available to sub · 1 unavailable · 2 not joined yet')).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1, notJoined: 2 });
   await expect(card(page, 'Kelly Moss').getByRole('button', { name: 'Unlink Kelly M from Kelly Moss' })).toBeVisible();
 });
 

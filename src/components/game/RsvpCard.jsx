@@ -25,12 +25,8 @@ export function RsvpCard({ rsvp, onSet, onToggleGk, suspended, busy }) {
             rsvp?.playing_gk ? 'border-black bg-zinc-950 text-white' : 'border-zinc-200 bg-white hover:border-zinc-300',
           )}
         >
-          <span>
-            <span className="block text-sm font-bold">Playing GK</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
-              A woman in goal doesn't count toward the 3-women minimum
-            </span>
-          </span>
+          {/* No rule here: it's on Field Rules. */}
+          <span className="block text-sm font-bold">Playing GK</span>
           <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition', rsvp?.playing_gk ? 'bg-lime-400' : 'bg-zinc-200')}>
             <span
               className={cn(

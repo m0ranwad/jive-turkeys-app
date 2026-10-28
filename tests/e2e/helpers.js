@@ -169,3 +169,23 @@ export async function playerOptions(page, name) {
   return dialog;
 }
 
+/**
+ * The Team page's groups: how many are Playing, Available to sub and Unavailable (a group with
+ * nobody isn't shown), and how many rows haven't joined the site yet.
+ */
+export async function expectTeam(page, { playing, sub = 0, unavailable = 0, notJoined }) {
+  const heading = (status) => page.locator(`[data-status-group="${status}"] h3`);
+  for (const [status, label, n] of [['active', 'Playing', playing], ['sub_pool', 'Available to sub', sub], ['on_break', 'Unavailable', unavailable]]) {
+    if (n) await expect(heading(status)).toHaveText(new RegExp(`^${label} · ${n}( ·|$)`));
+    else await expect(heading(status)).toHaveCount(0);
+  }
+  if (notJoined !== undefined) {
+    await expect(notJoinedRows(page)).toHaveCount(notJoined);
+  }
+}
+
+/** A row on the Team page, by name. */
+export const rosterRow = (page, name) => page.locator(`[data-roster-row="${name}"]`);
+
+/** Team page rows for teammates who haven't joined the site yet. */
+export const notJoinedRows = (page) => page.locator('[data-roster-row][data-not-joined]');

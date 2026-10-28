@@ -151,7 +151,7 @@ export function RulesPage() {
   return (
     <div className="space-y-5">
       <div className="space-y-3">
-        <PageHeader title="Field Rules" subtitle={`${venueName}.`}>
+        <PageHeader title="Field Rules" subtitle={venueName}>
           {isCaptain && (
             <button
               onClick={() => setEditing(true)}
@@ -189,7 +189,7 @@ export function RulesPage() {
         </div>
       </section>
 
-      <GameDayChecklist settings={s} />
+      <GameDayChecklist />
 
       <section className={CARD}>
         {s.rules_intro && (

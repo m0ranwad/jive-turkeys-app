@@ -225,7 +225,7 @@ export function GameDetailPage() {
             {fmtDateLong(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'}
           </p>
           {game.has_result && (
-            <div className="mt-4 flex items-baseline gap-3">
+            <div className="mt-4 flex items-baseline gap-3" data-testid="final-score">
               <span className="font-display text-4xl font-extrabold leading-none">{game.score_us ?? 0}</span>
               <span className="text-white/30">–</span>
               <span className="font-display text-4xl font-extrabold leading-none text-white/40">{game.score_them ?? 0}</span>
