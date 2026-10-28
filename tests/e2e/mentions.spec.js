@@ -121,6 +121,9 @@ test('@team pings everyone, and only captains can use it', async ({ page }) => {
   const box = composer(page);
   await box.pressSequentially('@te');
   await option(page, /@team/).click();
+  // The picker places the cursor on the next animation frame. Flush that frame
+  // on the simulated clock before typing, so it cannot move the cursor mid-word.
+  await page.clock.runFor(20);
   await box.pressSequentially('pizza after the game');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(message(page, '@team pizza after the game').locator('[data-mention]')).toHaveText('@team');
