@@ -6,7 +6,7 @@
 // Sample data: session 1 is over (Jamie played it and is unavailable session 2;
 // Chris joined in session 2). Session 2 starts Saturday, and only some players
 // have answered: not the captain, Sam, Morgan, Riley, Kelly or Mike yet.
-import { expect, openSection, signIn, test, playerOptions } from './helpers';
+import { expect, expectTeam, openSection, signIn, test, playerOptions } from './helpers';
 
 const SAM = 'sam@demo.test';
 const JORDAN = 'jordan@demo.test'; // already answered for session 2
@@ -80,7 +80,7 @@ test('a player answers for themselves; players who already answered are not aske
   // Players don't see the captains' list of who hasn't answered.
   await openTab(page, '/team', 'Team');
   await expect(page.getByTestId('session-answers')).toHaveCount(0);
-  await expect(page.getByText(/^Session 2 · 12 playing · 1 available to sub/)).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1 });
 });
 
 test('a player in the sub pool can say they are in', async ({ page }) => {
@@ -124,13 +124,14 @@ test('once a session is over, status changes count from the next one and its due
   await signIn(page);
   await offSeason(page);
   await openTab(page, '/team', 'Team');
-  await expect(page.getByText(/^12 playing · 1 available to sub/)).toBeVisible();
-  await expect(page.getByText(/session 2 is over, so it counts from the next session/)).toBeVisible();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 1 });
   // A captain marks Kelly unavailable. Session 2's split doesn't change.
-  await (await playerOptions(page, 'Kelly Moss')).getByRole('button', { name: 'Unavailable' }).click();
+  const kelly = await playerOptions(page, 'Kelly Moss');
+  await expect(kelly).toContainText('session 2 is over, so it counts from the next session');
+  await kelly.getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText('Kelly Moss marked Unavailable')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByText(/^11 playing · 1 available to sub · 2 unavailable/)).toBeVisible();
+  await expectTeam(page, { playing: 11, sub: 1, unavailable: 2 });
 
   await openTab(page, '/dues', 'Dues');
   await expect(page.getByTestId('dues-session')).toHaveText('Session 2 · 2026–27');
