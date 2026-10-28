@@ -123,7 +123,6 @@ export function SettingsPage() {
       </p>
       <TeamCodeCard meId={user?.id} roster={roster} />
       <section className={cn(CARD, 'space-y-5')}>
-        {field('Header line (under "Jive Turkeys")', 'season_label', { maxLength: 40, placeholder: DEFAULT_SETTINGS.season_label })}
         <div className="grid gap-4 sm:grid-cols-2">
           {field('Primary jersey', 'primary_jersey')}
           {field('Backup jersey', 'backup_jersey')}

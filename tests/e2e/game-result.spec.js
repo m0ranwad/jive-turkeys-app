@@ -15,6 +15,7 @@ async function openResult(page) {
 }
 
 const player = (result, name) => result.locator(`[data-player="${name}"]`);
+const finalScore = (page) => page.getByTestId('final-score');
 const resultCard = (page) => page.locator('section').filter({ has: page.getByRole('heading', { name: 'Result', exact: true }) });
 
 test.beforeEach(async ({ page }) => {
@@ -95,7 +96,7 @@ test('goals, assists and cards go in with + and −, and our score adds itself u
   await expect(page.getByText('Result saved')).toBeVisible();
   await expect(result).toBeHidden();
   const card = resultCard(page);
-  await expect(card).toContainText('3–2');
+  await expect(finalScore(page)).toContainText('3–2');
   await expect(card).toContainText('Mike Russo2G');
   await expect(card).toContainText('Jordan Rivera1G');
   await expect(card).toContainText('Riley Novak1A');
@@ -144,7 +145,7 @@ test("take off a no-show, add someone who came anyway, and Edit result opens as 
   // Cancel leaves it as it was.
   await result.getByRole('button', { name: 'Add a goal for Kelly Moss' }).click();
   await result.getByRole('button', { name: 'Cancel' }).click();
-  await expect(resultCard(page)).toContainText('2–0');
+  await expect(finalScore(page)).toContainText('2–0');
   await expect(resultCard(page)).toContainText('Kelly Moss1G');
 });
 
@@ -175,7 +176,7 @@ test('fill-ins from outside the team: a name if anyone caught it, and their goal
   await result.getByRole('button', { name: 'Save result' }).click();
   await expect(page.getByText('Result saved')).toBeVisible();
   const card = resultCard(page);
-  await expect(card).toContainText('4–0');
+  await expect(finalScore(page)).toContainText('4–0');
   await expect(card).toContainText('Fill-in 12G');
   await expect(card).toContainText('Lenafill-in2G');
   await expect(card).toContainText('Jordan Rivera1A');
@@ -197,7 +198,7 @@ test('fill-ins from outside the team: a name if anyone caught it, and their goal
   await expect(result.getByLabel('Jive Turkeys score')).toHaveValue('2');
   await result.getByRole('button', { name: 'Save result' }).click();
   await expect(page.getByText('Result saved')).toBeVisible();
-  await expect(resultCard(page)).toContainText('2–0');
+  await expect(finalScore(page)).toContainText('2–0');
   await expect(resultCard(page)).not.toContainText('Fill-in');
   await expect(resultCard(page)).toContainText('Lenafill-in2G');
 });

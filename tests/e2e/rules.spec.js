@@ -1,4 +1,4 @@
-// The Field Rules page: sections, the coed box, directions, the checklist and the pictures.
+// The Field Rules page: sections, the coed box, directions, quick hits and the pictures.
 import { CAPTAIN, PLAYER, expect, signIn, test } from './helpers';
 
 async function openRules(page) {
@@ -8,7 +8,7 @@ async function openRules(page) {
   await expect(page.getByRole('heading', { name: 'Field Rules' })).toBeVisible();
 }
 
-test('players see the rules in sections, with directions, a checklist and pictures', async ({ page }) => {
+test('players see the rules in sections, with directions, quick hits and pictures', async ({ page }) => {
   await signIn(page, PLAYER);
   await openRules(page);
 
@@ -16,9 +16,9 @@ test('players see the rules in sections, with directions, a checklist and pictur
   await expect(directions).toContainText('8809 Lake Rd, Seville, OH');
   await expect(directions).toHaveAttribute('href', /google\.com\/maps.*8809%20Lake%20Rd/);
 
-  const checklist = page.getByRole('region', { name: 'Game-day checklist' });
-  await expect(checklist).toContainText('Waiver on file');
-  await expect(checklist).toContainText('Bright green/yellow, or Black when the schedule says so.');
+  // Quick hits is the one short list; no second checklist repeats it.
+  await expect(page.getByRole('heading', { name: 'Quick hits' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Game-day checklist' })).toHaveCount(0);
 
   const sections = page.getByRole('navigation', { name: 'Rule sections' });
   await expect(sections.getByRole('button')).toHaveText([

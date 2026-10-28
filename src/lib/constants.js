@@ -28,8 +28,6 @@ export const DEFAULT_SETTINGS = {
   venue_address: '8809 Lake Rd, Seville, OH',
   min_players: 8,
   min_women: 3,
-  // The line under "Jive Turkeys" in the header.
-  season_label: 'Season 12 · Indoor Coed',
   potm_mode: 'separate',
   // Player of the Match voting: open this many hours after a result is posted,
   // a notification when it opens, a reminder this many hours before it closes

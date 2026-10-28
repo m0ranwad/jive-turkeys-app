@@ -89,7 +89,7 @@ test('a player in the sub pool can say they are in', async ({ page }) => {
   await expect(page.getByText("You're playing session 2")).toBeVisible();
   await expect(prompt(page)).toHaveCount(0);
   await openTab(page, '/profile', 'Sam Okafor');
-  await expect(page.getByText('It counts for session 2')).toBeVisible();
+  await expect(page.getByText('Counts for session 2')).toBeVisible();
 });
 
 test('captains can correct who was on a past session, and only that session changes', async ({ page }) => {

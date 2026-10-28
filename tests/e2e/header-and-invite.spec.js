@@ -1,21 +1,17 @@
-// Small things: the header line is a Team Settings field, Copy invite is always
-// on the Team page (emailed invites aren't switched on yet), and announcement
-// dates are in local time.
+// Small things: the header shows the season and session the site is on, Copy
+// invite is always on the Team page (emailed invites aren't switched on yet),
+// and announcement dates are in local time.
 import { expect, signIn, test } from './helpers';
 
-test('captains change the line under "Jive Turkeys" in the header', async ({ page }) => {
+test('the line under "Jive Turkeys" is the season and session the site is on', async ({ page }) => {
   await signIn(page);
-  const header = page.locator('header').first();
-  await expect(header).toContainText('Season 12 · Indoor Coed');
+  // Sample data: the next game is session 2 of the 2026–27 season.
+  await expect(page.locator('header').first()).toContainText('2026–27 · Session 2');
+  // It isn't a Team Settings field any more.
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('link', { name: 'Team Settings' }).click();
-  // The menu keeps focus while it slides away, then hands it back to the Menu button. Typing before then loses letters.
-  await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
-  // It saves when you leave the box (or press Enter); there's no Save button.
-  await page.getByLabel('Header line (under "Jive Turkeys")').fill('Fall 2026 · Thursday Coed');
-  await page.getByLabel('Header line (under "Jive Turkeys")').press('Enter');
-  await expect(page.getByTestId('settings-status')).toHaveText('All changes saved');
-  await expect(header).toContainText('Fall 2026 · Thursday Coed');
+  await expect(page.getByRole('heading', { name: 'Team settings' })).toBeVisible();
+  await expect(page.getByLabel(/Header line/)).toHaveCount(0);
 });
 
 test('anyone can copy an invite from the Team page, even once everyone has joined', async ({ page, context }) => {

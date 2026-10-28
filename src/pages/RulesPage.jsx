@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Pencil } from 'lucide-react';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
-import { CardsExplainer, GameDayChecklist, ThreeLineDiagram } from '@/components/rules/RuleVisuals';
+import { CardsExplainer, ThreeLineDiagram } from '@/components/rules/RuleVisuals';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
@@ -151,7 +151,7 @@ export function RulesPage() {
   return (
     <div className="space-y-5">
       <div className="space-y-3">
-        <PageHeader title="Field Rules" subtitle={`${venueName}.`}>
+        <PageHeader title="Field Rules" subtitle={venueName}>
           {isCaptain && (
             <button
               onClick={() => setEditing(true)}
@@ -188,8 +188,6 @@ export function RulesPage() {
           </ul>
         </div>
       </section>
-
-      <GameDayChecklist settings={s} />
 
       <section className={CARD}>
         {s.rules_intro && (
