@@ -583,7 +583,7 @@ export function TeamPage() {
       )}
       {data.isCaptain && optionsPlayer && (
         <Dialog open onOpenChange={(open) => !open && setOptionsFor(null)}>
-          <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogContent className={DIALOG}>
             <DialogHeader className="text-left">
               <DialogTitle className={DIALOG_TITLE}>{optionsPlayer.display_name}</DialogTitle>
             </DialogHeader>
