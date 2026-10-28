@@ -48,7 +48,7 @@ test('the session question comes right under the Next game card, before the vote
 
 test('a new session asks who is playing, and the last session keeps its dues', async ({ page }) => {
   await signIn(page);
-  await expect(prompt(page)).toContainText('Session 2 starts Sat, Oct 10');
+  await expect(prompt(page)).toContainText('Starts Sat, Oct 10');
   await expect(prompt(page)).toContainText('Playing session 2?');
   await expect(prompt(page)).toContainText("You're down as Playing.");
 

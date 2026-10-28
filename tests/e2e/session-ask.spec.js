@@ -48,7 +48,7 @@ test('the session answers fit their buttons on any phone', async ({ page }) => {
 
 test("a player answers for the next session ahead, and only that session changes", async ({ page }) => {
   await signIn(page, PLAYER);
-  await expect(ahead(page)).toContainText('Asking ahead');
+  await expect(ahead(page)).toContainText('Starts Sat, Nov 14');
   await expect(ahead(page)).toContainText('Playing session 3?');
   await expect(ahead(page)).toContainText('3 in so far');
   await ahead(page).getByRole('button', { name: 'Unavailable' }).click();
@@ -66,6 +66,9 @@ test("a player answers for the next session ahead, and only that session changes
   await expect(ahead(page).getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
   await ahead(page).getByRole('button', { name: 'Playing' }).click();
   await expect(ahead(page)).toContainText('Session 3: Playing');
+  await expect(ahead(page)).toContainText('Starts Sat, Nov 14');
+  // The count is on the open card.
+  await ahead(page).getByRole('button', { name: 'Change' }).click();
   await expect(ahead(page)).toContainText('4 in so far');
 });
 

@@ -129,7 +129,7 @@ export function SessionPrompt({ ask, onAnswered }) {
   return (
     <section className="rounded-3xl border-2 border-lime-400 bg-lime-50 p-4" data-testid="session-prompt">
       <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-800">
-        Session {period.session} starts {startsOn ? fmtDateShort(startsOn) : 'soon'}
+        {startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Starts soon'}
       </span>
       <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
       <p className="mb-3 mt-1 text-xs font-medium text-lime-900/80">You're down as {STATUS_LABEL[entry.status]}.</p>
@@ -152,7 +152,7 @@ export function NextSessionCard({ ask, rows, players, onAnswered }) {
       <span className="text-[11px] font-black uppercase tracking-[0.18em] text-lime-400">Next up</span>
       <h2 className="mt-1 font-display text-2xl font-extrabold uppercase tracking-tight">Session {period.session}</h2>
       <p className="mt-1 text-xs font-semibold text-white/70">
-        {startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Start date to come'} · Games show here when the schedule is out
+        {startsOn ? `Starts ${fmtDateShort(startsOn)}.` : 'Start date to come.'} Games show here when the schedule is out.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.08em]">
         <span className={cn(chip, 'bg-lime-400 text-black')}>{tally.in} in</span>
@@ -200,9 +200,7 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
           <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
             Session {period.session}: {ANSWER_LABEL[entry.status]}
           </span>
-          <span className="block truncate text-[11px] font-semibold text-zinc-500">
-            {when} · {tally.in} in so far
-          </span>
+          <span className="block truncate text-[11px] font-semibold text-zinc-500">{when}</span>
         </span>
         <button
           type="button"
@@ -221,11 +219,14 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
       aria-label={`Session ${period.session}`}
       data-testid="session-ahead"
     >
-      <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">Asking ahead</span>
-      <h2 className="mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
-      <p className="mb-3 mt-1 text-xs font-medium text-zinc-600">
-        {when} · {tally.in} in so far
-      </p>
+      {/* The date and how many are in, the way a later game's card shows its count. */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] font-black uppercase tracking-[0.16em] text-lime-700">{when}</span>
+        <span className="shrink-0 rounded-full bg-lime-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-lime-800">
+          {tally.in} in<span className="sr-only"> so far</span>
+        </span>
+      </div>
+      <h2 className="mb-3 mt-1 font-display text-xl font-extrabold uppercase tracking-tight">Playing session {period.session}?</h2>
       <SessionAnswers
         question={ask}
         selected={answered ? entry.status : undefined}
