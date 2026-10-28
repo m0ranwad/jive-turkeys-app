@@ -1,3 +1,5 @@
+import { Check } from 'lucide-react';
+import { CARD } from '@/lib/constants';
 
 const RED = '#ef4444';
 const LIME = '#a3e635';
@@ -109,5 +111,27 @@ export function CardsExplainer() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** What to sort out before heading to a game: labels only (the rules below say the rest). */
+export function GameDayChecklist() {
+  const items = ['Waiver on file', 'Shin guards', 'Jewelry off or taped', 'Right jersey', 'Get there early'];
+  return (
+    <section className={CARD} aria-labelledby="game-day-checklist">
+      <h2 id="game-day-checklist" className="font-display text-sm font-extrabold uppercase tracking-[0.18em]">
+        Game-day checklist
+      </h2>
+      <ul className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2">
+        {items.map((item) => (
+          <li key={item} className="flex items-center gap-2.5">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
+              <Check className="h-3 w-3" strokeWidth={3.5} />
+            </span>
+            <span className="text-sm font-bold leading-snug text-zinc-900">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

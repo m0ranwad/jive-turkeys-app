@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Pencil } from 'lucide-react';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
-import { CardsExplainer, ThreeLineDiagram } from '@/components/rules/RuleVisuals';
+import { CardsExplainer, GameDayChecklist, ThreeLineDiagram } from '@/components/rules/RuleVisuals';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
@@ -188,6 +188,8 @@ export function RulesPage() {
           </ul>
         </div>
       </section>
+
+      <GameDayChecklist />
 
       <section className={CARD}>
         {s.rules_intro && (

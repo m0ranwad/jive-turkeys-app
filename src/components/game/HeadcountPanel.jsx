@@ -1,17 +1,18 @@
 import { ShortBanner } from '@/components/schedule/GameCard';
 import { shortageIsUrgent } from '@/lib/calendar';
 import { CARD } from '@/lib/constants';
-import { mapsUrl } from '@/lib/format';
+import { fmtDateShort, fmtTime, jerseyText, mapsUrl } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-/** A group of names; empty groups other than IN aren't shown. */
-function Group({ label, entries, suspendedIds, tone, onPick, always = false }) {
-  if (!entries.length && !always) return null;
+function Group({ label, note, entries, suspendedIds, tone, onPick }) {
   return (
     <div data-group={label}>
-      <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]', tone)}>
-        {label} · {entries.length}
-      </span>
+      <div className="flex items-center gap-2">
+        <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em]', tone)}>
+          {label} · {entries.length}
+        </span>
+        {note && <span className="text-[11px] font-medium text-zinc-500">{note}</span>}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {entries.length === 0 && <span className="text-xs font-medium text-zinc-500">Nobody yet</span>}
         {entries.map((entry) => {
@@ -56,26 +57,31 @@ function Group({ label, entries, suspendedIds, tone, onPick, always = false }) {
  * the game has a score. `bare`: just the counts and names, inside something
  * else (a played game's folded list).
  */
-export function HeadcountPanel({ game, headcount, suspendedIds = [], onPick = null, bare = false }) {
-  // Maybe, Out and No reply have their counts on the groups below.
+export function HeadcountPanel({ game, headcount, suspendedIds = [], settings, onPick = null, bare = false }) {
   const tiles = [
     { label: 'IN', value: headcount.totalIn, tone: 'bg-lime-400 text-black' },
     { label: 'Women on field', value: `${headcount.womenFieldIn} of ${headcount.minWomen}`, tone: 'bg-zinc-950 text-lime-400' },
+    { label: 'MAYBE', value: headcount.groups.maybe.length, tone: 'bg-amber-300 text-black' },
+    { label: 'OUT', value: headcount.groups.out.length, tone: 'bg-zinc-100 text-zinc-600' },
+    { label: 'No reply', value: headcount.groups.none.length, tone: 'bg-zinc-100 text-zinc-600' },
+    { label: 'Men', value: headcount.totalIn - headcount.womenIn, tone: 'bg-zinc-100 text-zinc-600' },
   ];
   const showNeed = !game.has_result && headcount.isShort;
 
   return (
     <section className={bare ? 'px-5 pb-5' : CARD}>
-      {!bare && <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Headcount</h3>}
-      {showNeed && !bare && (
-        <ShortBanner
-          className="mt-2"
-          needTotal={headcount.needTotal}
-          needWomen={headcount.needWomen}
-          urgent={shortageIsUrgent(game)}
-        />
-      )}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      {!bare && <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Headcount</h3>
+          <p className="mt-1 text-xs font-medium text-zinc-500">
+            {fmtDateShort(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'} · {jerseyText(game.jersey, settings)}
+          </p>
+        </div>
+        {showNeed && (
+          <ShortBanner needTotal={headcount.needTotal} needWomen={headcount.needWomen} urgent={shortageIsUrgent(game)} />
+        )}
+      </div>}
+      <div className="mt-3 grid grid-cols-3 gap-2">
         {tiles.map((tile) => (
           <div key={tile.label} className={cn('rounded-2xl px-3 py-2.5', tile.tone)}>
             <div className="font-display text-xl font-extrabold leading-none">{tile.value}</div>
@@ -83,18 +89,35 @@ export function HeadcountPanel({ game, headcount, suspendedIds = [], onPick = nu
           </div>
         ))}
       </div>
+      {showNeed && !bare && (
+        <p className="mt-3 text-xs font-medium text-zinc-500">
+          We need at least {headcount.minPlayers} players, with {headcount.minWomen} women on the field (a woman in goal
+          doesn't count).
+        </p>
+      )}
       {onPick && (
         <p className="mt-3 text-xs font-medium text-zinc-500">
           Tap a name to set their RSVP, for teammates who told you another way or haven't joined the site (dashed outline).
         </p>
       )}
       <div className="mt-4 space-y-4">
-        <Group label="IN" entries={headcount.groups.in} suspendedIds={suspendedIds} tone="bg-lime-400 text-black" onPick={onPick} always />
+        <Group label="IN" entries={headcount.groups.in} suspendedIds={suspendedIds} tone="bg-lime-400 text-black" onPick={onPick} />
         <Group label="MAYBE" entries={headcount.groups.maybe} suspendedIds={suspendedIds} tone="bg-amber-300 text-black" onPick={onPick} />
         <Group label="OUT" entries={headcount.groups.out} suspendedIds={suspendedIds} tone="bg-zinc-200 text-zinc-600" onPick={onPick} />
         <Group label="No reply" entries={headcount.groups.none} suspendedIds={suspendedIds} tone="bg-zinc-900 text-white" onPick={onPick} />
-        <Group label="Subs" entries={headcount.groups.subs} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
-        <Group label="Unavailable" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
+        {headcount.groups.subs.length > 0 && (
+          <Group
+            label="Subs"
+            note="Available to sub, no reply"
+            entries={headcount.groups.subs}
+            suspendedIds={suspendedIds}
+            tone="bg-zinc-100 text-zinc-600"
+            onPick={onPick}
+          />
+        )}
+        {headcount.groups.unavailable.length > 0 && (
+          <Group label="Unavailable" note="No sub requests" entries={headcount.groups.unavailable} suspendedIds={suspendedIds} tone="bg-zinc-100 text-zinc-600" onPick={onPick} />
+        )}
       </div>
       <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-semibold text-zinc-500">
         <span className="inline-flex items-center gap-2">
