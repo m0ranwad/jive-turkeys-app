@@ -31,6 +31,21 @@ async function offSeason(page) {
   await page.reload();
 }
 
+test('the session question comes right under the Next game card, before the vote reminder', async ({ page }) => {
+  await signIn(page);
+  // Sample data: the captain hasn't answered session 2, and voting on last week's game is open.
+  const vote = page.getByTestId('potm-prompt');
+  await expect(vote).toBeVisible();
+  const top = async (locator) => (await locator.boundingBox()).y;
+  const next = await top(page.getByRole('region', { name: 'Next game' }));
+  const question = await top(prompt(page));
+  expect(question).toBeGreaterThan(next);
+  expect(question).toBeLessThan(await top(vote));
+  // Answering the game doesn't answer the session.
+  await page.getByRole('region', { name: 'Next game' }).getByRole('button', { name: 'IN', exact: true }).click();
+  await expect(prompt(page)).toContainText('Playing session 2?');
+});
+
 test('a new session asks who is playing, and the last session keeps its dues', async ({ page }) => {
   await signIn(page);
   await expect(prompt(page)).toContainText('Session 2 starts Sat, Oct 10');
