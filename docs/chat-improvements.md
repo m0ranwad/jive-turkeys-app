@@ -19,19 +19,29 @@ and rehearsal pass; hosted browser checks are running.
 
 ## Iteration 2: search
 
-Implemented:
+Saved as `b836ab2` in preview #171. Manual phone checks passed without page errors:
 
 - Search opens directly from a conversation, on phones and computers.
 - New queries show Searching, with old results cleared.
 - Responses to older queries cannot replace the current results.
 - Added checks for the shortcut, loading state and late responses.
 
+## Iteration 3: screen polish
+
+Implemented and checked on 1280px desktop, 393px phone and 360px small phone screens:
+
+- Desktop chat is wider, with a wider room list on large screens.
+- Phones have a roomy chat-options window; desktop keeps its dropdown.
+- Rename, new thread and destructive confirmations match the other chat windows.
+- Existing room-menu actions and both Cancel paths work at all three sizes, with no page errors or
+  horizontal page overflow.
+- Added a failed-reconnection check and made the history-retry check wait for the phone room list.
+
 ## Remaining steps
 
-1. Finish hosted checks for iteration 1 and resolve any failures.
-2. Finish hosted checks for iteration 2.
-3. Give desktop chat and its room list more space.
-4. Polish phone controls: larger room-menu rows and consistent chat dialogs (#76).
+1. Finish hosted browser, logic, compilation, and database checks on the final saved increment.
+2. Review the sample-data preview; publish only when the owner asks.
+3. Check real iPhone keyboards/scrolling, push alerts and delivery between two signed-in devices.
 
 ## Continuation notes
 

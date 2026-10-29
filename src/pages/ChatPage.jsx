@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
-import { ConfirmDialog, NewRoomDialog, PeopleDialog, PrivateChatDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
+import { ConfirmDialog, NewRoomDialog, PeopleDialog, PrivateChatDialog, RoomMenuDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ChatSearch } from '@/components/chat/ChatSearch';
 import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
@@ -959,12 +959,29 @@ export function ChatPage() {
     setMenuOpen(false);
     next();
   };
+  const roomActions = (
+    <>
+      {privateRoom && <MenuItem icon={Users} label="People" onClick={closeMenuAnd(() => setDialog({ kind: 'people' }))} />}
+      {canManage && (
+        <>
+          <MenuItem icon={Pencil} label="Rename" onClick={closeMenuAnd(() => setDialog({ kind: 'rename' }))} />
+          {thread.archived ? (
+            <MenuItem icon={LockOpen} label={`Reopen ${roomKind}`} onClick={() => setClosed(false)} />
+          ) : (
+            <MenuItem icon={Lock} label={`Close ${roomKind}`} onClick={() => setClosed(true)} />
+          )}
+        </>
+      )}
+      {privateRoom && <MenuItem icon={LogOut} label="Leave chat" onClick={closeMenuAnd(() => setDialog({ kind: 'leave', thread }))} />}
+      {canManage && <MenuItem icon={Trash2} label={`Delete ${roomKind}`} danger onClick={closeMenuAnd(() => setDialog({ kind: 'deleteThread', thread }))} />}
+    </>
+  );
 
   return (
     <div ref={shell} data-chat-shell className="flex gap-3" style={shellStyle}>
       <aside
         className={cn(
-          'w-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:flex md:w-64 md:shrink-0',
+          'w-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:flex md:w-64 md:shrink-0 lg:w-80',
           listOnly ? 'flex' : 'hidden',
         )}
       >
@@ -1053,39 +1070,19 @@ export function ChatPage() {
                   onClick={() => setMenuOpen((open) => !open)}
                   aria-label="Chat options"
                   aria-expanded={menuOpen}
-                  className="grid h-9 w-9 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
+                  className="grid h-11 w-11 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
                 >
                   <MoreHorizontal className="h-5 w-5" />
                 </button>
-                {menuOpen && (
+                {menuOpen && wide && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                    <div className="absolute right-0 top-full z-40 mt-1 w-48 overflow-hidden rounded-2xl border border-black/5 bg-white py-1 shadow-xl">
-                      {privateRoom && <MenuItem icon={Users} label="People" onClick={closeMenuAnd(() => setDialog({ kind: 'people' }))} />}
-                      {canManage && (
-                        <>
-                          <MenuItem icon={Pencil} label="Rename" onClick={closeMenuAnd(() => setDialog({ kind: 'rename' }))} />
-                          {thread.archived ? (
-                            <MenuItem icon={LockOpen} label={`Reopen ${roomKind}`} onClick={() => setClosed(false)} />
-                          ) : (
-                            <MenuItem icon={Lock} label={`Close ${roomKind}`} onClick={() => setClosed(true)} />
-                          )}
-                        </>
-                      )}
-                      {privateRoom && (
-                        <MenuItem icon={LogOut} label="Leave chat" onClick={closeMenuAnd(() => setDialog({ kind: 'leave', thread }))} />
-                      )}
-                      {canManage && (
-                        <MenuItem
-                          icon={Trash2}
-                          label={`Delete ${roomKind}`}
-                          danger
-                          onClick={closeMenuAnd(() => setDialog({ kind: 'deleteThread', thread }))}
-                        />
-                      )}
+                    <div className="absolute right-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-2xl border border-black/5 bg-white p-1.5 shadow-xl">
+                      {roomActions}
                     </div>
                   </>
                 )}
+                {!wide && <RoomMenuDialog open={menuOpen} onOpenChange={setMenuOpen}>{roomActions}</RoomMenuDialog>}
               </div>
             )}
           </header>
@@ -1249,7 +1246,7 @@ function MenuItem({ icon: Icon, label, danger, onClick }) {
     <button
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-zinc-50',
+        'flex min-h-12 w-full items-center gap-2.5 rounded-xl px-3 py-3 text-left text-sm font-semibold transition hover:bg-zinc-50',
         danger ? 'text-red-600' : 'text-zinc-700',
       )}
     >

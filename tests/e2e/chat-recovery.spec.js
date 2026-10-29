@@ -66,7 +66,8 @@ test('removing a failed message removes only the unsent copy and keeps the next 
 test('failed history looks different from an empty room and offers a working retry', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'messages'));
   await chatTab(page).click();
-  if (await page.locator('[data-room="team"]').isVisible()) await page.locator('[data-room="team"]').click();
+  await showRooms(page);
+  await page.locator('[data-room="team"]').click();
   await expect(page.getByText("Messages didn't load", { exact: true })).toBeVisible();
   await expect(page.getByText('No messages yet. Break the ice.', { exact: true })).toHaveCount(0);
   await page.evaluate(() => localStorage.removeItem('jt_demo_fail_reads'));
