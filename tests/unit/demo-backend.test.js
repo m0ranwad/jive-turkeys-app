@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v28';
+const DB_KEY = 'jt_demo_db_v29';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -479,6 +479,7 @@ describe('dues', () => {
     expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
     const [settings] = await api.entities.TeamSettings.list();
     expect(settings.pay_venmo).toBeTruthy();
+    expect(settings.pay_paypal).toBe('kircherbrian');
   });
 
   it('lets any player mark players paid, recording who did it, without touching custom amounts', async () => {

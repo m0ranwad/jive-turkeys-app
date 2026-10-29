@@ -3,6 +3,7 @@
 -- scripts/test-db.sh after every migration is applied. Everything happens in
 -- one transaction that's rolled back, so the other test files never see it.
 -- The first failed check stops the run with "FAILED: <what was expected>".
+-- Expected behavior and the related test suites: docs/dues.md.
 
 begin;
 

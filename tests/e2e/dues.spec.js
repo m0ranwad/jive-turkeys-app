@@ -2,14 +2,14 @@
 // can mark players paid; marking someone not paid takes a second tap and is
 // kept in the history; couples pay together; captains set the fee, custom
 // amounts and payment links. The database enforces who can change what
-// (supabase/tests/dues.test.sql).
+// (supabase/tests/dues.test.sql). Expected behavior: docs/dues.md.
 import { duesOption, expect, openSection, signIn, test } from './helpers';
 
 // Alex Chen and Riley Novak are a couple who pay together and haven't paid this session in the sample data.
 const ALEX = 'alex@demo.test';
 const JORDAN = 'jordan@demo.test'; // paid two days ago, and marked it herself
 const SAM = 'sam@demo.test'; // paid $50 before the ref fees were added; the share is now $61
-const PAYPAL_QR = 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ';
+const PAYPAL = 'https://paypal.me/kircherbrian';
 
 /** The Dues tab: bottom bar on phones, top bar on computers. */
 async function openDues(page) {
@@ -47,8 +47,8 @@ async function expectRemaining(page, amount) {
   await expect(page.getByText("You're both paid up")).toHaveCount(0);
   await expect(page.getByTestId('pay-difference')).toContainText('Pay the rest');
   const paypal = page.getByRole('link', { name: `Pay $${amount} with PayPal` });
-  await expect(paypal).toHaveAttribute('href', PAYPAL_QR);
-  await expect(paypal).toContainText(`Enter $${amount}`);
+  await expect(paypal).toHaveAttribute('href', `${PAYPAL}/${amount}`);
+  await expect(paypal).toContainText('paypal.me/kircherbrian');
 }
 
 test('Dues has its own tab, where Profile used to be', async ({ page }) => {
@@ -79,8 +79,8 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
     'https://venmo.com/B-Kircher?txn=pay&audience=private&amount=122&note=Jive%20Turkeys%20dues%20%C2%B7%20Session%202%202026%E2%80%9327%20%C2%B7%20Alex%20Chen%20%26%20Riley%20Novak',
   );
   const paypal = page.getByRole('link', { name: 'Pay $122 with PayPal' });
-  await expect(paypal).toHaveAttribute('href', PAYPAL_QR);
-  await expect(paypal).toContainText('Enter $122');
+  await expect(paypal).toHaveAttribute('href', `${PAYPAL}/122`);
+  await expect(paypal).toContainText('paypal.me/kircherbrian');
   await expect(page.getByText('Cash at the field works too.')).toBeVisible();
   await expect(page.getByText('Other sessions')).toBeVisible();
 
@@ -94,6 +94,31 @@ test('a player sees what they owe for themselves and their partner, with Venmo a
   await expect(page.getByRole('tab', { name: 'Team dues' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('dues-unpaid')).toContainText('Alex Chen');
   await expect(page.getByTestId('dues-paid')).toContainText('Jordan Rivera');
+});
+
+test('opening PayPal leaves the dues unpaid until a teammate records the payment', async ({ page, context }) => {
+  // Keep the payment service local to the test: no real transfer or external request.
+  await context.route('https://paypal.me/**', (route) => route.fulfill({
+    contentType: 'text/html', body: '<h1>PayPal</h1>',
+  }));
+  await signIn(page, ALEX);
+  await openDues(page);
+  const pay = page.getByRole('link', { name: 'Pay $122 with PayPal' });
+  const opened = context.waitForEvent('page');
+  await pay.click();
+  const paypal = await opened;
+  await expect(paypal).toHaveURL(`${PAYPAL}/122`);
+  await paypal.close();
+
+  await page.reload();
+  const card = page.getByTestId('my-dues');
+  await expect(card).toContainText('Unpaid');
+  await expect(pay).toBeVisible();
+  await expect(page.getByTestId('team-progress')).toContainText('$385 in · $408 to go');
+
+  await page.getByRole('button', { name: 'Mark us paid' }).click();
+  await expect(page.getByText("You're both paid up")).toBeVisible();
+  await expect(pay).toHaveCount(0);
 });
 
 test('marking yourself paid is one tap; marking not paid asks first and stays in your history', async ({ page }) => {
