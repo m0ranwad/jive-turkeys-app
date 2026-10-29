@@ -206,9 +206,11 @@ game; captains see who hasn't answered on the Team page. A past session can be c
 - Every page requires a login, except `/privacy` and `/terms`, and a new account also has to enter the team
   code (Team Settings) before it sees anything. The Base44 app returned player emails and phone numbers to
   anyone who asked its API, without signing in.
-- Schedule import reads `.xlsx`/`.csv` directly in the browser instead of through Base44's AI. It finds
-  date, time, field and opponent columns by name. For league-wide sheets with Home/Away columns, it keeps
-  only Jive Turkeys games.
+- Schedule import reads original league PDFs and `.xlsx`/`.csv` files directly in the browser. It finds
+  date, time, field and opponent columns by name, or reads a printed grid using its numbered team key.
+  For league-wide grids or sheets with Home/Away columns, it keeps only Jive Turkeys games. Captains
+  review the games and their season/session before saving. Image-only scans need the original PDF,
+  a spreadsheet or manual entry.
 - The "Email RSVP reminders" switch is gone. It was a placeholder that needed a paid Base44 plan.
   *Copy reminder* on each game still works.
 - The field rules from the Base44 site are loaded by the setup SQL. No player data was carried over:

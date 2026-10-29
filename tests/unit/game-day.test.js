@@ -237,6 +237,36 @@ function xlsxFile(rows) {
 const csvFile = (text) => ({ arrayBuffer: async () => new TextEncoder().encode(text).buffer });
 
 describe('importing a league schedule', () => {
+  it('reads dot-separated kickoff times without matching the minutes as hours', async () => {
+    expect(normalizeTime('7.30 PM')).toBe('19:30');
+    expect(normalizeTime('8.10p')).toBe('20:10');
+    expect(normalizeTime('7.00pm')).toBe('19:00');
+    for (const invalid of ['30 PM', '127:30 PM', '7:60 PM', '13:30 PM', '25:10', '8:99']) {
+      expect(normalizeTime(invalid)).toBe('');
+    }
+    const text = 'Date,Time,Opponent\n11/6,7.30 PM,Net Ninjas\n11/13,8.10p,Goal Diggers\n11/20,7.00pm,Ball Busters';
+    expect((await parseScheduleFile(csvFile(text), 2026)).map((game) => game.time)).toEqual(['19:30', '20:10', '19:00']);
+  });
+
+  it('reads Excel-style month-name dates and their two-digit years', async () => {
+    const games = await parseScheduleFile(csvFile('Date,Time,Opponent\n15-Oct-26,7:00 PM,Net Ninjas\n6-Nov,8:10 PM,Goal Diggers\nJan-8,9:20 PM,Ball Busters'), 2026);
+    expect(games.map((game) => game.date)).toEqual(['2026-10-15', '2026-11-06', '2027-01-08']);
+    expect(normalizeDate('15-Oct-2026', 2027)).toBe('2026-10-15');
+    expect(normalizeDate('Oct-15', 2026)).toBe('2026-10-15');
+    // Schedule imports interpret mmm-dd as a day, including the ambiguous Oct-26.
+    expect(normalizeDate('Oct-26', 2026)).toBe('2026-10-26');
+  });
+
+  it('does not mistake numeric field numbers for dates in a headerless spreadsheet', async () => {
+    expect(await parseScheduleFile(xlsxFile([
+      [2, new Date(2027, 10, 6), '7:00 PM', 'Ball Busters'],
+      [1, '11/13', '8:10 PM', 'Goal Diggers'],
+    ]), 2027)).toEqual([
+      { date: '2027-11-06', time: '19:00', field_number: '2', opponent: 'Ball Busters' },
+      { date: '2027-11-13', time: '20:10', field_number: '1', opponent: 'Goal Diggers' },
+    ]);
+  });
+
   it('reads dates and times in the usual formats', () => {
     expect(normalizeDate('2026-10-15')).toBe('2026-10-15');
     expect(normalizeDate('10/15/26')).toBe('2026-10-15');
