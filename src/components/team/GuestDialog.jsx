@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api';
-import { EYEBROW } from '@/components/dues/DuesParts';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { DIALOG, DIALOG_TITLE, POSITIONS } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE, EYEBROW, FIELD_LABEL, POSITIONS } from '@/lib/constants';
 import { likelyAccount, sortPastedNames } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
-const FIELD_LABEL = 'text-xs font-semibold text-zinc-500';
-const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
 const SELECT = 'h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900';
 
 /** Name, man / woman (for the coed counts) and position. */

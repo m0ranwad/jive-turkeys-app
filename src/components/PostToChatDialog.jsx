@@ -5,13 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/components/ui/toast';
 import { useTeam } from '@/hooks/useTeam';
 import { copyText } from '@/lib/clipboard';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { saveFailedToast } from '@/lib/errors';
 import { findMentions, mentionPeople } from '@/lib/mentions';
 import { chatNamer, plainName } from '@/lib/team-posts';
 import { cn } from '@/lib/utils';
 
-const BIG_BUTTON = 'flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold uppercase tracking-[0.1em] transition';
+// Plain buttons with an icon beside the words.
+const BUTTON = cn(BIG_BUTTON, 'flex items-center justify-center gap-2 transition');
 // The database refuses longer messages.
 const MAX_LENGTH = 2000;
 
@@ -112,7 +113,7 @@ export function PostToChatDialog({ open, onOpenChange, title, intro, message, ab
             type="button"
             onClick={post}
             disabled={busy || tooLong || !user}
-            className={cn(BIG_BUTTON, 'bg-lime-400 text-black hover:bg-lime-300 disabled:opacity-50')}
+            className={cn(BUTTON, 'bg-lime-400 text-black hover:bg-lime-300 disabled:opacity-50')}
           >
             <MessageSquare className="h-4 w-4" />
             {busy ? 'Posting…' : 'Post in Team Chat'}

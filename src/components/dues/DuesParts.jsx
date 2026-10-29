@@ -6,13 +6,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { copyText } from '@/lib/clipboard';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { DIALOG, DIALOG_TITLE, EYEBROW } from '@/lib/constants';
 import { changeLine, dollars, feeParts, feeTotal, payOptions } from '@/lib/dues';
 import { seasonName, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export const HEADING = 'font-display text-sm font-extrabold uppercase tracking-[0.12em]';
-export const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 
 export const shortDate = (date) => (date ? dayjs(date).format('MMM D') : '');
 

@@ -7,15 +7,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { saveTeamSettings } from '@/lib/actions';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE, EYEBROW } from '@/lib/constants';
 import { cleanPayHandle, dollars, feeProblem, feeTotal, feeWarning, notPlayingLabel, partPayment } from '@/lib/dues';
 import { today } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { EYEBROW, HistoryList, PartPayment, StatusChip, shortDate } from './DuesParts';
+import { HistoryList, PartPayment, StatusChip, shortDate } from './DuesParts';
 
 const SECTION = 'space-y-2 border-t border-zinc-100 pt-4';
 const FIELD_LABEL = cn(EYEBROW, 'text-zinc-500');
-const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
 
 /**
  * Captains: the session fee as the league bills it. Every box needs a number of

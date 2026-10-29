@@ -6,14 +6,14 @@ import { PostToChatDialog } from '@/components/PostToChatDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
-import { CARD } from '@/lib/constants';
+import { CARD, EYEBROW } from '@/lib/constants';
 import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues, topUps } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 import { FeeDialog, PaySettingsDialog, PlayerSheet } from './DuesDialogs';
 import { SessionRosterDialog } from './SessionRosterDialog';
-import { Avatar, EYEBROW, HEADING, HistoryList, StatusChip, feeLine } from './DuesParts';
+import { Avatar, HEADING, HistoryList, StatusChip, feeLine } from './DuesParts';
 
 const DARK_BUTTON =
   'inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-white/20 disabled:opacity-40';

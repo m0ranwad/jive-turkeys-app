@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { saveFailedToast } from '@/lib/errors';
 
 /**
@@ -58,7 +58,7 @@ export function AskSessionDialog({ open, onOpenChange, period, ask, onSaved }) {
         <Button
           onClick={() => save(date)}
           disabled={busy || !date}
-          className="h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]"
+          className={BIG_BUTTON}
         >
           {ask ? 'Save the date' : 'Ask the team'}
         </Button>
@@ -67,7 +67,7 @@ export function AskSessionDialog({ open, onOpenChange, period, ask, onSaved }) {
             variant="outline"
             onClick={() => save(null)}
             disabled={busy}
-            className="h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]"
+            className={BIG_BUTTON}
           >
             Stop asking
           </Button>
