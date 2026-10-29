@@ -9,7 +9,7 @@ import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v28';
+const DB_KEY = 'jt_demo_db_v29';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -142,6 +142,22 @@ function seed() {
     id: uid(), game_id: next.id, user_id: p.user_id, status: ['in', 'in', 'maybe', 'in', 'out', 'in', 'in', 'maybe'][i],
     playing_gk: p.position === 'Goalie', created_date: now(), updated_date: now(),
   }));
+  // Later games show the other ways Who's coming can look: a full team with Taylor and Sam sharing
+  // goal (and one on the bench), and one short on girls that nobody has offered to play GK for yet.
+  const upcoming = games.filter((g) => !g.has_result).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const sayIn = (game, names, keepers = []) =>
+    names.forEach((name) =>
+      rsvps.push({
+        id: uid(), game_id: game.id, user_id: profiles.find((p) => p.display_name === name).user_id, status: 'in',
+        playing_gk: keepers.includes(name), created_date: now(), updated_date: now(),
+      }),
+    );
+  sayIn(
+    upcoming[2],
+    ['Jordan Rivera', 'Priya Shah', 'Riley Novak', 'Kelly Moss', 'Taylor Brooks', 'Sam Okafor', 'Alex Chen', 'Chris Dunn', 'Drew Patel'],
+    ['Taylor Brooks', 'Sam Okafor'],
+  );
+  sayIn(upcoming[3], ['Jordan Rivera', 'Sam Okafor', 'Alex Chen', 'Taylor Brooks', 'Drew Patel', 'Chris Dunn']);
 
   const minutesAgo = (m) => dayjs().subtract(m, 'minute').toISOString();
   const me = profiles[0];

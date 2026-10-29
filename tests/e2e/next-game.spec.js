@@ -12,12 +12,12 @@ test('a shortage is a calm chip until two days before kickoff, then turns red', 
   await signIn(page);
   // Goal Diggers is more than two days away: how many more we need, without the alarm.
   const card = nextGame(page);
-  await expect(card).toContainText('Need 2 more · 1 more woman');
+  await expect(card).toContainText('Need 2 more, including a girl');
   await expect(card).not.toContainText('Short');
   const later = page.getByRole('link', { name: /vs FC Lightning/ });
   await expect(later).toContainText('0 in');
   await expect(later).not.toContainText('Need');
-  await expect(later).not.toContainText('women');
+  await expect(later).not.toContainText('girls');
   await expect(later).not.toContainText('maybe');
   await expect(later).not.toContainText('no reply');
   await expect(later).not.toContainText('Short');
@@ -25,7 +25,7 @@ test('a shortage is a calm chip until two days before kickoff, then turns red', 
   // A day later it's within 48 hours of kickoff.
   await page.clock.fastForward('24:00:00');
   await page.reload();
-  await expect(nextGame(page)).toContainText('Short · Need 2 more · 1 more woman');
+  await expect(nextGame(page)).toContainText('Short · Need 2 more, including a girl');
   await expect(page.getByRole('link', { name: /vs FC Lightning/ })).not.toContainText('Short');
 });
 
@@ -44,26 +44,28 @@ test('a later game still warns when short within 48 hours of kickoff', async ({ 
   await page.reload();
   await expect(nextGame(page)).toContainText('vs Goal Diggers');
   const later = page.getByRole('link', { name: /vs FC Lightning/ });
-  await expect(later).toContainText('Short · Need 8 more · 3 more women');
+  await expect(later).toContainText('Short · Need 8, including 3 girls');
   await expect(later).toContainText('0 in');
 });
 
-test("a game's own page keeps the full shortage and headcount", async ({ page }) => {
+test("a game's own page says its shortage once, in one line", async ({ page }) => {
   await signIn(page);
-  const headcount = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Headcount' }) });
+  const box = page.locator('section').filter({ has: page.getByRole('heading', { name: "Who's coming" }) });
 
-  // FC Lightning is weeks away: grey, once, with the minimums as a note.
+  // FC Lightning is weeks away: grey, once, and nobody's in yet.
   await page.getByRole('link', { name: /vs FC Lightning/ }).click();
-  await expect(headcount).toContainText('Need 8 more · 3 more women');
-  await expect(headcount).not.toContainText('Short');
-  await expect(headcount).toContainText('We need at least 8 players, with 3 women on the field');
-  await expect(headcount).toContainText('0 of 3');
+  await expect(box).toContainText('Need 8, including 3 girls');
+  await expect(box.getByText(/Need/)).toHaveCount(1);
+  await expect(box).not.toContainText('Short');
+  await expect(box).not.toContainText('No goalie yet');
+  await expect(box).toContainText('Nobody yet');
 
   // Goal Diggers, a day later: within 48 hours, so red.
   await page.clock.fastForward('24:00:00');
   await page.goto('/');
   await nextGame(page).getByRole('link', { name: /Details/ }).click();
-  await expect(headcount).toContainText('Short · Need 2 more · 1 more woman');
+  await expect(box).toContainText('Short');
+  await expect(box).toContainText('Need 2 more, including a girl');
 
   // A played game has nothing to call for: who said IN is folded away, with no shortage.
   await page.goto('/');
@@ -75,12 +77,12 @@ test("a game's own page keeps the full shortage and headcount", async ({ page })
   await expect(rsvps).not.toContainText('We need at least');
 });
 
-test('Playing GK has no rule note, and a played game says once who votes', async ({ page }) => {
+test("I'll play GK has no rule note, and a played game says once who votes", async ({ page }) => {
   // Jordan said IN for Goal Diggers, and didn't play The Hat Tricks game.
   await signIn(page, PLAYER);
   await nextGame(page).getByRole('link', { name: /Details/ }).click();
-  await expect(page.getByRole('button', { name: /Playing GK/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Playing GK/ })).not.toContainText("doesn't count");
+  await expect(page.getByRole('button', { name: "I'll play GK" })).toBeVisible();
+  await expect(page.getByRole('button', { name: "I'll play GK" })).not.toContainText("doesn't count");
 
   await page.goto('/');
   await page.getByRole('link', { name: /vs The Hat Tricks/ }).filter({ hasNotText: 'Vote for Player of the Match' }).first().click();
@@ -92,13 +94,13 @@ test('the next game is at the top of Schedule, and you answer right there', asyn
   await signIn(page);
   const card = nextGame(page);
   await expect(card).toContainText('vs Goal Diggers');
-  await expect(card).toContainText('6 in');
+  await expect(card.getByRole('img', { name: /^6 of 8 spots filled/ })).toBeVisible();
   await expect(card).toContainText("You haven't answered");
   await expect(page.getByRole('link', { name: /vs Goal Diggers/ })).toHaveCount(1);
 
   await card.getByRole('button', { name: 'IN', exact: true }).click();
   await expect(card.getByRole('button', { name: 'IN', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card).toContainText('7 in');
+  await expect(card.getByRole('img', { name: /^7 of 8 spots filled/ })).toBeVisible();
   await expect(card).toContainText('Your answer');
 
   // The game page agrees, and so does a reload.

@@ -7,7 +7,7 @@
 // Sample data (clock fixed at Thu Oct 8, noon): last week's result (vs The Hat
 // Tricks) went up 3 hours ago, so voting is open until 9:00 PM; the captain
 // voted for Woman of the Match but not Man. Voting on earlier games has closed.
-import { expect, openChat, signIn, test } from './helpers';
+import { expect, openChat, openResult, signIn, test } from './helpers';
 
 async function openGame(page, opponent) {
   await page.getByRole('link', { name: new RegExp(`vs ${opponent}`) }).first().click();
@@ -86,7 +86,7 @@ test('posting a result opens voting for the time set in Team Settings', async ({
 
   await page.locator('a[href="/"]:visible').first().click();
   await openGame(page, 'Goal Diggers');
-  await page.getByRole('button', { name: 'Enter result' }).click();
+  await openResult(page);
   await page.getByRole('dialog', { name: 'Game result' }).getByRole('button', { name: 'Save result' }).click();
   await expect(page.getByTestId('potm-deadline')).toHaveText('Voting open until Fri 12:00 PM');
 });

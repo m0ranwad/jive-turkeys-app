@@ -135,6 +135,16 @@ export async function goToSchedule(page) {
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
 
+/** Opens a game's result: Enter result leads once the game has started, and waits under More before. */
+export async function openResult(page) {
+  const button = page.getByRole('button', { name: /^(Enter|Edit) result$/ });
+  if (!(await button.isVisible())) await page.getByRole('button', { name: 'More', exact: true }).click();
+  await button.click();
+}
+
+/** A tab in a game's Who's coming box: In, Not in yet or Out (each named with its count). */
+export const whoTab = (page, name) => page.getByRole('tab', { name: new RegExp(`^${name} \\d+$`) });
+
 /** Taps a message to show its reactions and options. */
 export async function tapMessage(page, text) {
   await message(page, text).click();
