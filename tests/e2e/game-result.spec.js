@@ -3,12 +3,12 @@
 // from outside the team can score for us.
 // In the sample data, Alex Chen, Jordan Rivera, Mike Russo (hasn't joined),
 // Riley Novak, Sam Okafor and Taylor Brooks said IN for the next game.
-import { expect, isPhone, signIn, test } from './helpers';
+import { expect, isPhone, openResult as openGameResult, signIn, test } from './helpers';
 
 async function openResult(page) {
   await page.getByRole('link', { name: /vs Goal Diggers/ }).click();
   await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
-  await page.getByRole('button', { name: /^(Enter|Edit) result$/ }).click();
+  await openGameResult(page);
   const result = page.getByRole('dialog', { name: 'Game result' });
   await expect(result).toBeVisible();
   return result;
