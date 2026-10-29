@@ -11,7 +11,7 @@ test('the line under "Jive Turkeys" is the season and session the site is on', a
   await page.getByRole('button', { name: 'Menu' }).click();
   const menu = page.getByRole('dialog', { name: 'Menu', exact: true });
   await expect(menu.getByText('Jive Turkeys', { exact: true })).toBeVisible();
-  await expect(menu.getByText('Est. 2014', { exact: true })).toBeVisible();
+  await expect(menu.getByText('Est. 2015', { exact: true })).toBeVisible();
   await expect(menu.locator('img[src="/icon-192.png"]')).toBeVisible();
   await page.getByRole('link', { name: 'Team Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Team settings' })).toBeVisible();
