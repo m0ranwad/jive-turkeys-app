@@ -41,6 +41,8 @@ export function PostToChatDialog({ open, onOpenChange, title, intro, message, ab
   );
   const offSite = about.filter((p) => p.guest).map((p) => p.display_name);
   const tooLong = body.length > MAX_LENGTH;
+  // Over about three lines, the preview may shrink to fit the screen (it keeps at least that much).
+  const longBody = body.length > 120 || body.split('\n').length > 3;
   const buzzes = team
     ? 'Everyone with notifications on gets a buzz (@team).'
     : mentions.length
@@ -82,14 +84,18 @@ export function PostToChatDialog({ open, onOpenChange, title, intro, message, ab
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+      {/* Only a long message scrolls: it shrinks to fit the screen, so the buttons stay put. */}
+      <DialogContent className={cn(DIALOG, 'flex flex-col')} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>{title}</DialogTitle>
         </DialogHeader>
         {intro && <p className="-mt-2 text-sm text-zinc-500">{intro}</p>}
         <p
           data-testid="post-preview"
-          className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-zinc-100 px-3.5 py-3 text-sm leading-relaxed text-zinc-800"
+          className={cn(
+            'max-h-64 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded-2xl bg-zinc-100 px-3.5 py-3 text-sm leading-relaxed text-zinc-800',
+            longBody ? 'min-h-[5rem]' : 'shrink-0',
+          )}
         >
           {body}
         </p>

@@ -98,3 +98,29 @@ test('when the keyboard goes away, the chat goes back to normal', async ({ page 
   expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(tabBar.y);
   await expect(page.getByRole('link', { name: 'Schedule', exact: true }).filter({ visible: true })).toBeInViewport();
 });
+
+/** Acts out the start of a swipe on `locator` and says whether the chat stopped it from moving the page. */
+const swipeStopped = (locator) =>
+  locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const touch = new Touch({ identifier: 1, target: el, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 });
+    const swipe = new TouchEvent('touchmove', { touches: [touch], targetTouches: [touch], changedTouches: [touch], bubbles: true, cancelable: true });
+    el.dispatchEvent(swipe);
+    return swipe.defaultPrevented;
+  });
+
+test("with the keyboard up, a swipe on the room name doesn't slide the chat, and the messages still scroll", async ({ page }) => {
+  const box = composer(page);
+  const roomName = page.getByRole('heading', { name: 'Team Chat' });
+  expect(await swipeStopped(roomName), 'no keyboard: swipes are left alone').toBe(false);
+
+  await box.click();
+  await page.evaluate(() => window.keyboard(330));
+  expect(await swipeStopped(roomName)).toBe(true);
+  expect(await swipeStopped(page.getByRole('button', { name: 'Send' }))).toBe(true);
+  expect(await swipeStopped(message(page, '🔥🔥🔥')), 'the messages scroll').toBe(false);
+
+  await box.blur();
+  await page.evaluate(() => window.keyboard(0));
+  expect(await swipeStopped(roomName)).toBe(false);
+});

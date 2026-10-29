@@ -159,6 +159,11 @@ function Avatar({ person, small }) {
 /**
  * Teammates to tick: [{ id, name, gender, captain }]. A search box shows once
  * the list is long.
+ *
+ * The list is the only part of its window that scrolls: it shrinks to fit the
+ * screen, so the title, search box and button stay put. It goes straight in a
+ * shrinking flex column with gap-4 (no wrapper in between, or the list couldn't
+ * shrink), which scrolls as a whole only on screens too short for even that.
  */
 function PeoplePicker({ people, picked, onToggle }) {
   const [query, setQuery] = useState('');
@@ -175,9 +180,9 @@ function PeoplePicker({ people, picked, onToggle }) {
     return <p className="rounded-2xl bg-zinc-50 px-3.5 py-3 text-sm text-zinc-500">Everyone on the site is already in it.</p>;
   }
   return (
-    <div className="space-y-2">
+    <>
       {people.length > 6 && (
-        <div className="relative">
+        <div className="relative -mb-2">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <Input
             value={query}
@@ -189,7 +194,14 @@ function PeoplePicker({ people, picked, onToggle }) {
           />
         </div>
       )}
-      <div className="-mx-1 max-h-[38vh] space-y-1 overflow-y-auto px-1 py-0.5">
+      {/* At least two names and a peek at the next show, so it's clear the list goes on. */}
+      <div
+        data-testid="people-list"
+        className={cn(
+          '-mx-1 space-y-1 overflow-y-auto overscroll-contain px-1 py-0.5',
+          shown.length > 2 ? 'min-h-[9rem]' : 'shrink-0',
+        )}
+      >
         {shown.map((p) => {
           const on = picked.has(p.id);
           return (
@@ -219,9 +231,12 @@ function PeoplePicker({ people, picked, onToggle }) {
         })}
         {shown.length === 0 && <p className="px-2.5 py-3 text-sm text-zinc-500">Nobody by that name.</p>}
       </div>
-    </div>
+    </>
   );
 }
+
+// What holds a PeoplePicker. The edge padding keeps focus rings from being cut off.
+const PICKER_COLUMN = '-mx-1 -mb-1 flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain px-1 pb-1';
 
 const toggle = (set, id) => {
   const next = new Set(set);
@@ -276,7 +291,7 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* No keyboard popping up over the list on phones. */}
-      <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className={cn(DIALOG, 'flex flex-col')} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>New private chat</DialogTitle>
         </DialogHeader>
@@ -284,14 +299,12 @@ export function PrivateChatDialog({ open, onOpenChange, people, preselected, onS
           <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Only the teammates you pick can see it. Captains can't either, unless you add them.
         </p>
-        <form onSubmit={save} className="space-y-4">
-          <div className="space-y-1.5">
-            <span className={cn(EYEBROW, 'flex items-center justify-between text-zinc-500')}>
-              With
-              {picked.size > 0 && <span className="text-zinc-950">{picked.size} picked</span>}
-            </span>
-            <PeoplePicker people={people} picked={picked} onToggle={(id) => setPicked((set) => toggle(set, id))} />
-          </div>
+        <form onSubmit={save} className={PICKER_COLUMN}>
+          <span className={cn(EYEBROW, '-mb-2.5 flex items-center justify-between text-zinc-500')}>
+            With
+            {picked.size > 0 && <span className="text-zinc-950">{picked.size} picked</span>}
+          </span>
+          <PeoplePicker people={people} picked={picked} onToggle={(id) => setPicked((set) => toggle(set, id))} />
           <div className="space-y-1.5">
             <Label htmlFor="private-title" className={FIELD_LABEL}>
               Name (optional)
@@ -392,7 +405,7 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={DIALOG} onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className={cn(DIALOG, 'flex flex-col')} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>People in this chat</DialogTitle>
         </DialogHeader>
@@ -401,39 +414,42 @@ export function PeopleDialog({ open, onOpenChange, thread, members, me, personOf
           {whoCanSee(members.length)}
         </p>
 
-        <ul aria-label="People in this chat" className="divide-y divide-zinc-100">
-          {sorted.map((m) => (
-            <li key={m.id} className="flex items-center gap-3 py-2.5">
-              <Avatar person={m.person} />
-              <div className="min-w-0 flex-1">
-                <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">{m.person.name}</span>
-                {(m.user_id === me || m.user_id === thread.created_by || m.person.captain) && (
-                  <span className="mt-1 flex flex-wrap gap-1.5">
-                    {m.user_id === me && <span className={cn(PILL, 'bg-zinc-100 text-zinc-600')}>You</span>}
-                    {m.user_id === thread.created_by && <span className={cn(PILL, 'bg-lime-400 text-black')}>Started it</span>}
-                    {m.person.captain && <span className={cn(PILL, 'bg-zinc-950 text-lime-400')}>Captain</span>}
-                  </span>
+        {/* Out of the way while adding, so the names to pick from fit the screen. */}
+        {!adding && (
+          <ul aria-label="People in this chat" className="divide-y divide-zinc-100">
+            {sorted.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 py-2.5">
+                <Avatar person={m.person} />
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">{m.person.name}</span>
+                  {(m.user_id === me || m.user_id === thread.created_by || m.person.captain) && (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {m.user_id === me && <span className={cn(PILL, 'bg-zinc-100 text-zinc-600')}>You</span>}
+                      {m.user_id === thread.created_by && <span className={cn(PILL, 'bg-lime-400 text-black')}>Started it</span>}
+                      {m.person.captain && <span className={cn(PILL, 'bg-zinc-950 text-lime-400')}>Captain</span>}
+                    </span>
+                  )}
+                </div>
+                {starter && m.user_id !== me && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(m)}
+                    aria-label={`Remove ${m.person.name}`}
+                    className="shrink-0 rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
+                  >
+                    Remove
+                  </button>
                 )}
-              </div>
-              {starter && m.user_id !== me && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(m)}
-                  aria-label={`Remove ${m.person.name}`}
-                  className="shrink-0 rounded-full px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-red-700 underline-offset-2 transition hover:underline"
-                >
-                  Remove
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {thread.archived ? (
           <p className="rounded-2xl bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-500">This chat is closed, so nobody can be added.</p>
         ) : adding ? (
-          <div className="space-y-3 border-t border-zinc-100 pt-4">
-            <span className={cn(EYEBROW, 'block text-zinc-500')}>Add people</span>
+          <div className={cn(PICKER_COLUMN, 'border-t border-zinc-100 pt-4')}>
+            <span className={cn(EYEBROW, '-mb-1 block text-zinc-500')}>Add people</span>
             <PeoplePicker people={addable} picked={picked} onToggle={(id) => setPicked((set) => toggle(set, id))} />
             {addable.length > 0 && (
               <>

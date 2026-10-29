@@ -139,7 +139,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
           )}
         </div>
 
-        <div className="max-h-[75vh] overflow-y-auto px-6 pb-6 pt-5">
+        <div className="max-h-[75dvh] overflow-y-auto overscroll-contain px-6 pb-6 pt-5">
           {/* Each step fades and slides in (a CSS animation; no animation library to download). */}
           <div key={step} className="duration-200 ease-out animate-in fade-in slide-in-from-bottom-3 motion-reduce:animate-none">
             {onProfileStep && names === null ? (

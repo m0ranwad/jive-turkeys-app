@@ -41,7 +41,7 @@ function DemoSignIn() {
  */
 export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-md">
         {Icon ? (
           <div className="mb-10 text-center">

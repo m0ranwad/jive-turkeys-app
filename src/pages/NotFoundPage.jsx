@@ -3,7 +3,7 @@ import { useLocation } from 'react-router';
 export function NotFoundPage() {
   const page = useLocation().pathname.substring(1);
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+    <div className="flex min-h-dvh items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="space-y-2">
           <h1 className="text-7xl font-light text-slate-300">404</h1>
