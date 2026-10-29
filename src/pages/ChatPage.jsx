@@ -488,16 +488,16 @@ export function ChatPage() {
   // Fetch replied-to messages that are older than what's loaded.
   useEffect(() => {
     if (!loaded) return;
-    const have = new Set(loaded.messages.map((m) => m.id));
+    const have = new Set(visibleMessages.map((m) => m.id));
     const missing = [
-      ...new Set(loaded.messages.map((m) => m.reply_to_id).filter((id) => id && !have.has(id) && !(id in extras))),
+      ...new Set(visibleMessages.map((m) => m.reply_to_id).filter((id) => id && !have.has(id) && !(id in extras))),
     ];
     if (!missing.length) return;
     setExtras((current) => ({ ...current, ...Object.fromEntries(missing.map((id) => [id, null])) }));
     api.entities.Message.filter({ id: missing })
       .then((rows) => setExtras((current) => ({ ...current, ...Object.fromEntries(rows.map((m) => [m.id, m])) })))
       .catch(() => {});
-  }, [loaded, extras]);
+  }, [loaded, extras, visibleMessages]);
 
   // While a room is on screen, check in every 15 seconds so this player's phone
   // doesn't buzz for the conversation they're already reading.
@@ -672,6 +672,8 @@ export function ChatPage() {
       setOverview((list) => bumpOverview(list, created, false));
       return true;
     } catch (err) {
+      // A live echo may already have confirmed it while both HTTP responses were lost.
+      if (!outboxRef.current.some((m) => m.id === pending.id)) return true;
       updateOutbox((list) => list.map((m) => m.id === pending.id ? { ...m, failed: true, error: friendlyError(err) } : m));
       toast({ title: "That didn't send", description: friendlyError(err) });
       return false;

@@ -40,13 +40,40 @@ test('a message whose confirmation was lost is confirmed without sending a dupli
     const { api } = await import('/src/api/index.js');
     const create = api.entities.Message.create;
     api.entities.Message.create = async (row) => { await create(row); throw new TypeError('Failed to fetch'); };
+    api.entities.Message.filter = async () => { throw new TypeError('Failed to fetch'); };
   });
   await send(page, 'Saved despite the lost response');
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+  await expect(page.getByText("That didn't send", { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
     return JSON.parse(localStorage.getItem(key)).messages.filter((m) => m.body === 'Saved despite the lost response').length;
   })).toBe(1);
+});
+
+test('a failed reply still shows its older original after refreshing beyond the latest history page', async ({ page }) => {
+  await openChat(page);
+  await message(page, 'Who is bringing the pinnies this week?').click();
+  await page.getByRole('button', { name: 'Reply', exact: true }).click();
+  await page.evaluate(() => localStorage.setItem('jt_demo_offline', '1'));
+  await composer(page).fill('Keep this reply and its original');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await page.getByRole('button', { name: 'Retry', exact: true }).waitFor();
+  // A busy room: after a refresh, the quoted original is older than the newest 60 messages.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const sam = db.player_profiles.find((p) => p.display_name.startsWith('Sam'));
+    for (let i = 0; i < 70; i += 1) {
+      const when = new Date(Date.now() + i * 1000).toISOString();
+      db.messages.push({ id: crypto.randomUUID(), user_id: sam.user_id, author_name: sam.display_name, body: `Newer message ${i}`, thread_id: null, reply_to_id: null, created_date: when, updated_date: when });
+    }
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  const failed = page.locator('[data-message-id]').filter({ hasText: 'Keep this reply and its original' });
+  await expect(failed.getByRole('button', { name: /Jordan R\. Who is bringing the pinnies/ })).toBeVisible();
+  await expect(failed.getByText('Original message was deleted', { exact: true })).toHaveCount(0);
 });
 
 test('removing a failed message removes only the unsent copy and keeps the next draft', async ({ page }) => {

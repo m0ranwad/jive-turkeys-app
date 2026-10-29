@@ -39,6 +39,9 @@ Implemented and checked on 1280px desktop, 393px phone and 360px small phone scr
 
 ## Remaining steps
 
+Final recovery follow-up: keep an older quoted original visible after refreshing a failed reply, and
+accept a live confirmation even when both HTTP responses were lost. Both cases have browser checks.
+
 1. Finish hosted browser, logic, compilation, and database checks on the final saved increment.
 2. Review the sample-data preview; publish only when the owner asks.
 3. Check real iPhone keyboards/scrolling, push alerts and delivery between two signed-in devices.
