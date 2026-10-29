@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseScheduleFile, parseScheduleRows } from '@/lib/schedule-import';
+import { ImportProblem, parseScheduleFile, parseScheduleRows } from '@/lib/schedule-import';
 import { pdfTextRows } from '@/lib/schedule-pdf';
 // Node uses PDF.js's in-process worker. The browser uses the bundled worker URL.
 import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
@@ -59,6 +59,26 @@ describe('the printed league grid', () => {
       ['Sat', 'FIELD', 'Jan 3', 'Jan 10'],
       ['1:30PM', '2', '', '958 V 956'],
     ], 2026)).toThrow('team key');
+  });
+
+  it('explains a scanned or unreadable PDF in plain words', async () => {
+    const pdf = (text) => {
+      const bytes = new TextEncoder().encode(text);
+      return { name: 'schedule.pdf', arrayBuffer: async () => bytes.buffer };
+    };
+    // One blank page: what a scan looks like to a text reader.
+    const blank = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
+      + '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n'
+      + '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n'
+      + 'trailer<</Root 1 0 R>>\n%%EOF\n';
+    const problem = (file) => parseScheduleFile(file, 2026).catch((error) => error);
+    const scanned = await problem(pdf(blank));
+    expect(scanned).toBeInstanceOf(ImportProblem);
+    expect(scanned.message).toMatch(/^This PDF is a scanned image with no readable text\./);
+    // PDF.js's own "Invalid PDF structure." never reaches the captain.
+    const broken = await problem(pdf('%PDF-invalid'));
+    expect(broken).toBeInstanceOf(ImportProblem);
+    expect(broken.message).toMatch(/^That PDF couldn't be opened\. It may be damaged or password-protected\./);
   });
 
   it('joins PDF text fragments without shifting empty dates or field columns', () => {

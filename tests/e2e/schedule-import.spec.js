@@ -34,6 +34,8 @@ test('a captain can correct rows, and an unreadable file leaves manual entry ava
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Import schedule' });
   await dialog.locator('input[type="file"]').setInputFiles({ name: 'broken.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-invalid') });
+  await expect(dialog.getByText("That PDF couldn't be opened.", { exact: false })).toBeVisible();
+  await expect(dialog.getByText('Invalid PDF structure')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Add a row' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Confirm 0 games' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Add a row' }).click();

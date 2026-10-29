@@ -12,6 +12,9 @@ dayjs.extend(customParseFormat);
 
 const OUR_TEAM = /jive|turkey/i;
 
+/** A problem with the file itself, in words a captain can act on. Other errors stay out of sight. */
+export class ImportProblem extends Error {}
+
 const HEADER_PATTERNS = {
   date: /\bdate\b|game\s*day/i,
   time: /\btime\b|\bstart\b|kick\s*off/i,
@@ -225,7 +228,7 @@ function rowsByGrid(rows, season) {
   }
   const ourIds = [...teams].filter(([, name]) => OUR_TEAM.test(name)).map(([id]) => id);
   if (ourIds.length !== 1) {
-    throw new Error("Couldn't identify Jive Turkeys in the schedule's team key. Include the team key with the schedule, or add the games manually.");
+    throw new ImportProblem("Couldn't identify Jive Turkeys in the schedule's team key. Include the team key with the schedule, or add the games manually.");
   }
 
   const games = [];
@@ -284,7 +287,14 @@ export async function parseScheduleFile(file, season) {
   const signature = new TextDecoder().decode(new Uint8Array(bytes).subarray(0, 5));
   if (signature === '%PDF-' || /\.pdf$/i.test(file.name || '') || file.type === 'application/pdf') {
     const { readPdfRows } = await import('./schedule-pdf');
-    return parseScheduleRows(await readPdfRows(bytes), season);
+    // PDF.js says "Invalid PDF structure." for damaged and password-protected files.
+    const rows = await readPdfRows(bytes).catch(() => {
+      throw new ImportProblem("That PDF couldn't be opened. It may be damaged or password-protected. Try the league's original PDF or a spreadsheet, or add the games manually.");
+    });
+    if (!rows.some((row) => row.some((cell) => cell.trim()))) {
+      throw new ImportProblem('This PDF is a scanned image with no readable text. Use the original league PDF or a spreadsheet, or add the games manually.');
+    }
+    return parseScheduleRows(rows, season);
   }
   // The spreadsheet reader is large, so it's only loaded when someone imports.
   const XLSX = await import('xlsx');

@@ -68,9 +68,6 @@ export async function readPdfRows(bytes) {
       rows.push(...pdfTextRows(content.items));
       page.cleanup();
     }
-    if (!rows.some((row) => row.some((cell) => cell.trim()))) {
-      throw new Error('This PDF is a scanned image with no readable text. Use the original league PDF or a spreadsheet, or add the games manually.');
-    }
     return rows;
   } finally {
     await task.destroy();

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label } from '@/components/ui/input';
 import { seasonLabel, seasonOf, sessionOf, today, venueText } from '@/lib/format';
-import { parseScheduleFile } from '@/lib/schedule-import';
+import { ImportProblem, parseScheduleFile } from '@/lib/schedule-import';
 import { cn } from '@/lib/utils';
 import { SeasonPicker } from './SeasonPicker';
 import { SessionPicker } from './SessionPicker';
@@ -70,7 +70,9 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
     } catch (error) {
       if (request !== readId.current) return;
       setRows([]);
-      setMessage(error.message || "That file couldn't be read. Try the league's PDF, .xlsx or .csv schedule.");
+      setMessage(error instanceof ImportProblem
+        ? error.message
+        : "That file couldn't be read. Try the league's PDF, .xlsx or .csv schedule.");
       setStep('preview');
     } finally {
       if (request === readId.current) {

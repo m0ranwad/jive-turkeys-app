@@ -64,7 +64,7 @@ mode, phone and desktop) · `[db]` = `supabase/tests/games.test.sql`, `potm.test
 | Rule | Checked by |
 |---|---|
 | Date, time, field and opponent columns are found by name, in `.xlsx` and `.csv` files, below any title rows. | `[unit]` |
-| Original league PDFs and spreadsheet grids with dates across the top and times down the side use the numbered team key to find only Jive Turkeys games and name opponents. Empty weeks, separate fields, repeated Saturday/Sunday headers and doubleheaders keep their dates and times. A missing team key or a scanned PDF explains the problem and allows manual entry. PDFs are read in the browser. | `[unit]` `[browser]` |
+| Original league PDFs and spreadsheet grids with dates across the top and times down the side use the numbered team key to find only Jive Turkeys games and name opponents. Empty weeks, separate fields, repeated Saturday/Sunday headers and doubleheaders keep their dates and times. A missing team key, a scanned PDF or a PDF that won't open (damaged or password-protected) explains the problem in plain words and allows manual entry. PDFs are read in the browser. | `[unit]` `[browser]` |
 | A grid title such as **SESSION II 2026** supplies its calendar year; **2026–27** supplies the season. Explicit column years still win. If all imported dates belong to one session, the preview selects that season/session and explains any change; captains can adjust them before confirming. | `[unit]` `[browser]` |
 | A league sheet with Home and Away columns keeps only Jive Turkeys games, with the other team as the opponent. If our name isn't in it at all, every game is kept. | `[unit]` |
 | Without headers, each cell's role is guessed from what it looks like. | `[unit]` |
