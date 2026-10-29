@@ -28,7 +28,7 @@ export function EmojiPicker({ onPick, keepFocus, className }) {
           {EMOJI_GROUPS[group].label}
         </span>
       </div>
-      <div className="grid max-h-44 grid-cols-8 gap-0.5 overflow-y-auto pt-1.5 sm:grid-cols-10">
+      <div className="grid max-h-44 grid-cols-8 gap-0.5 overflow-y-auto overscroll-contain pt-1.5 sm:grid-cols-10">
         {EMOJI_GROUPS[group].emojis.map((emoji) => (
           <button
             key={emoji}

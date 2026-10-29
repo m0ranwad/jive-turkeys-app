@@ -329,7 +329,7 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
       <DialogContent
         // No keyboard popping up over the screen as it opens on a phone.
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="flex h-[100dvh] max-h-[100dvh] max-w-none flex-col gap-0 overflow-hidden border-0 p-0 sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl sm:border">
+        className="flex h-[100dvh] max-h-[100dvh] max-w-none flex-col gap-0 overflow-hidden border-0 p-0 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-3xl sm:border">
         <div className="shrink-0 border-b border-zinc-100 px-4 pb-3 pt-4 sm:px-6 sm:pt-5">
           <div className={cn(EYEBROW, 'text-lime-700')}>vs {game.opponent}</div>
           <DialogTitle className="mt-0.5 font-display text-lg font-extrabold uppercase tracking-tight">Game result</DialogTitle>

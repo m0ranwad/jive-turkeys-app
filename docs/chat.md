@@ -49,6 +49,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | On phones the chat fills the screen, with the message box just above the tab bar. Only the messages scroll, not the page. The room header has ‹ (back to the room list), the room's name (not in capitals, so long names fit) with one line under it, Search, and **⋯** when the room has options. | `[browser]` |
 | On larger computers, the chat uses a wider layout and room list so names and previews have more room. On phones, Search is in the room header, and **⋯** opens a roomy chat-options window with large rows. Thread, rename and confirmation windows use the same rounded fields and full-width primary buttons as the other chat windows. | `[browser]` (existing room and dialog flows), visual check |
 | While typing on a phone, the chat fits the space above the keyboard: room name at the top, newest messages, and the message box with your words right above the keyboard. The site header and tab bar step aside until the keyboard closes. This holds when the iPhone keyboard covers the page without resizing it, and when Safari slides the page. Tapping Send or an emoji keeps the keyboard open. | `[browser]` (simulated keyboard), manual on a real iPhone |
+| **Scrolling on phones:** one swipe scrolls whatever is under your finger (the messages, the room list, the @mention list, the emoji picker, a popup or its list) and stops at its end instead of moving on to the page. The page behind the chat never moves or bounces, and while typing, a swipe on the room name or around the message box doesn't slide the chat. Popups fit the part of the screen you can see (`dvh`, not `vh`, which on iPhones counts the screen under Safari's toolbar), with their buttons reachable, and each has one scroll area: in **New private chat** and **Add people** only the names scroll, between the search box and the button (on the smallest phones the part below the title scrolls too). While adding people, the list of who's in the chat steps aside. | `[browser]` `phone-scrolling.spec.js`, `[unit]` `screen-heights.test.js`, manual on a real iPhone (see below) |
 | A one-time tip at the top of the room list (never over the messages) explains tapping a message and **New**. It stays dismissed. | `[browser]` |
 | Drafts are kept per player and room on this device while switching rooms and after refresh. Signing out clears this device's drafts and unsent messages. If browser storage is unavailable, they are kept for this visit. | `[browser]` `chat-recovery.spec.js`, `[unit]` `chat-local.test.js` |
 | If the room list or message history cannot load, **Try again** is shown with a plain-language error. A failed history request never shows the empty-room greeting. While reconnecting, loaded messages stay visible; a failed catch-up offers **Try again** and does not mark unseen messages read. No signal is shown above the conversation. | `[browser]` `chat-recovery.spec.js`, `chat-catch-up.spec.js` |
@@ -111,7 +112,7 @@ it's a thread with `visibility = 'private'`, and who's in it is `chat_thread_mem
 | Only the people in it see it, its messages, reactions and who's in it, in the list, in search and in unread counts. Nobody else can post, react, add people or see it, captains included. | `[db]` `[unit]` `[browser]` |
 | Its unread count adds to the Chat tab like Team Chat's, even before you open it. What was said before you were added (or added back) doesn't count as unread, even if you'd read further back before leaving. | `[db]` `[unit]` `[browser]` |
 | A player a captain takes off the team drops out of every private chat they were in, and off its People list. Adding them back to the team doesn't bring the chats back: someone in each chat adds them again. | `[db]` `[unit]` |
-| **⋯ → People** lists who's in it, like the Team page: initials colored by man / woman, and **You**, **Started it** and **Captain** badges, with "Only the two of you can see it" (or "these N people"). Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the window says so). Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
+| **⋯ → People** lists who's in it, like the Team page: initials colored by man / woman, and **You**, **Started it** and **Captain** badges, with "Only the two of you can see it" (or "these N people"). Anyone in it can **Add people** (teammates on the site), who then see the whole chat, earlier messages included (the window says so). While adding, the window shows only the teammates to pick from; **Cancel** brings back who's in it. Nobody can be added to a closed chat. | `[browser]` `[db]` `[unit]` |
 | Its starter also gets **Remove** next to each person, and **Rename**, **Close chat** / **Reopen chat** and **Delete chat** (after a confirm that says it removes the messages for everyone in it). Once the starter leaves, nobody has those. | `[browser]` `[db]` `[unit]` |
 | **Leave chat** (in **⋯**, or at the bottom of People; after a confirm) takes you out and back to the room list (Team Chat on computers); it's gone from your list until someone adds you back. Your messages stay in it. Leaving and taking someone out only say they worked once they really did. | `[browser]` `[db]` `[unit]` |
 | A private chat can never be opened up to the team, and a thread can never be made private: a room's kind is set when it starts. | `[db]` `[unit]` |
@@ -223,14 +224,25 @@ devices signed in as different players:
 5. On a phone, open Chat: the room list shows, and it scrolls by itself without moving the page. Tap a room, then ‹:
    back to the list. The same with the phone's back gesture.
 6. On an iPhone, tap the message box: the keyboard opens, and the room name, newest messages and the box (with what you type) all stay visible above it. Send a message: the keyboard stays open. Tap outside the box: everything goes back to normal.
-7. Notifications (after a change to them): on a phone, turn them on with the bell (on an iPhone, from the Home
+   Then, with the keyboard still up, swipe on the room name and around the message box: nothing moves. Swipe the
+   messages: only they scroll.
+7. Scrolling on an iPhone (after a change to the chat's layout or its popups), in Safari and again in the Home
+   Screen app. In each, swipe past the end and back past the start: only that part scrolls, and the page behind
+   never moves or bounces.
+   - The room list, then a room's messages. In Safari the toolbar at the bottom doesn't slide away.
+   - Type @ in the message box, then open the emoji picker: each list scrolls by itself.
+   - **New** → **Private chat**: only the names scroll, and the title, Find a teammate and **Start chat** stay
+     on screen. The same in a private chat's **⋯ → People → Add people**.
+   - Search, and a popup elsewhere on the site (say **Add game** on Schedule): its bottom and buttons can be
+     reached, and the page behind doesn't move.
+8. Notifications (after a change to them): on a phone, turn them on with the bell (on an iPhone, from the Home
    Screen app) and tap **Send a test**: it arrives within a few seconds. Close the app and post in Team Chat
    from the other device: the phone gets "Name: message", and tapping it opens Team Chat. With Team Chat open
    on the phone, post again: no notification. Close the app and post twice more: the Home Screen icon shows
    2. Open the app and read Team Chat, then close it: the number is gone.
-8. @mentions (after a change to them): from one device, @mention the other player in a thread they've never
+9. @mentions (after a change to them): from one device, @mention the other player in a thread they've never
    opened. Their phone gets the notification, and their Chat tab shows "@1" until they open that thread.
-9. Private chats (after a change to them): from one device, start a private chat with the other player. It shows
+10. Private chats (after a change to them): from one device, start a private chat with the other player. It shows
    up on the other device without a refresh, with a lock, and their phone gets a notification for its first
    message. A third player (or a captain) who isn't in it doesn't see it. Leave it on one device: it disappears
    there, and the other still sees the messages.

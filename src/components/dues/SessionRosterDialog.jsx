@@ -78,7 +78,8 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={DIALOG}>
+      {/* Only the names scroll: the list shrinks to fit the screen, so the Save button stays put. */}
+      <DialogContent className={cn(DIALOG, 'flex flex-col')}>
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>
             {ahead ? `Answers for session ${period.session}` : `Who was on session ${period.session}`}
@@ -91,7 +92,12 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
             ? `Answer for anyone, including roster names who haven't joined. Only session ${period.session} changes, not the session being played.`
             : `This changes how session ${period.session}'s fee is split. Payments already marked stay marked. Other sessions don't change.`}
         </p>
-        <ul className="max-h-[50vh] divide-y divide-zinc-100 overflow-y-auto">
+        <ul
+          className={cn(
+            'divide-y divide-zinc-100 overflow-y-auto overscroll-contain',
+            people.length > 2 ? 'min-h-[9rem]' : 'shrink-0',
+          )}
+        >
           {people.map((m) => (
             <li key={m.user_id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0 truncate text-sm font-semibold">{m.display_name}</span>

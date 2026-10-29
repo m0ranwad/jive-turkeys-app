@@ -57,6 +57,7 @@ export const AWARD_LABEL = {
 
 export const CARD = 'rounded-3xl border border-black/5 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]';
 
-// Popups: an inset card with big rounded corners and a left-aligned display heading.
-export const DIALOG = 'max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto rounded-3xl p-5 sm:max-w-md';
+// Popups: an inset card with big rounded corners and a left-aligned display heading. dvh, not vh: on
+// iPhones vh counts the screen under Safari's toolbar, which hid the bottom of tall popups.
+export const DIALOG = 'max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto overscroll-contain rounded-3xl p-5 sm:max-w-md';
 export const DIALOG_TITLE = 'font-display text-lg font-extrabold uppercase tracking-tight';

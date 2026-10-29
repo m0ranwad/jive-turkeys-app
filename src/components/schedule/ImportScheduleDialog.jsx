@@ -96,7 +96,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto overscroll-contain sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Import schedule</DialogTitle>
         </DialogHeader>

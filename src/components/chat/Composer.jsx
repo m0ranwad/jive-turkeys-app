@@ -163,7 +163,7 @@ export const Composer = forwardRef(function Composer(
           id={`mentions-${room}`}
           role="listbox"
           aria-label="Mention a teammate"
-          className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 max-h-52 overflow-y-auto rounded-3xl border border-black/5 bg-white p-1.5 shadow-xl sm:right-auto sm:w-80"
+          className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 max-h-52 overflow-y-auto overscroll-contain rounded-3xl border border-black/5 bg-white p-1.5 shadow-xl sm:right-auto sm:w-80"
         >
           {choices.map((choice, i) => (
             <div
@@ -270,7 +270,7 @@ export const Composer = forwardRef(function Composer(
           placeholder={placeholder}
           maxLength={MAX_LENGTH}
           aria-label="Message"
-          className="block max-h-36 min-h-11 flex-1 resize-none rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-500 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
+          className="block max-h-36 min-h-11 flex-1 resize-none overscroll-contain rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-500 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
         />
         <button
           type="submit"

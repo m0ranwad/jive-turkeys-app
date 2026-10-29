@@ -119,7 +119,8 @@ export function Layout() {
   // The side menu is a dialog: Escape closes it, focus stays inside it, and closing it goes back to the Menu button.
   return (
     <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
-      <div className="min-h-screen bg-[#FAFAF7]">
+      {/* dvh: the screen you can see. On iPhones the taller vh made the chat's page scroll under Safari's toolbar. */}
+      <div className="min-h-dvh bg-[#FAFAF7]">
         {isDemo && (
           <div className="bg-amber-300 px-4 py-1.5 text-center text-[11px] font-bold uppercase tracking-[0.12em] text-black">
             Demo mode · sample data stored in this browser only

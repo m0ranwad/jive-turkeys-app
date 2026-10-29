@@ -119,6 +119,16 @@ function useWide() {
 // How much the visible area must shrink while typing to count as an on-screen keyboard.
 const KEYBOARD_PX = 120;
 
+/** Whether `node`, or a box around it inside `root`, has more to scroll to. */
+function scrollsUnder(node, root) {
+  for (let el = node; el instanceof Element; el = el === root ? null : el.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(el);
+    if (/auto|scroll/.test(overflowY) && el.scrollHeight > el.clientHeight) return true;
+    if (/auto|scroll/.test(overflowX) && el.scrollWidth > el.clientWidth) return true;
+  }
+  return false;
+}
+
 /**
  * Sizes the chat to fill the screen between the header and the bottom tab bar.
  *
@@ -168,7 +178,21 @@ function useChatViewport(ref, ready) {
     };
   }, [ref, ready]);
 
-  if (!box) return { keyboard: false, style: { height: 'calc(100vh - 12rem)' } };
+  // While it's pinned above the keyboard, a swipe on the chat scrolls only what's under the finger (the
+  // messages, a long message being typed, the @ list or the emoji picker). iPhones otherwise slide the page
+  // behind, and the chat with it, when a swipe starts on the room name or around the message box.
+  const pinned = !!box?.keyboard;
+  useEffect(() => {
+    const el = ref.current;
+    if (!pinned || !el) return undefined;
+    const hold = (e) => {
+      if (e.touches.length === 1 && !scrollsUnder(e.target, el)) e.preventDefault();
+    };
+    el.addEventListener('touchmove', hold, { passive: false });
+    return () => el.removeEventListener('touchmove', hold);
+  }, [ref, pinned]);
+
+  if (!box) return { keyboard: false, style: { height: 'calc(100dvh - 12rem)' } };
   if (!box.keyboard) return { keyboard: false, style: { height: box.height } };
   // Above the site header and tab bar (z-40), below dialogs (z-50).
   return {
@@ -242,6 +266,14 @@ export function ChatPage() {
   const shell = useRef(null);
   const composer = useRef(null);
   const { style: shellStyle } = useChatViewport(shell, !loading);
+  // The chat fills the screen and scrolls inside itself, so the page behind never moves or bounces.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.overscrollBehavior = 'none';
+    return () => {
+      root.style.overscrollBehavior = '';
+    };
+  }, []);
   const pushStatus = usePush();
   const [notifyOpen, setNotifyOpen] = useState(false);
 
