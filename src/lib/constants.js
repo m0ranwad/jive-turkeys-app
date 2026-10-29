@@ -61,3 +61,9 @@ export const CARD = 'rounded-3xl border border-black/5 bg-white p-4 shadow-[0_1p
 // iPhones vh counts the screen under Safari's toolbar, which hid the bottom of tall popups.
 export const DIALOG = 'max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto overscroll-contain rounded-3xl p-5 sm:max-w-md';
 export const DIALOG_TITLE = 'font-display text-lg font-extrabold uppercase tracking-tight';
+// Inside popups: small bold capitals over a section, a field's label, the full-width main button, and a badge
+// ("Captain", "You").
+export const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
+export const FIELD_LABEL = 'text-xs font-semibold text-zinc-500';
+export const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
+export const PILL = 'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]';

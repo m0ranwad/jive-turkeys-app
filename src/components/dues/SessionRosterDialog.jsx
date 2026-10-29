@@ -3,7 +3,7 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { entryFor } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 
@@ -127,7 +127,7 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
         <Button
           onClick={save}
           disabled={busy || changed.length === 0}
-          className="h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]"
+          className={BIG_BUTTON}
         >
           {busy ? 'Saving…' : changed.length ? `Save ${changed.length} change${changed.length === 1 ? '' : 's'}` : 'No changes'}
         </Button>

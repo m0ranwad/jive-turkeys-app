@@ -4,13 +4,13 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
-import { CARD } from '@/lib/constants';
+import { CARD, EYEBROW } from '@/lib/constants';
 import { changeLine, dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues, topUps } from '@/lib/dues';
 import { seasonName, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { isEarlier } from '@/lib/roster';
 import { PayTogetherDialog } from './DuesDialogs';
-import { ConfirmNotPaid, EYEBROW, HEADING, HistoryList, PartPayment, PayButtons, StatusChip } from './DuesParts';
+import { ConfirmNotPaid, HEADING, HistoryList, PartPayment, PayButtons, StatusChip } from './DuesParts';
 
 const round = (value) => Math.round(value * 100) / 100;
 

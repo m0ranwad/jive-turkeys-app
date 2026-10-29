@@ -13,12 +13,12 @@ import {
   resultRows,
   scoreFollowsGoals,
 } from '@/lib/results';
+import { EYEBROW } from '@/lib/constants';
 import { saveFailedToast } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 const TEAM = 'Jive Turkeys';
 let nextFillInKey = 0;
-const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
 const SMALL_BUTTON =
   'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-black uppercase tracking-[0.08em] transition';
 

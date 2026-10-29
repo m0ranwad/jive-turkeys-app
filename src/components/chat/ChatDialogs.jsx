@@ -3,7 +3,7 @@ import { Check, ChevronRight, Hash, Lock, LogOut, Search, UserPlus } from 'lucid
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
-import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
+import { BIG_BUTTON, DIALOG, DIALOG_TITLE, EYEBROW, FIELD_LABEL, PILL } from '@/lib/constants';
 import { initials, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -135,10 +135,6 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
 }
 
 // The same labels, buttons and badges as the Team and Dues popups.
-const EYEBROW = 'text-[11px] font-black uppercase tracking-[0.14em]';
-const FIELD_LABEL = 'text-xs font-semibold text-zinc-500';
-const BIG_BUTTON = 'h-12 w-full rounded-2xl text-sm font-bold uppercase tracking-[0.1em]';
-const PILL = 'rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-[0.1em]';
 
 /** Initials in a circle, colored like the Team page (women lime, men black). */
 function Avatar({ person, small }) {
