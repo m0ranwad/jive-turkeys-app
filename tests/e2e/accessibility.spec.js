@@ -225,6 +225,12 @@ test('adding and importing games', async ({ page }) => {
   await page.getByRole('button', { name: 'Import' }).click();
   await expect(page.getByRole('dialog', { name: 'Import schedule' })).toBeVisible();
   await expectAccessible(page, 'Import schedule');
+  await page.getByRole('dialog', { name: 'Import schedule' }).locator('input[type="file"]').setInputFiles({
+    name: 'schedule.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('Date,Time,Field,Opponent\n11/7,7.30 PM,2,Ball Busters\n'),
+  });
+  await expect(page.getByLabel('Opponent', { exact: true })).toBeVisible();
+  await expectAccessible(page, 'Import schedule preview');
 });
 
 test('toggle buttons tell screen readers which one is picked', async ({ page }) => {

@@ -1,0 +1,1 @@
+`league-grid.pdf` is a small synthetic schedule with fictional opponents. It exercises the printed league layout: sparse date columns, two fields, different Saturday/Sunday headers, and a two-column team key. It contains no copy of the user's uploaded document.

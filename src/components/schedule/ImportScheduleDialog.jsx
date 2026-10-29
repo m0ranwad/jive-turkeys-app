@@ -4,7 +4,7 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label } from '@/components/ui/input';
-import { seasonLabel, seasonOf, today, venueText } from '@/lib/format';
+import { seasonLabel, seasonOf, sessionOf, today, venueText } from '@/lib/format';
 import { parseScheduleFile } from '@/lib/schedule-import';
 import { cn } from '@/lib/utils';
 import { SeasonPicker } from './SeasonPicker';
@@ -25,6 +25,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const fileInput = useRef(null);
+  const readId = useRef(0);
 
   useEffect(() => {
     if (!open) return;
@@ -33,6 +34,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
   }, [open]);
 
   const reset = () => {
+    readId.current += 1;
     setStep('pick');
     setRows([]);
     setMessage('');
@@ -45,21 +47,36 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
 
   const readFile = async (file) => {
     if (!file) return;
+    const request = ++readId.current;
     setBusy(true);
     setMessage('');
     try {
       const games = await parseScheduleFile(file, Number(year));
+      if (request !== readId.current) return;
       if (!games.length) {
         setMessage("Couldn't find any games in that file. Try another file, or add rows manually.");
+      } else {
+        const periods = games.map((game) => sessionOf(game.date));
+        const period = periods[0];
+        if (periods.every((item) => item.year === period.year && item.session === period.session)
+          && (Number(year) !== period.year || Number(session) !== period.session)) {
+          setYear(period.year);
+          setSession(period.session);
+          setMessage(`The dates in this file belong to ${seasonLabel(period.year, period.session)}. Check the games below before confirming.`);
+        }
       }
       setRows(games.map((g, i) => ({ key: `${Date.now()}-${i}`, ...g })));
       setStep('preview');
-    } catch {
-      setMessage("That file couldn't be read. Try an .xlsx or .csv export of the schedule.");
+    } catch (error) {
+      if (request !== readId.current) return;
+      setRows([]);
+      setMessage(error.message || "That file couldn't be read. Try the league's PDF, .xlsx or .csv schedule.");
       setStep('preview');
     } finally {
-      setBusy(false);
-      if (fileInput.current) fileInput.current.value = '';
+      if (request === readId.current) {
+        setBusy(false);
+        if (fileInput.current) fileInput.current.value = '';
+      }
     }
   };
 
@@ -115,6 +132,7 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
             </div>
             <button
               type="button"
+              disabled={busy}
               onClick={() => fileInput.current?.click()}
               className="flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 transition hover:border-lime-400 hover:bg-lime-50/40"
             >
@@ -124,16 +142,16 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
                 <Upload className="h-7 w-7 text-zinc-500" />
               )}
               <span className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-                {busy ? 'Reading schedule…' : 'Upload .xlsx or .csv'}
+                {busy ? 'Reading schedule…' : 'Upload PDF, .xlsx or .csv'}
               </span>
               <span className="max-w-xs text-center text-xs font-medium text-zinc-500">
-                We'll pull out date, time, field number and opponent — even if the columns are named differently.
+                Upload the league's original PDF or spreadsheet, including its team key. We'll find Jive Turkeys' games in the grid.
               </span>
             </button>
             <input
               ref={fileInput}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".pdf,.xlsx,.xls,.csv,application/pdf"
               className="hidden"
               onChange={(e) => readFile(e.target.files?.[0])}
             />
@@ -143,6 +161,16 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
 
         {step === 'preview' && (
           <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Season</Label>
+                <SeasonPicker value={year} around={season} onChange={setYear} />
+              </div>
+              <div className="space-y-2">
+                <Label>Session</Label>
+                <SessionPicker value={session} onChange={setSession} />
+              </div>
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-zinc-600">
                 {ready.length} row{ready.length === 1 ? '' : 's'} ready for {seasonLabel(year, session)}
@@ -179,15 +207,17 @@ export function ImportScheduleDialog({ open, onOpenChange, settings, existingGam
                       </button>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
-                      <Input type="date" value={row.date} onChange={(e) => updateRow(row.key, { date: e.target.value })} />
-                      <Input type="time" value={row.time} onChange={(e) => updateRow(row.key, { time: e.target.value })} />
+                      <Input aria-label="Game date" type="date" value={row.date} onChange={(e) => updateRow(row.key, { date: e.target.value })} />
+                      <Input aria-label="Kickoff time" type="time" value={row.time} onChange={(e) => updateRow(row.key, { time: e.target.value })} />
                       <Input
                         value={row.opponent}
+                        aria-label="Opponent"
                         placeholder="Opponent"
                         onChange={(e) => updateRow(row.key, { opponent: e.target.value })}
                       />
                       <Input
                         value={row.field_number}
+                        aria-label="Field number"
                         placeholder="Field #"
                         onChange={(e) => updateRow(row.key, { field_number: e.target.value })}
                       />
