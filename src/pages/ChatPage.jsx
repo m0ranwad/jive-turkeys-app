@@ -1042,6 +1042,10 @@ export function ChatPage() {
               <p className="truncate text-[11px] font-semibold text-zinc-500">{subtitle}</p>
             </div>
 
+            <button onClick={() => setSearchOpen(true)} aria-label="Search messages" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100">
+              <Search className="h-5 w-5" />
+            </button>
+
             {/* One menu for every room, with only what you can do there (Team Chat and the Lounge have none). */}
             {hasOptions && (
               <div className="relative">

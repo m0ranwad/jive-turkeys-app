@@ -68,12 +68,13 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Editing the latest message also updates the room-list preview, for the sender and live viewers. Older edits do not replace the latest message's preview. | `[browser]` `chat-recovery.spec.js` |
 
-**Search** (the 🔍 at the top of the room list) finds messages in Team Chat, every thread, your private chats and (for captains) the Captains' Lounge:
+**Search** (the 🔍 at the top of the room list or in an open conversation) finds messages in Team Chat, every thread, your private chats and (for captains) the Captains' Lounge:
 
 | Expected behavior | Checked by |
 |---|---|
 | Words match in any form ("parked" finds "parking"); handles, numbers and anything else match as typed, and `%`, a leading `-` or the word "or" are just text. Two characters at least. | `[db]` |
 | Results show who, where (Team Chat or the thread's name), when, and the match highlighted. Tapping one opens that room and jumps to the message, loading older messages until it's there. | `[browser]` |
+| Changing the search clears old results and shows **Searching…** until the current query finishes. A late response to an earlier query cannot replace the current results. | `[browser]` `chat-search.spec.js` |
 | Players only find messages they can read: never a private chat they aren't in (captains included), nor the Lounge unless they're a captain. An account that hasn't joined the team finds nothing. | `[db]` `[unit]` `[browser]` |
 
 ## 4. Threads, private chats and the Captains' Lounge

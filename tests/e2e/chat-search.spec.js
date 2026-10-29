@@ -49,3 +49,38 @@ test('nothing found says so', async ({ page }) => {
   await searchBox(page).fill('zzzz');
   await expect(page.getByText('Nothing found.')).toBeVisible();
 });
+
+test('search opens directly from an open conversation', async ({ page }) => {
+  await signIn(page);
+  await openChat(page);
+  await page.getByRole('button', { name: 'Search messages', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Search the chat' })).toBeVisible();
+  await searchBox(page).fill('parking');
+  await expect(page.getByRole('dialog').getByRole('button', { name: /Parking tip/ })).toBeVisible();
+});
+
+test('changing a query clears its old matches and a late result cannot replace the current search', async ({ page }) => {
+  await signIn(page);
+  await openChat(page);
+  await openSearch(page);
+  await searchBox(page).fill('parking');
+  const old = page.getByRole('dialog').getByRole('button', { name: /Parking tip/ });
+  await expect(old).toBeVisible();
+  await page.evaluate(async () => {
+    const { api } = await import('/src/api/index.js');
+    const search = api.chat.search;
+    window.resolveSearch = {};
+    api.chat.search = (query) => new Promise((resolve) => { window.resolveSearch[query] = async () => resolve(await search(query)); });
+  });
+  await searchBox(page).fill('dues');
+  await expect(page.getByText('Searching…', { exact: true })).toBeVisible();
+  await expect(old).toHaveCount(0);
+  await page.waitForFunction(() => window.resolveSearch.dues);
+  await searchBox(page).fill('zzzz');
+  await page.waitForFunction(() => window.resolveSearch.zzzz);
+  await page.evaluate(() => window.resolveSearch.zzzz());
+  await expect(page.getByText('Nothing found.', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.resolveSearch.dues());
+  await expect(page.getByText('Nothing found.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button', { name: /dues for session/ })).toHaveCount(0);
+});

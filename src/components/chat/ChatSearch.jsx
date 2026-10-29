@@ -4,6 +4,8 @@ import { api } from '@/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { shortWhen } from '@/lib/chat';
 import { shortName } from '@/lib/format';
+import { friendlyError } from '@/lib/errors';
+import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 
 /** The message text with what was searched for highlighted (case-insensitive). */
 function Highlighted({ text, query }) {
@@ -30,23 +32,28 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [error, setError] = useState('');
+  const [searching, setSearching] = useState(false);
   const latest = useRef(0);
 
   useEffect(() => {
     // Any change outdates an answer still on its way, and the last error.
     const ask = ++latest.current;
     setError('');
+    setResults(null);
+    setSearching(false);
     if (!open) return undefined;
     const q = query.trim();
     if (q.length < 2) {
       setResults(null);
       return undefined;
     }
+    setSearching(true);
     const timer = setTimeout(() => {
       api.chat
         .search(q)
         .then((rows) => ask === latest.current && setResults(rows))
-        .catch((err) => ask === latest.current && (setResults(null), setError(err.message)));
+        .catch((err) => ask === latest.current && setError(friendlyError(err)))
+        .finally(() => ask === latest.current && setSearching(false));
     }, 250);
     return () => clearTimeout(timer);
   }, [open, query]);
@@ -59,9 +66,9 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
         onOpenChange(next);
       }}
     >
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="font-display text-lg font-extrabold uppercase tracking-tight">Search the chat</DialogTitle>
+      <DialogContent className={`${DIALOG} flex max-h-[85dvh] flex-col sm:max-w-lg`}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>Search the chat</DialogTitle>
         </DialogHeader>
         <label className="flex items-center gap-2 rounded-2xl border border-black/10 bg-zinc-50 px-3 focus-within:border-lime-400 focus-within:bg-white">
           <Search className="h-4 w-4 shrink-0 text-zinc-500" />
@@ -75,10 +82,11 @@ export function ChatSearch({ open, onOpenChange, nameOf, roomName = (id, saved) 
             className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm"
           />
         </label>
-        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1" aria-live="polite">
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto overscroll-contain px-1" aria-live="polite">
+          {searching && <p className="py-6 text-center text-sm text-zinc-500">Searching…</p>}
           {error && <p className="py-6 text-center text-sm text-red-600">{error}</p>}
           {!error && results?.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">Nothing found.</p>}
-          {!error && results === null && (
+          {!error && !searching && results === null && (
             <p className="py-6 text-center text-sm text-zinc-500">Searches Team Chat, every thread and your private chats.</p>
           )}
           <ul className="space-y-1.5">

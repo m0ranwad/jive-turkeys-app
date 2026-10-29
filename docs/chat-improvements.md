@@ -7,19 +7,29 @@ Keep the existing lime-and-charcoal look. The separate accessibility refactor is
 
 ## Iteration 1: message protection and recovery
 
-Implemented, with final hosted checks still to run:
+Saved as `28c2dfe` in preview #171. All 358 logic checks and compilation pass. Hosted database rules
+and rehearsal pass; hosted browser checks are running.
 
 - Failed messages remain visible with Retry and Remove, separately from the next draft.
 - Drafts and unconfirmed messages survive refresh, are scoped by player, and clear on sign-out.
 - Stable message IDs prevent duplicate retries, including a lost server response.
 - Failed history and room-list requests show Try again. Reconnection retains loaded messages.
 - Edited latest-message previews update immediately, including live edits.
-- Added six logic checks and phone/desktop recovery checks. The focused 104 logic checks pass.
+- Added six logic checks and phone/desktop recovery checks.
+
+## Iteration 2: search
+
+Implemented:
+
+- Search opens directly from a conversation, on phones and computers.
+- New queries show Searching, with old results cleared.
+- Responses to older queries cannot replace the current results.
+- Added checks for the shortcut, loading state and late responses.
 
 ## Remaining steps
 
 1. Finish hosted checks for iteration 1 and resolve any failures.
-2. Show Searching instead of stale results and add search inside open conversations.
+2. Finish hosted checks for iteration 2.
 3. Give desktop chat and its room list more space.
 4. Polish phone controls: larger room-menu rows and consistent chat dialogs (#76).
 
