@@ -76,8 +76,7 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
     }
   };
 
-  // Before you answer, Playing is the suggested one; after, your answer is the picked one.
-  const lit = (status) => (selected ? status === selected : status === 'active');
+  // An outline suggests Playing before you answer; a filled button is a saved answer.
   return (
     // Each column is at least as wide as its longest word ("Unavailable" never gets cut off);
     // phones narrower than 360px stack the three.
@@ -96,9 +95,11 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
           className={cn(
             'min-h-12 rounded-2xl border-2 px-1 py-2 font-display font-extrabold uppercase leading-tight transition motion-safe:active:scale-[0.98] disabled:opacity-60',
             compact ? 'text-[11px] tracking-normal' : 'text-[12px] tracking-[0.02em]',
-            lit(choice.status)
+            selected === choice.status
               ? 'border-lime-400 bg-lime-400 text-black hover:bg-lime-300'
-              : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
+              : !selected && choice.status === 'active'
+                ? 'border-lime-400 bg-white text-lime-700 hover:bg-lime-50'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300',
           )}
         >
           {choice.label}
@@ -193,14 +194,16 @@ export function SessionAheadCard({ ask, rows, players, onAnswered }) {
         data-testid="session-ahead"
         className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-lime-400 text-black">
+        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-lime-400 text-black min-[360px]:grid">
           <CalendarCheck className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-sm font-extrabold uppercase tracking-tight">
+          <span className="block font-display text-sm font-extrabold uppercase tracking-tight">
             Session {period.session}: {ANSWER_LABEL[entry.status]}
           </span>
-          <span className="block truncate text-[11px] font-semibold text-zinc-500">{when}</span>
+          <span className="block text-[11px] font-semibold text-zinc-500">
+            {when} · <span className="whitespace-nowrap">{tally.in} in</span>
+          </span>
         </span>
         <button
           type="button"

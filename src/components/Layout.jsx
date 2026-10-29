@@ -26,7 +26,7 @@ import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
 import { lastChatRoom } from '@/lib/chat';
 import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
-import { STATUS_LABEL } from '@/lib/constants';
+import { STATUS_LABEL, TEAM_FOUNDED } from '@/lib/constants';
 import { initials, seasonLabel, sessionOf, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -245,6 +245,13 @@ export function Layout() {
             >
               <X className="h-4 w-4" />
             </DialogClose>
+          </div>
+          <div className="mt-5 flex items-center gap-3">
+            <img src="/icon-192.png" alt="" width="48" height="48" className="h-12 w-12 shrink-0 rounded-2xl" />
+            <div>
+              <p className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">Jive Turkeys</p>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.2em] text-lime-400">Est. {TEAM_FOUNDED}</p>
+            </div>
           </div>
           {user && (
             <Link

@@ -51,6 +51,7 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await expect(prompt(page)).toContainText('Starts Sat, Oct 10');
   await expect(prompt(page)).toContainText('Playing session 2?');
   await expect(prompt(page)).toContainText("You're down as Playing.");
+  await expect(prompt(page).getByRole('button', { name: 'Playing', exact: true })).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 
   // Captains see who hasn't answered.
   await openTab(page, '/team', 'Team');

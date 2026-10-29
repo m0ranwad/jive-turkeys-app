@@ -49,9 +49,12 @@ test("a player answers for the next session ahead, and only that session changes
   await expect(ahead(page)).toContainText('Starts Sat, Nov 14');
   await expect(ahead(page)).toContainText('Playing session 3?');
   await expect(ahead(page)).toContainText('3 in so far');
+  await expect(ahead(page).getByRole('button', { name: 'Playing', exact: true })).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(ahead(page).getByRole('button', { name: 'Playing', exact: true })).toHaveCSS('border-color', 'rgb(163, 230, 53)');
   await ahead(page).getByRole('button', { name: 'Unavailable' }).click();
   await expect(page.getByText("Unavailable for session 3. No sub requests.")).toBeVisible();
   await expect(ahead(page)).toContainText('Session 3: Unavailable');
+  await expect(ahead(page)).toContainText('Starts Sat, Nov 14 · 3 in');
 
   // Jordan is still Active for session 2.
   await openTab(page, '/profile', 'Jordan Rivera');
@@ -64,10 +67,14 @@ test("a player answers for the next session ahead, and only that session changes
   await expect(ahead(page).getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
   await ahead(page).getByRole('button', { name: 'Playing' }).click();
   await expect(ahead(page)).toContainText('Session 3: Playing');
-  await expect(ahead(page)).toContainText('Starts Sat, Nov 14');
-  // The count is on the open card.
+  await expect(ahead(page)).toContainText('Starts Sat, Nov 14 · 4 in');
+  await page.reload();
+  await expect(ahead(page)).toContainText('Starts Sat, Nov 14 · 4 in');
+  // Reopening shows a saved answer filled in, unlike the suggested outline.
   await ahead(page).getByRole('button', { name: 'Change' }).click();
   await expect(ahead(page)).toContainText('4 in so far');
+  await expect(ahead(page).getByRole('button', { name: 'Playing', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(ahead(page).getByRole('button', { name: 'Playing', exact: true })).toHaveCSS('background-color', 'rgb(163, 230, 53)');
 });
 
 test("captains answer this session's question first, then the next one's", async ({ page }) => {
@@ -215,6 +222,7 @@ test('between sessions, the question is at the top of Schedule and status change
   await expect(next).toContainText('Games show here when the schedule is out');
   await expect(next).toContainText('3 in');
   await expect(next).toContainText('10 to answer');
+  await expect(next.getByRole('button', { name: 'Playing', exact: true })).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await next.getByRole('button', { name: 'Available to sub' }).click();
   await expect(page.getByText("You're available to sub for session 3")).toBeVisible();
   await expect(next).toContainText('Your answer');
