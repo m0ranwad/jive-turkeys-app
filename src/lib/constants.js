@@ -1,5 +1,7 @@
 export const SESSIONS = [1, 2, 3];
 
+export const TEAM_FOUNDED = 2014;
+
 // A season runs November to April (session 1 Nov–Dec, 2 Jan–Feb, 3 Mar–Apr) and is
 // filed under the year it starts in. From this month (May) on, dates belong to the
 // season that starts that November.

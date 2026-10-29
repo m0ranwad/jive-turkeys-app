@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { api, isDemo, DEMO_LOGIN, DEMO_PLAYER_LOGIN } from '@/api';
+import { TEAM_FOUNDED } from '@/lib/constants';
 
 /** Demo mode only: sign in as a sample captain or player with one tap. */
 function DemoSignIn() {
@@ -54,6 +55,7 @@ export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
           <div className="mb-8 text-center">
             <img src="/icon-192.png" alt="" width="72" height="72" className="mx-auto h-[72px] w-[72px] rounded-[22px] shadow-sm" />
             <p className="mt-3 font-display text-sm font-extrabold uppercase tracking-[0.16em] text-zinc-950">Jive Turkeys</p>
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.24em] text-lime-700">Est. {TEAM_FOUNDED}</p>
             <h1 className="mt-5 font-display text-3xl font-extrabold uppercase leading-none tracking-tight text-zinc-950">{title}</h1>
             {subtitle && <p className="mt-2 text-zinc-600">{subtitle}</p>}
           </div>
