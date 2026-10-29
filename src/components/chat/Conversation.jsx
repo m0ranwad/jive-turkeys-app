@@ -30,6 +30,8 @@ export function Conversation({
   onCopy,
   onDelete,
   onEdit,
+  onRetry,
+  onRemoveUnsent,
   focusId,
   onFocused,
   emptyText,
@@ -216,7 +218,7 @@ export function Conversation({
               people={people}
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
-              canDelete={mine || isCaptain}
+              canDelete={!m.pending && (mine || isCaptain)}
               canEdit={mine && !m.pending && !!onEdit}
               onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
               onReact={(message, emoji, fromMenu) => {
@@ -227,6 +229,8 @@ export function Conversation({
               onCopy={close(onCopy)}
               onDelete={close(onDelete)}
               onEdit={onEdit && close(onEdit)}
+              onRetry={onRetry}
+              onRemoveUnsent={onRemoveUnsent}
               onJumpTo={jumpTo}
             />
           );

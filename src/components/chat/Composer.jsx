@@ -4,16 +4,11 @@ import { EmojiPicker } from './EmojiPicker';
 import { initials } from '@/lib/format';
 import { TEAM, mentionChoices, mentionQuery } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
+import { chatDraft, keepDraft } from '@/lib/chat-local';
 
 const MAX_LENGTH = 2000;
 // Tapping Send or an emoji keeps the cursor in the message box, so a phone's keyboard stays open.
 const keepTyping = (e) => e.preventDefault();
-// Unsent text per room, kept while moving between rooms.
-const drafts = new Map();
-
-/** Puts text in a room's message box for when it opens (say, a first message that didn't send). */
-export const keepDraft = (room, text) => drafts.set(room, text);
-
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
  * reply preview, and a list of teammates to @mention while typing a name after
@@ -38,7 +33,7 @@ export const Composer = forwardRef(function Composer(
   },
   ref,
 ) {
-  const [draft, setDraft] = useState(() => drafts.get(room) || '');
+  const [draft, setDraft] = useState(() => chatDraft(me, room));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const box = useRef(null);
 
@@ -77,7 +72,7 @@ export const Composer = forwardRef(function Composer(
   const draftBeforeEdit = useRef('');
   useEffect(() => {
     if (!editing) return;
-    draftBeforeEdit.current = drafts.get(room) || '';
+    draftBeforeEdit.current = chatDraft(me, room);
     setDraft(editing.body);
     requestAnimationFrame(() => {
       const el = box.current;
@@ -89,8 +84,8 @@ export const Composer = forwardRef(function Composer(
   }, [editing?.id]);
 
   useEffect(() => {
-    if (!editing) drafts.set(room, draft);
-  }, [room, draft, editing]);
+    if (!editing) keepDraft(me, room, draft);
+  }, [me, room, draft, editing]);
 
   const stopEditing = () => {
     setDraft(draftBeforeEdit.current);
@@ -114,9 +109,9 @@ export const Composer = forwardRef(function Composer(
       return undefined;
     }
     setDraft('');
+    keepDraft(me, room, '');
     setEmojiOpen(false);
-    const sent = await onSend(body);
-    if (!sent) setDraft((current) => current || body);
+    await onSend(body);
   };
 
   const onKeyDown = (e) => {

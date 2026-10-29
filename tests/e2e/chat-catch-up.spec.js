@@ -51,6 +51,21 @@ test('the connection coming back brings in what was posted meanwhile', async ({ 
   await expect(message(page, 'We switched to field 4')).toBeVisible();
 });
 
+test('a failed catch-up keeps loaded messages and offers a retry', async ({ page }) => {
+  await setHidden(page, true);
+  await liveOff(page);
+  await samPosts(page, 'The field changed while you were away');
+  await page.evaluate(() => localStorage.setItem('jt_demo_fail_reads', 'messages'));
+  await setHidden(page, false);
+  await expect(page.getByText("Couldn't update messages", { exact: true })).toBeVisible();
+  await expect(message(page, 'Paid 💸')).toBeVisible();
+  await expect(message(page, 'The field changed while you were away')).toHaveCount(0);
+  await page.evaluate(() => localStorage.removeItem('jt_demo_fail_reads'));
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(message(page, 'The field changed while you were away')).toBeVisible();
+  await expect(page.getByText("Couldn't update messages", { exact: true })).toHaveCount(0);
+});
+
 test("sending a message doesn't mark read one that never reached your screen", async ({ page }) => {
   // Live updates cut off without the page noticing: Sam's message doesn't arrive.
   await liveOff(page);

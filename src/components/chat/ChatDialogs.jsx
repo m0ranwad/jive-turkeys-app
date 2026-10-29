@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronRight, Hash, Lock, LogOut, Search, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { DIALOG, DIALOG_TITLE } from '@/lib/constants';
 import { initials, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
-
-const TITLE = 'font-display text-lg font-extrabold uppercase tracking-tight';
 
 const NEW_KINDS = [
   {
@@ -88,18 +86,18 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className={TITLE}>{renaming ? (chat ? 'Rename chat' : 'Rename thread') : 'New thread'}</DialogTitle>
+      <DialogContent className={cn(DIALOG, 'sm:max-w-md')}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>{renaming ? (chat ? 'Rename chat' : 'Rename thread') : 'New thread'}</DialogTitle>
           {!renaming && (
             <p className="text-sm text-zinc-500">
-              For side conversations, so Team Chat stays about the team. Everyone can see and join it.
+              Everyone on the team can see and join it.
             </p>
           )}
         </DialogHeader>
         <form onSubmit={save} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="thread-title">{chat ? 'Name' : 'Topic'}</Label>
+            <Label htmlFor="thread-title" className={FIELD_LABEL}>{chat ? 'Name' : 'Topic'}</Label>
             <Input
               id="thread-title"
               value={title}
@@ -107,12 +105,12 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
               maxLength={80}
               placeholder="⚽ Sunday pickup"
               autoFocus
+              className="h-12 rounded-2xl text-base"
             />
-            <p className="text-xs text-zinc-500">Tip: start with an emoji and it becomes the {chat ? "chat's" : "thread's"} icon.</p>
           </div>
           {!renaming && (
             <div className="space-y-2">
-              <Label htmlFor="thread-first">First message (optional)</Label>
+              <Label htmlFor="thread-first" className={FIELD_LABEL}>First message (optional)</Label>
               <Textarea
                 id="thread-first"
                 rows={3}
@@ -120,17 +118,16 @@ export function ThreadDialog({ open, onOpenChange, thread, onSave }) {
                 value={first}
                 onChange={(e) => setFirst(e.target.value)}
                 placeholder="Kick it off…"
+                className="rounded-2xl text-base"
               />
             </div>
           )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy || !title.trim()}>
+          <div className="space-y-2">
+            <Button type="submit" disabled={busy || !title.trim()} className={BIG_BUTTON}>
               {busy ? 'Saving…' : renaming ? 'Save' : 'Start thread'}
             </Button>
-          </DialogFooter>
+            <button type="button" onClick={() => onOpenChange(false)} className="min-h-11 w-full text-xs font-bold uppercase tracking-wider text-zinc-600">Cancel</button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
@@ -494,19 +491,29 @@ export function ConfirmDialog({ open, onOpenChange, title, body, confirmLabel, b
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className={TITLE}>{title}</DialogTitle>
+      <DialogContent className={cn(DIALOG, 'sm:max-w-sm')} onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>{title}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-zinc-600">{body}</p>
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={confirm} disabled={busy}>
+        <div className="space-y-2">
+          <Button variant="destructive" onClick={confirm} disabled={busy} className={BIG_BUTTON}>
             {busy ? busyLabel : confirmLabel}
           </Button>
-        </DialogFooter>
+          <button type="button" onClick={() => onOpenChange(false)} disabled={busy} className="min-h-11 w-full text-xs font-bold uppercase tracking-wider text-zinc-600">Cancel</button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Room actions on a phone use the same roomy window as the other chat controls. */
+export function RoomMenuDialog({ open, onOpenChange, children }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={cn(DIALOG, 'sm:max-w-sm')} onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader className="text-left"><DialogTitle className={DIALOG_TITLE}>Chat options</DialogTitle></DialogHeader>
+        <div className="space-y-1">{children}</div>
       </DialogContent>
     </Dialog>
   );

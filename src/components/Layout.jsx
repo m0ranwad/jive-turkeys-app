@@ -126,7 +126,7 @@ export function Layout() {
           </div>
         )}
         <header className="sticky top-0 z-40 bg-zinc-950 text-white">
-          <div className="mx-auto flex h-16 max-w-3xl items-center gap-3 px-4">
+          <div className={cn('mx-auto flex h-16 items-center gap-3 px-4', onChat ? 'max-w-6xl' : 'max-w-3xl')}>
             <Link to="/" className="flex min-w-0 items-center gap-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-lime-400 font-display text-[13px] font-black tracking-tight text-black">
                 JT
@@ -191,7 +191,7 @@ export function Layout() {
         </header>
 
         {/* The chat sizes itself to the screen, so it needs no room below for the tab bar. */}
-        <main className={cn('mx-auto max-w-3xl px-4 pt-5', onChat ? 'pb-0' : 'pb-28 md:pb-14')}>
+        <main className={cn('mx-auto px-4 pt-5', onChat ? 'max-w-6xl pb-0' : 'max-w-3xl pb-28 md:pb-14')}>
           {/* Keeps the header and tabs up while a screen downloads the first time. */}
           <Suspense fallback={<PageSpinner />}>
             <Outlet />

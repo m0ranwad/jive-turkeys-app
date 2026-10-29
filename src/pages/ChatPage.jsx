@@ -16,9 +16,9 @@ import {
 } from 'lucide-react';
 import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
-import { ConfirmDialog, NewRoomDialog, PeopleDialog, PrivateChatDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
+import { ConfirmDialog, NewRoomDialog, PeopleDialog, PrivateChatDialog, RoomMenuDialog, ThreadDialog } from '@/components/chat/ChatDialogs';
 import { ChatSearch } from '@/components/chat/ChatSearch';
-import { ClosedNotice, Composer, keepDraft } from '@/components/chat/Composer';
+import { ClosedNotice, Composer } from '@/components/chat/Composer';
 import { NotificationsButton, NotificationsDialog, NotificationsPrompt, usePush } from '@/components/chat/Notifications';
 import { Conversation } from '@/components/chat/Conversation';
 import { MentionCount, ThreadIcon, ThreadList, UnreadCount } from '@/components/chat/ThreadList';
@@ -49,6 +49,7 @@ import {
   waitingElsewhere,
 } from '@/lib/chat';
 import { friendlyError, saveFailedToast } from '@/lib/errors';
+import { chatOutbox, keepOutbox, sendChatMessage } from '@/lib/chat-local';
 import { shortName } from '@/lib/format';
 import { findMentions, mentionPeople, mentionsMe } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
@@ -206,6 +207,24 @@ export function ChatPage() {
   const [members, setMembers] = useState(undefined);
   const [overview, setOverview] = useState([]);
   const [loaded, setLoaded] = useState(null);
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const [roomsError, setRoomsError] = useState(null);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [offline, setOffline] = useState(() => !navigator.onLine);
+  const [outbox, setOutbox] = useState(() => chatOutbox(me));
+  const outboxRef = useRef(outbox);
+  const sending = useRef(new Set());
+  const roomsRequest = useRef(0);
+  const updateOutbox = useCallback((update) => {
+    const next = update(outboxRef.current);
+    outboxRef.current = next;
+    keepOutbox(me, next);
+    setOutbox(next);
+  }, [me]);
+  useEffect(() => {
+    outboxRef.current = chatOutbox(me);
+    setOutbox(outboxRef.current);
+  }, [me]);
   const [reactions, setReactions] = useState([]);
   const [extras, setExtras] = useState({});
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -228,7 +247,7 @@ export function ChatPage() {
 
   // Live handlers read these instead of re-subscribing on every change.
   const live = useRef({});
-  live.current = { me, viewing: room };
+  live.current = { me, viewing: room, historyFailed: !!loaded?.error };
   // Messages that arrive live while a room's history is still loading.
   const arriving = useRef({ room: undefined, messages: [] });
   const overviewRef = useRef(overview);
@@ -243,6 +262,22 @@ export function ChatPage() {
       .overview()
       .then(setOverview)
       .catch(() => {});
+  }, []);
+
+  const refreshRooms = useCallback(async () => {
+    const run = ++roomsRequest.current;
+    setRoomsLoading(true);
+    try {
+      const [threadRows, summary] = await Promise.all([api.entities.ChatThread.list('-created_date'), api.chat.overview()]);
+      if (run !== roomsRequest.current) return;
+      setThreads(threadRows);
+      setOverview(summary);
+      setRoomsError(null);
+    } catch (err) {
+      if (run === roomsRequest.current) setRoomsError(friendlyError(err));
+    } finally {
+      if (run === roomsRequest.current) setRoomsLoading(false);
+    }
   }, []);
 
   const loadReactions = useCallback(async (messages) => {
@@ -268,38 +303,35 @@ export function ChatPage() {
   const catchUp = useCallback(() => {
     const target = live.current.viewing;
     if (target === undefined) {
-      refreshOverview();
+      refreshRooms();
+      return;
+    }
+    if (live.current.historyFailed) {
+      setHistoryRetry((n) => n + 1);
       return;
     }
     const run = ++catchUps.current;
-    setLoaded((current) => (current?.room === target ? { ...current, behind: true } : current));
+    setLoaded((current) => (current?.room === target ? { ...current, behind: true, syncing: true, syncError: null } : current));
     Promise.all([api.chat.history(target, { limit: PAGE }), api.chat.overview()])
       .then(([rows, summary]) => {
+        if (run !== catchUps.current) return;
         setOverview(summary);
         setLoaded((current) => {
           if (current?.room !== target) return current;
           const { messages, restarted } = catchUpMessages(current.messages, rows, PAGE);
-          return { ...current, messages, hasMore: current.hasMore || restarted, behind: run !== catchUps.current };
+          return { ...current, messages, hasMore: current.hasMore || restarted, behind: false, syncing: false, syncError: null };
         });
         loadReactions(rows);
       })
-      .catch(() => {});
-  }, [refreshOverview, loadReactions]);
+      .catch((err) => {
+        if (run === catchUps.current) setLoaded((current) => current?.room === target ? { ...current, syncing: false, syncError: friendlyError(err) } : current);
+      });
+  }, [refreshRooms, loadReactions]);
 
   // Rooms, who's in the private ones, room summaries, and live updates for the whole page.
   useEffect(() => {
     let alive = true;
-    Promise.all([api.entities.ChatThread.list('-created_date'), api.chat.overview()])
-      .then(([threadRows, summary]) => {
-        if (!alive) return;
-        setThreads(threadRows);
-        setOverview(summary);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setThreads([]);
-        toast({ title: "Chat didn't load", description: err.message });
-      });
+    refreshRooms();
     // Tried again when the page comes back into view, if it failed.
     const fetchMembers = () =>
       loadMembers()
@@ -360,10 +392,14 @@ export function ChatPage() {
       },
       {
         // An edit (yours on another device, or someone else's): the new text, in place.
-        onUpdate: (m) =>
+        onUpdate: (m) => {
           setLoaded((current) =>
             current && { ...current, messages: current.messages.map((x) => (x.id === m.id ? { ...x, ...m } : x)) },
-          ),
+          );
+          setOverview((list) => bumpOverview(list, m, false));
+          clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(refreshOverview, 300);
+        },
         onDelete: ({ id }) => {
           setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== id) });
           setReactions((list) => list.filter((r) => r.message_id !== id));
@@ -381,11 +417,17 @@ export function ChatPage() {
       setVisible(!document.hidden);
       if (document.hidden) return;
       catchUp();
+      if (threadsRef.current === null) refreshRooms();
       if (membersRef.current === null) fetchMembers();
     };
     document.addEventListener('visibilitychange', onVisibility);
+    const onOnline = () => { setOffline(false); catchUp(); refreshRooms(); };
+    const onOffline = () => setOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
     return () => {
       alive = false;
+      roomsRequest.current += 1;
       clearTimeout(refreshTimer);
       clearTimeout(roomsTimer);
       offThreads();
@@ -393,8 +435,10 @@ export function ChatPage() {
       offMessages();
       offReactions();
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
     };
-  }, [toast, refreshOverview, catchUp]);
+  }, [toast, refreshOverview, refreshRooms, catchUp]);
 
   // Open a room: its latest messages, and where the player left off.
   useEffect(() => {
@@ -403,6 +447,7 @@ export function ChatPage() {
     setMenuOpen(false);
     setLoaded(null);
     setReactions([]);
+    catchUps.current += 1;
     arriving.current = { room, messages: [] };
     if (room === undefined) return undefined;
     let alive = true;
@@ -423,27 +468,36 @@ export function ChatPage() {
       .catch((err) => {
         if (!alive) return;
         arriving.current = { room: undefined, messages: [] };
-        setLoaded({ room, messages: [], hasMore: false, unreadAfter: null });
-        toast({ title: "Messages didn't load", description: err.message });
+        setLoaded({ room, messages: [], hasMore: false, unreadAfter: null, error: friendlyError(err) });
       });
     return () => {
       alive = false;
     };
-  }, [room, loadReactions, toast]);
+  }, [room, historyRetry, loadReactions]);
+
+  // A live echo or reload can confirm a message even when its send response never arrived.
+  useEffect(() => {
+    const saved = new Set(loaded?.messages.map((m) => m.id));
+    if (outbox.some((m) => saved.has(m.id))) updateOutbox((list) => list.filter((m) => !saved.has(m.id)));
+  }, [loaded, outbox, updateOutbox]);
+  const visibleMessages = useMemo(() => [
+    ...(loaded?.messages || []),
+    ...outbox.filter((m) => roomOf(m) === room && !loaded?.messages.some((saved) => saved.id === m.id)),
+  ], [loaded, outbox, room]);
 
   // Fetch replied-to messages that are older than what's loaded.
   useEffect(() => {
     if (!loaded) return;
-    const have = new Set(loaded.messages.map((m) => m.id));
+    const have = new Set(visibleMessages.map((m) => m.id));
     const missing = [
-      ...new Set(loaded.messages.map((m) => m.reply_to_id).filter((id) => id && !have.has(id) && !(id in extras))),
+      ...new Set(visibleMessages.map((m) => m.reply_to_id).filter((id) => id && !have.has(id) && !(id in extras))),
     ];
     if (!missing.length) return;
     setExtras((current) => ({ ...current, ...Object.fromEntries(missing.map((id) => [id, null])) }));
     api.entities.Message.filter({ id: missing })
       .then((rows) => setExtras((current) => ({ ...current, ...Object.fromEntries(rows.map((m) => [m.id, m])) })))
       .catch(() => {});
-  }, [loaded, extras]);
+  }, [loaded, extras, visibleMessages]);
 
   // While a room is on screen, check in every 15 seconds so this player's phone
   // doesn't buzz for the conversation they're already reading.
@@ -602,53 +656,46 @@ export function ChatPage() {
     // Runs once the rooms and who's in them are in; openRoom, setParams and toast change every render.
   }, [dmWith, threads, members, me, loading, teammates]);
 
-  const send = async (body) => {
-    if (!me) return false;
-    const target = room;
-    const reply = replyTo;
-    const pending = {
-      id: pendingId(),
-      pending: true,
-      user_id: me,
-      author_name: myName,
-      body,
-      thread_id: target,
-      reply_to_id: reply?.id ?? null,
-      ...mentionFields(body),
-      created_date: new Date().toISOString(),
-    };
-    setReplyTo(null);
-    setLoaded((current) =>
-      current && current.room === target ? { ...current, messages: [...current.messages, pending] } : current,
-    );
+  const deliver = async (pending) => {
+    if (sending.current.has(pending.id)) return false;
+    sending.current.add(pending.id);
+    const target = roomOf(pending);
+    updateOutbox((list) => list.map((m) => m.id === pending.id ? { ...m, failed: false, error: null } : m));
     try {
-      const created = await api.entities.Message.create({
-        user_id: me,
-        author_name: myName,
-        body,
-        thread_id: target,
-        reply_to_id: pending.reply_to_id,
-        ...mentionFields(body),
-      });
+      const created = await sendChatMessage(api, pending);
       setLoaded((current) =>
         current && current.room === target
-          ? {
-              ...current,
-              messages: insertMessage(
-                current.messages.filter((m) => m.id !== pending.id),
-                created,
-              ),
-            }
+          ? { ...current, messages: insertMessage(current.messages, created) }
           : current,
       );
+      updateOutbox((list) => list.filter((m) => m.id !== pending.id));
       setOverview((list) => bumpOverview(list, created, false));
       return true;
     } catch (err) {
-      setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== pending.id) });
-      setReplyTo(reply);
-      toast({ title: "That didn't send", description: err.message });
+      // A live echo may already have confirmed it while both HTTP responses were lost.
+      if (!outboxRef.current.some((m) => m.id === pending.id)) return true;
+      updateOutbox((list) => list.map((m) => m.id === pending.id ? { ...m, failed: true, error: friendlyError(err) } : m));
+      toast({ title: "That didn't send", description: friendlyError(err) });
       return false;
+    } finally {
+      sending.current.delete(pending.id);
     }
+  };
+
+  const enqueue = (target, body, replyId, mentioned) => {
+    const pending = {
+      id: crypto.randomUUID(), pending: true, user_id: me, author_name: myName, body,
+      thread_id: target, reply_to_id: replyId ?? null, ...mentioned, created_date: new Date().toISOString(),
+    };
+    updateOutbox((list) => [...list, pending]);
+    return deliver(pending);
+  };
+
+  const send = (body) => {
+    if (!me) return false;
+    const replyId = replyTo?.id;
+    setReplyTo(null);
+    return enqueue(room, body, replyId, mentionFields(body));
   };
 
   const loadEarlier = async () => {
@@ -740,6 +787,8 @@ export function ChatPage() {
         current && { ...current, messages: current.messages.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)) },
       );
       setEditing(null);
+      setOverview((list) => bumpOverview(list, updated, false));
+      refreshOverview();
       return true;
     } catch (err) {
       toast({ title: "That edit didn't save", description: err.message });
@@ -754,15 +803,10 @@ export function ChatPage() {
 
   /**
    * A new room's first message. The room already exists, so a failed send doesn't
-   * undo it (trying again would start a second one): the text waits in its message box.
+   * undo it (trying again would start a second one): the message waits in that room's outbox.
    */
   const sendFirst = async (room, body, mentioned) => {
-    try {
-      await api.entities.Message.create({ user_id: me, author_name: myName, body, thread_id: room, reply_to_id: null, ...mentioned });
-    } catch (err) {
-      keepDraft(room, body);
-      toast({ title: "That didn't send", description: `${friendlyError(err)} Your message is in the box to send again.` });
-    }
+    await enqueue(room, body, null, mentioned);
   };
 
   const saveThread = async ({ title, first }) => {
@@ -917,12 +961,29 @@ export function ChatPage() {
     setMenuOpen(false);
     next();
   };
+  const roomActions = (
+    <>
+      {privateRoom && <MenuItem icon={Users} label="People" onClick={closeMenuAnd(() => setDialog({ kind: 'people' }))} />}
+      {canManage && (
+        <>
+          <MenuItem icon={Pencil} label="Rename" onClick={closeMenuAnd(() => setDialog({ kind: 'rename' }))} />
+          {thread.archived ? (
+            <MenuItem icon={LockOpen} label={`Reopen ${roomKind}`} onClick={() => setClosed(false)} />
+          ) : (
+            <MenuItem icon={Lock} label={`Close ${roomKind}`} onClick={() => setClosed(true)} />
+          )}
+        </>
+      )}
+      {privateRoom && <MenuItem icon={LogOut} label="Leave chat" onClick={closeMenuAnd(() => setDialog({ kind: 'leave', thread }))} />}
+      {canManage && <MenuItem icon={Trash2} label={`Delete ${roomKind}`} danger onClick={closeMenuAnd(() => setDialog({ kind: 'deleteThread', thread }))} />}
+    </>
+  );
 
   return (
     <div ref={shell} data-chat-shell className="flex gap-3" style={shellStyle}>
       <aside
         className={cn(
-          'w-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:flex md:w-64 md:shrink-0',
+          'w-full flex-col overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] md:flex md:w-64 md:shrink-0 lg:w-80',
           listOnly ? 'flex' : 'hidden',
         )}
       >
@@ -945,6 +1006,7 @@ export function ChatPage() {
             New
           </button>
         </div>
+        {roomsError && <ChatNotice title="Chats didn't load" message={roomsError} busy={roomsLoading} onRetry={refreshRooms} />}
         {threads ? (
           <ThreadList
             rooms={rooms}
@@ -959,9 +1021,9 @@ export function ChatPage() {
               </>
             }
           />
-        ) : (
+        ) : !roomsError ? (
           <PageSpinner />
-        )}
+        ) : null}
       </aside>
 
       {!listOnly && (
@@ -999,6 +1061,10 @@ export function ChatPage() {
               <p className="truncate text-[11px] font-semibold text-zinc-500">{subtitle}</p>
             </div>
 
+            <button onClick={() => setSearchOpen(true)} aria-label="Search messages" className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100">
+              <Search className="h-5 w-5" />
+            </button>
+
             {/* One menu for every room, with only what you can do there (Team Chat and the Lounge have none). */}
             {hasOptions && (
               <div className="relative">
@@ -1006,43 +1072,24 @@ export function ChatPage() {
                   onClick={() => setMenuOpen((open) => !open)}
                   aria-label="Chat options"
                   aria-expanded={menuOpen}
-                  className="grid h-9 w-9 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
+                  className="grid h-11 w-11 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
                 >
                   <MoreHorizontal className="h-5 w-5" />
                 </button>
-                {menuOpen && (
+                {menuOpen && wide && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                    <div className="absolute right-0 top-full z-40 mt-1 w-48 overflow-hidden rounded-2xl border border-black/5 bg-white py-1 shadow-xl">
-                      {privateRoom && <MenuItem icon={Users} label="People" onClick={closeMenuAnd(() => setDialog({ kind: 'people' }))} />}
-                      {canManage && (
-                        <>
-                          <MenuItem icon={Pencil} label="Rename" onClick={closeMenuAnd(() => setDialog({ kind: 'rename' }))} />
-                          {thread.archived ? (
-                            <MenuItem icon={LockOpen} label={`Reopen ${roomKind}`} onClick={() => setClosed(false)} />
-                          ) : (
-                            <MenuItem icon={Lock} label={`Close ${roomKind}`} onClick={() => setClosed(true)} />
-                          )}
-                        </>
-                      )}
-                      {privateRoom && (
-                        <MenuItem icon={LogOut} label="Leave chat" onClick={closeMenuAnd(() => setDialog({ kind: 'leave', thread }))} />
-                      )}
-                      {canManage && (
-                        <MenuItem
-                          icon={Trash2}
-                          label={`Delete ${roomKind}`}
-                          danger
-                          onClick={closeMenuAnd(() => setDialog({ kind: 'deleteThread', thread }))}
-                        />
-                      )}
+                    <div className="absolute right-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-2xl border border-black/5 bg-white p-1.5 shadow-xl">
+                      {roomActions}
                     </div>
                   </>
                 )}
+                {!wide && <RoomMenuDialog open={menuOpen} onOpenChange={setMenuOpen}>{roomActions}</RoomMenuDialog>}
               </div>
             )}
           </header>
 
+          {offline && !loaded?.error && <ChatNotice title="No connection" message="Your unsent messages stay here." />}
           {threadMissing ? (
             <div className="grid flex-1 place-items-center p-8 text-center">
               <div>
@@ -1055,11 +1102,14 @@ export function ChatPage() {
                 </button>
               </div>
             </div>
+          ) : loaded?.error && loaded.room === room ? (
+            <div className="grid flex-1 place-items-center p-5"><ChatNotice title="Messages didn't load" message={loaded.error} onRetry={() => setHistoryRetry((n) => n + 1)} /></div>
           ) : loaded && loaded.room === room ? (
             <>
+              {(loaded.syncing || loaded.syncError) && <ChatNotice title={loaded.syncing ? 'Updating messages…' : "Couldn't update messages"} message={loaded.syncError} busy={loaded.syncing} onRetry={loaded.syncError ? catchUp : undefined} />}
               <Conversation
                 key={`messages-${room ?? 'team'}`}
-                messages={loaded.messages}
+                messages={visibleMessages}
                 unreadAfter={loaded.unreadAfter}
                 me={me}
                 // Can delete anyone's message: captains, except in private chats.
@@ -1077,6 +1127,8 @@ export function ChatPage() {
                 onCopy={copy}
                 onDelete={(message) => setDialog({ kind: 'deleteMessage', message })}
                 onEdit={startEdit}
+                onRetry={deliver}
+                onRemoveUnsent={(message) => updateOutbox((list) => list.filter((m) => m.id !== message.id))}
                 focusId={focusId}
                 onFocused={() => setFocusId(null)}
                 emptyText={
@@ -1196,12 +1248,22 @@ function MenuItem({ icon: Icon, label, danger, onClick }) {
     <button
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold transition hover:bg-zinc-50',
+        'flex min-h-12 w-full items-center gap-2.5 rounded-xl px-3 py-3 text-left text-sm font-semibold transition hover:bg-zinc-50',
         danger ? 'text-red-600' : 'text-zinc-700',
       )}
     >
       <Icon className="h-4 w-4" />
       {label}
     </button>
+  );
+}
+
+function ChatNotice({ title, message, busy = false, onRetry }) {
+  return (
+    <div className="m-2 rounded-2xl bg-amber-50 px-3.5 py-3 text-sm text-amber-950 ring-1 ring-amber-200">
+      <p className="font-bold">{title}</p>
+      {message && <p className="mt-1 text-xs leading-relaxed">{message}</p>}
+      {onRetry && <button type="button" disabled={busy} onClick={onRetry} className="mt-2 min-h-11 rounded-full bg-zinc-950 px-4 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Trying…' : 'Try again'}</button>}
+    </div>
   );
 }
