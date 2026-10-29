@@ -873,6 +873,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         failIfOffline();
         if (table === 'potm_votes') checkVotingOpen(row.game_id);
         checkChatWrite(table, 'create', row);
+        // PostgreSQL's primary key makes a retry with the same message ID safe.
+        if (table === 'messages' && row.id && db.messages.some((m) => m.id === row.id)) throw new Error('Message already sent');
         // Same as the policies: only captains answer name checks, and only the database functions record picks.
         if ((table === 'team_name_checks' && currentUser().role !== 'admin') || table === 'team_guest_links' || table === 'session_asks') refuse();
         checkAmounts(table, row);
@@ -1272,6 +1274,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const chat = {
     async history(threadId, { before, limit = 60 } = {}) {
       requireUser();
+      failIfUnreadable('messages');
       if (!canRead(threadId)) return delay([]);
       const rows = sortRows(
         db.messages.filter((m) => (m.thread_id ?? null) === threadId && (!before || m.created_date < before)),
@@ -1282,6 +1285,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     // Same idea as the database's chat_search(): text anywhere in the message, newest first.
     async search(q) {
       requireUser();
+      failIfUnreadable('messages');
       const text = String(q || '').trim().toLowerCase();
       if (text.length < 2) return delay([]);
       const rows = sortRows(

@@ -69,6 +69,8 @@ export function MessageRow({
   onCopy,
   onDelete,
   onEdit,
+  onRetry,
+  onRemoveUnsent,
   onJumpTo,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -141,7 +143,8 @@ export function MessageRow({
               big ? 'px-1 text-4xl leading-tight' : bubble,
               selected && (big ? 'rounded-2xl bg-lime-100' : 'ring-2 ring-lime-400 ring-offset-1'),
               highlighted && 'ring-2 ring-amber-300 ring-offset-1',
-              m.pending && 'opacity-60',
+              m.pending && !m.failed && 'opacity-60',
+              m.failed && 'ring-1 ring-red-300',
             )}
           >
             <span className="whitespace-pre-wrap break-words">
@@ -176,9 +179,18 @@ export function MessageRow({
             </div>
           )}
 
-          {(last || selected) && (
+          {(last || selected || m.pending) && (
             <div className={cn('mt-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500', mine ? 'mr-2' : 'ml-3')}>
-              {m.pending ? 'Sending…' : timeLabel(m.created_date)}
+              {m.failed ? 'Not sent' : m.pending ? 'Sending…' : timeLabel(m.created_date)}
+            </div>
+          )}
+          {m.failed && (
+            <div className="mt-1 max-w-full text-right">
+              {m.error && <p className="text-xs text-red-700">{m.error}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => onRetry(m)} className="min-h-11 rounded-full px-3 text-xs font-bold text-lime-700 hover:bg-lime-50">Retry</button>
+                <button type="button" onClick={() => onRemoveUnsent(m)} className="min-h-11 rounded-full px-3 text-xs font-bold text-zinc-600 hover:bg-zinc-100">Remove</button>
+              </div>
             </div>
           )}
         </div>
