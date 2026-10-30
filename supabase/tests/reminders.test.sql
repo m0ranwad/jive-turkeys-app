@@ -139,8 +139,8 @@ create temp table subs_sent as select * from public.game_reminder_targets(rem_te
 select rem_test.ok(rem_test.names(array(select subscription_id from subs_sent)) = '{sid,sue}',
   'the call for subs goes to the sub pool, not to someone on break who said OUT');
 select rem_test.ok(
-  (select bool_and(title = '🆘 We need subs' and body like 'We need 5 more players (3 women) for % vs Ball Busters, Field 2. Can you play?%') from subs_sent),
-  'it says how many we need, and how many women');
+  (select bool_and(title = '🆘 We need subs' and body like 'We need 5 more players, including 3 girls, for % vs Ball Busters, Field 2. Can you play?%') from subs_sent),
+  'it says how many we need, and how many girls');
 
 select rem_test.ok((select count(*) = 0 from public.game_reminder_targets(rem_test.id('g1'), 'rsvp')), 'each goes out once');
 select public.game_reminders_tick();
@@ -157,7 +157,7 @@ select rem_test.ok(rem_test.names(array(select subscription_id from public.game_
   'an unavailable player who said MAYBE still gets no sub request');
 
 -- ---------------------------------------------------------------------------
--- Only women short: only women are asked.
+-- Only girls short: only girls are asked.
 -- ---------------------------------------------------------------------------
 
 delete from public.game_reminder_log;
@@ -167,8 +167,20 @@ select rem_test.ok(
   (select need_total = 0 and need_women = 1 from public.game_headcount(rem_test.id('g1'))),
   'captains'' minimums count (3 players, 1 woman)');
 create temp table women_sent as select * from public.game_reminder_targets(rem_test.id('g1'), 'subs');
-select rem_test.ok(rem_test.names(array(select subscription_id from women_sent)) = '{sue}', 'short only on women: only women are asked');
-select rem_test.ok((select bool_and(body like 'We need 1 more woman for %') from women_sent), 'and it says so');
+select rem_test.ok(rem_test.names(array(select subscription_id from women_sent)) = '{sue}', 'short only on girls: only girls are asked');
+select rem_test.ok((select bool_and(body like 'We need 1 more girl for %') from women_sent), 'and it says so');
+
+-- Short on players too, but the open spots are full (4 players, 3 girls: 3 in, none of them
+-- girls on the field): another guy would only sit on the bench, so only girls are asked.
+delete from public.game_reminder_log;
+update public.team_settings set min_players = 4, min_women = 3;
+select rem_test.ok(
+  (select need_total = 1 and need_women = 3 from public.game_headcount(rem_test.id('g1'))),
+  'one more player and three more girls short');
+create temp table girls_sent as select * from public.game_reminder_targets(rem_test.id('g1'), 'subs');
+select rem_test.ok(rem_test.names(array(select subscription_id from girls_sent)) = '{sue}', 'with the open spots full, only girls are asked');
+select rem_test.ok((select bool_and(body like 'We need 3 more girls for %') from girls_sent), 'and it says how many girls');
+update public.team_settings set min_players = 3, min_women = 1;
 
 -- Not short: no call for subs, even later on.
 delete from public.game_reminder_log;

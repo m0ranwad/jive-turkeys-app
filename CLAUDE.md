@@ -271,7 +271,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   `src/lib/team-logic.js`) are caught when captains paste names, when a new player types a name instead of picking
   theirs ("Is that you?"), and on grey cards for captains ("Joined as …?"). In dues they split, pay and pair like
   everyone else (payments and history rows have `guest_id` instead of `user_id`; `duesMembers()` / `guestAsPlayer()` in `src/lib/dues.js` merge both kinds).
-  Games include them too: captains set their RSVPs (tap a name in a game's Headcount, `RsvpForDialog.jsx`) and enter
+  Games include them too: captains set their RSVPs (tap a name in a game's Who's coming, `RsvpForDialog.jsx`) and enter
   their stat lines, and teammates can vote for them for Player of the Match (they can't vote). `rsvps`, `game_stats`
   and `potm_votes` rows have `guest_id` / `voted_for_guest_id` for them; `useSeasonData()` returns `players` (app
   players plus roster names) and keys those rows like everyone else's (`keyedRow()`, `keyedVote()` in
@@ -285,6 +285,11 @@ manages the GitHub, Cloudflare and Supabase accounts.
   for that one game, count toward our score, show on that game's Result card, and nowhere else (no Team page, dues,
   headcounts, leaderboards or Player of the Match). The logic is in `src/lib/results.js`; tests in
   `tests/unit/results.test.js`, `tests/e2e/game-result.spec.js` and `supabase/tests/games.test.sql`.
+- Who's coming (a game's headcount): `src/components/game/HeadcountPanel.jsx` draws the field as spots (`headcount().spots`
+  in `src/lib/team-logic.js`: one goal, the girls' minimum, the rest open to anyone, then the bench), one headline
+  (`shortageText()`, also on Schedule and in chat posts) and In / Not in yet / Out tabs. Any number can mark GK; the first
+  takes the goal. The site says "girls" and "guys" for game-day counts. `game_reminder_targets()` words the call for subs
+  the same way and asks only girls once the open spots are full, like `subsToAsk()`. Rules: section 1 of `docs/games.md`.
 - Player of the Match voting closes: posting a result sets `games.potm_closes_at` (the window, reminder and
   announcement are captain settings in `team_settings.potm_*`); `src/lib/potm.js`, `src/components/PotmPrompt.jsx`
   (the Schedule card), `src/components/game/PotmVoting.jsx`. The database sends the "voting is open" and reminder
