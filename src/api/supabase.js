@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { JOIN_ERRORS } from '@/lib/team-code';
+import { isInternalEmail } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const PAGE_SIZE = 1000;
@@ -108,19 +109,45 @@ export function createSupabaseBackend(url, key) {
 
   const entities = Object.fromEntries(Object.entries(TABLES).map(([name, table]) => [name, entity(table)]));
 
+  async function usernameAccount(action, values) {
+    const { data, error } = await supabase.functions.invoke('username-auth', { body: { action, ...values } });
+    if (error) {
+      let message;
+      try { message = (await error.context.json()).error; } catch { /* Network or service unavailable. */ }
+      throw new Error(message || 'Account sign-in is unavailable right now. Please try again shortly.');
+    }
+    if (data?.error) throw new Error(data.error);
+    if (data?.session) {
+      const { error: sessionError } = await supabase.auth.setSession(data.session);
+      if (sessionError) {
+        // The account or password already changed; the player can still log in with it.
+        if (action !== 'signin') return { ...data, session: null };
+        throw new Error('Please try logging in again.');
+      }
+    }
+    return data;
+  }
+
   const auth = {
     /**
-     * The signed-in user ({ id, email, full_name, role, joined }) or null. `joined`: on the
-     * team (entered the team code, or a captain). Before the database has team codes, everyone is.
+     * The signed-in user ({ id, email, username, hasPassword, full_name, role, joined }) or null.
+     * `joined`: on the team (entered the team code, or a captain). Before the database has team
+     * codes, everyone is. `hasPassword`: not Google-only, so adding a username asks for it.
      */
     async me() {
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user;
       if (!sessionUser) return null;
-      const { data: row } = await supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle();
+      const [{ data: row }, { data: alias }] = await Promise.all([
+        supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle(),
+        supabase.from('username_accounts').select('username').eq('user_id', sessionUser.id).maybeSingle(),
+      ]);
       return {
         id: sessionUser.id,
-        email: sessionUser.email,
+        email: isInternalEmail(sessionUser.email) ? null : sessionUser.email,
+        username: alias?.username || null,
+        hasPassword: (sessionUser.app_metadata?.providers || []).includes('email')
+          || (sessionUser.identities || []).some((identity) => identity.provider === 'email'),
         full_name: row?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
         role: row?.role || 'user',
         joined: row ? row.joined_team_at !== null || row.role === 'admin' : true,
@@ -140,7 +167,10 @@ export function createSupabaseBackend(url, key) {
       return !!data.session;
     },
 
-    async signIn(email, password) {
+    async signIn(login, password) {
+      // A phone's autofill can leave a space after an email address.
+      const email = login.trim();
+      if (!email.includes('@')) return usernameAccount('signin', { username: email, password });
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Invalid email or password' : error.message);
     },
@@ -148,7 +178,7 @@ export function createSupabaseBackend(url, key) {
     /** Returns { needsVerification } — false when email confirmation is off. */
     async signUp(email, password) {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: { emailRedirectTo: origin() },
       });
@@ -158,6 +188,12 @@ export function createSupabaseBackend(url, key) {
       }
       return { needsVerification: !data.session };
     },
+
+    signUpUsername: (username, password, teamCode) => usernameAccount('signup', { username, password, teamCode }),
+    /** Email players give the password they have (it stays); Google-only players choose one. */
+    linkUsername: (username, password) => usernameAccount('link', { username, password }),
+    /** With the code a captain gave them: sets the new password and signs the player in. */
+    resetWithCode: (username, code, password) => usernameAccount('reset', { username, code, password }),
 
     async verifySignup(email, code) {
       let { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
@@ -179,7 +215,7 @@ export function createSupabaseBackend(url, key) {
     },
 
     async requestPasswordReset(email) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin()}/reset-password` });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${origin()}/reset-password` });
       if (error) throw new Error(error.message);
     },
 
@@ -215,6 +251,15 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('unlink_team_guest', { p_guest_id: guestId });
       if (error) fail(error);
     },
+
+    /** Usernames by user id: everyone's for captains, otherwise just your own. */
+    async usernames() {
+      const { data, error } = await supabase.from('username_accounts').select('user_id, username');
+      if (error) fail(error);
+      return Object.fromEntries((data || []).map((row) => [row.user_id, row.username]));
+    },
+    /** Captains: a one-time code a teammate uses to set a new password ({ code, username, expiresAt }). */
+    issueResetCode: (userId) => usernameAccount('issue-reset', { userId }),
 
     /** Captains: take a signed-up player off the team (they lose access), or add them back. */
     async setRemoved(userId, removed) {

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { LoaderCircle, Lock, Mail } from 'lucide-react';
+import { KeyRound, LoaderCircle, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError, OrDivider, safeReturnTo } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useToast } from '@/components/ui/toast';
-import { GoogleButton, IconInput } from './LoginPage';
+import { GoogleButton, IconInput, PasswordInput } from './LoginPage';
+import { UsernameField } from '@/components/UsernameAccount';
+import { usernameProblem } from '@/lib/username';
 
 function VerifyEmail({ email }) {
   const { toast } = useToast();
@@ -72,9 +74,12 @@ function VerifyEmail({ email }) {
 }
 
 export function RegisterPage() {
+  // No email to check, so it's the quickest way in.
+  const [method, setMethod] = useState('username');
+  const [username, setUsername] = useState('');
+  const [teamCode, setTeamCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -83,10 +88,16 @@ export function RegisterPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    if (password !== confirm) return setError('Passwords do not match');
+    if (method === 'username' && usernameProblem(username)) return setError(usernameProblem(username));
     if (password.length < 6) return setError('Use at least 6 characters for your password');
     setBusy(true);
     try {
+      if (method === 'username') {
+        const { session } = await api.auth.signUpUsername(username, password, teamCode);
+        // Signing in right after can fail; the account is made, so they log in.
+        window.location.href = session ? returnTo : '/login';
+        return;
+      }
       const { needsVerification } = await api.auth.signUp(email, password);
       if (needsVerification) setVerifying(true);
       else window.location.href = returnTo;
@@ -117,8 +128,25 @@ export function RegisterPage() {
     >
       <GoogleButton returnTo={returnTo} onError={setError} />
       <OrDivider />
+      <div className="mb-5 grid grid-cols-2 gap-2">
+        {[['username', 'Username (no email)'], ['email', 'Email']].map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={method === value} disabled={busy}
+            className={`rounded-xl px-3 py-3 text-sm font-semibold ${method === value ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+            onClick={() => { setMethod(value); setError(''); }}>{label}</button>
+        ))}
+      </div>
       <FormError>{error}</FormError>
       <form onSubmit={submit} className="space-y-4">
+        {method === 'username' ? (
+          <>
+            <p className="text-sm text-zinc-600">Already use Google or email? <Link className="text-lime-700 underline" to="/login">Log in first</Link>, then add a username in My Profile to keep the same account.</p>
+            <UsernameField value={username} onChange={setUsername} />
+            <div className="space-y-2">
+              <Label htmlFor="team-code">Team code</Label>
+              <IconInput icon={KeyRound} id="team-code" autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={40} value={teamCode} onChange={(e) => setTeamCode(e.target.value)} />
+            </div>
+          </>
+        ) : (
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <IconInput
@@ -132,28 +160,11 @@ export function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <IconInput
-            icon={Lock}
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 6 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm">Confirm Password</Label>
-          <IconInput
-            icon={Lock}
-            id="confirm"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
+          <PasswordInput id="password" autoComplete="new-password" placeholder="At least 6 characters" minLength={6} maxLength={256}
+            value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" className="h-12 w-full font-medium" disabled={busy}>
           {busy ? (

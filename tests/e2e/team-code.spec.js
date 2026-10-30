@@ -6,9 +6,9 @@ import { enterTeamCode, expect, signIn, test } from './helpers';
 
 async function createAccount(page, email) {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill(email);
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
 }
 

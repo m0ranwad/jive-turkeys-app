@@ -10,6 +10,15 @@ README.md has the service inventory and the current setup status.
 - Sign-in is **Continue with Google**, or email + password with a 6-digit email code. `/privacy` and
   `/terms` (`src/pages/LegalPages.jsx`) exist because Google requires them. Keep them public and linked
   from the sign-in screens.
+- Players can also choose **Username (no email)** (the preselected choice) and enter the team code at
+  signup. The `username-auth` account service uses Supabase for passwords and sessions, and stores
+  usernames in `username_accounts`. There are no recovery codes: a player who forgets their password
+  asks a captain, who taps **Reset [name]'s password** in the player's options on the Team page and
+  texts them a one-time code (24 hours) to enter under Forgot password?. Captains also see each
+  player's username there. Never expose reset-code hashes or internal email identifiers
+  (`handle_new_user()` keeps them out of `public.users`). Google/email players add a username from My
+  Profile to keep the same account. In the preview, Jordan's username is `jordan`.
+  `docs/accounts.md` describes signup, linking and resets; keep its tests in step with changes.
 - Only teammates get in: a new account enters the **team code** before it sees anything
   (`src/pages/auth/JoinTeamPage.jsx`, database function `join_team()`; ten wrong tries block it for an hour).
   Captains see and change the code in Team Settings (`src/components/TeamCodeCard.jsx`), and Copy invite on the
@@ -103,8 +112,10 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
    it. Never rewrite history or force-push. If the change added a migration and its database update
    succeeded, keep the migration file and revert everything else (`git revert --no-commit <sha>`, then
    `git checkout HEAD -- supabase/migrations`). The unused column or table is harmless, and deleting an
-   applied migration file makes every later database update fail. Tell him the screens are back to how
-   they were, and anything players typed is kept out of sight.
+   applied migration file makes every later database update fail. If the change added a Supabase
+   function, also keep `.github/workflows/functions.yml` (`git checkout HEAD -- .github/workflows/functions.yml`):
+   its deploy step takes a function off Supabase once its folder is gone, and the older file would leave
+   it running. Tell him the screens are back to how they were, and anything players typed is kept out of sight.
 
 If he asks to "just publish it" without a preview, you may skip step 3, but still pass step 1 and
 still go through a pull request so there's a record.

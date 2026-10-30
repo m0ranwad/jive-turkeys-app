@@ -83,7 +83,7 @@ export function Layout() {
   // Announcements you haven't opened: a number on its menu item and a dot on the Menu button. None while reading them.
   const announcementsUnread = useAnnouncementsUnread(!!user, pathname);
   const newPosts = pathname === ANNOUNCEMENTS_PATH ? 0 : announcementsUnread;
-  const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';
+  const myInitials = user ? initials(profile?.display_name || user.full_name || user.username || user.email || 'Player') : '';
 
   useEffect(() => {
     if (!user) return;

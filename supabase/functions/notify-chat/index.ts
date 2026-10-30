@@ -7,24 +7,13 @@
 // Deployed by .github/workflows/functions.yml. The logic lives in ../_shared/notify.js.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { handleNotify } from '../_shared/notify.js';
+import { secretKey } from '../_shared/secret-key.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-
-// New-style secret key (sb_secret_...), falling back to the legacy service_role
-// key that Supabase retires at the end of 2026.
-function secretKey(): string {
-  try {
-    const key = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default;
-    if (key) return key;
-  } catch {
-    // Not set on older projects.
-  }
-  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-}
 
 const reply = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });

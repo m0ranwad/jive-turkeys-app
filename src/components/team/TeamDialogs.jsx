@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input, Label } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
+import { copyText } from '@/lib/clipboard';
 import { POSITIONS } from '@/lib/constants';
 import { saveFailedToast } from '@/lib/errors';
 import { cn } from '@/lib/utils';
@@ -251,5 +252,72 @@ export function RemovePlayerDialog({ player, pickedName, canUnlink, onOpenChange
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Captains, in a teammate's options: the username they sign in with and, if
+ * they forgot their password, a one-time code to text them. They enter it under
+ * Forgot password? with a new password.
+ */
+export function PasswordResetForTeammate({ player, username }) {
+  const { toast } = useToast();
+  const [made, setMade] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const first = player.display_name.split(' ')[0];
+  const make = async () => {
+    setBusy(true);
+    try {
+      setMade(await api.users.issueResetCode(player.user_id));
+    } catch (err) {
+      toast(saveFailedToast(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const until = made && new Date(made.expiresAt).toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' });
+  const message = made
+    && `Your Jive Turkeys password reset code is ${made.code}. On the log in screen, tap Forgot password?, then `
+    + `"Signed up with a username?", and enter your username (${made.username}), this code and a new password. `
+    + `It works once, until ${until}.`;
+  const phone = (player.phone || '').replace(/[^\d+]/g, '');
+  return (
+    <div className="space-y-3 rounded-2xl bg-zinc-50 p-4">
+      <p className="text-sm text-zinc-600">
+        Signs in with the username <b className="text-zinc-950">{username}</b>
+      </p>
+      {made ? (
+        <>
+          <p className="text-sm text-zinc-700">
+            Text {first} this code. It works once, until {until}, and a new one replaces it.
+          </p>
+          <p className="text-center font-mono text-2xl font-bold tracking-[0.15em] text-zinc-950" data-testid="reset-code">{made.code}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={`sms:${phone}?&body=${encodeURIComponent(message)}`}
+              className="flex h-11 items-center justify-center rounded-xl bg-zinc-950 text-xs font-bold uppercase tracking-[0.1em] text-white"
+            >
+              Text it
+            </a>
+            <button
+              type="button"
+              onClick={async () => toast({ title: (await copyText(message)) ? 'Message copied' : "Couldn't copy. Text the code shown above." })}
+              className="h-11 rounded-xl bg-white text-xs font-bold uppercase tracking-[0.1em] text-zinc-700 ring-1 ring-zinc-200"
+            >
+              Copy message
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={make}
+          disabled={busy}
+          className="h-11 w-full rounded-xl bg-white text-xs font-bold uppercase tracking-[0.1em] text-zinc-700 ring-1 ring-zinc-200 transition hover:bg-zinc-100"
+        >
+          {busy ? 'Making a code…' : `Reset ${first}'s password`}
+        </button>
+      )}
+    </div>
   );
 }

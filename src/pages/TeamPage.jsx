@@ -7,7 +7,7 @@ import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
 import { AskSessionDialog } from '@/components/team/AskSessionDialog';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
-import { PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
+import { PasswordResetForTeammate, PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { useSeasonData } from '@/hooks/useSeasonData';
@@ -95,6 +95,13 @@ export function TeamPage() {
   useEffect(() => {
     loadGuests();
   }, [loadGuests]);
+
+  // Captains: who signs in with which username, so they can tell a teammate who forgot it.
+  const [usernames, setUsernames] = useState({});
+  useEffect(() => {
+    if (!data.isCaptain) return;
+    api.users.usernames().then(setUsernames).catch(() => setUsernames({}));
+  }, [data.isCaptain]);
 
   // The team code new players enter, for the invite. Null before the database has team codes.
   const [joinCode, setJoinCode] = useState(null);
@@ -586,6 +593,9 @@ export function TeamPage() {
                   >
                     {optionsPlayer.is_captain ? 'Captain ✓' : 'Make captain'}
                   </button>
+                  {usernames[optionsPlayer.user_id] && (
+                    <PasswordResetForTeammate player={optionsPlayer} username={usernames[optionsPlayer.user_id]} />
+                  )}
                   <button
                     onClick={() => {
                       setOptionsFor(null);

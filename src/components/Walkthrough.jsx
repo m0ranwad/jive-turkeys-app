@@ -207,7 +207,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                     <p className="text-sm text-amber-900">
                       {asking.accounts.map((p) => p.display_name).join(' and ')}{' '}
                       {asking.accounts.length === 1 ? 'has' : 'have'} an account here already. If that's you, sign out
-                      and sign in the way you did before (with Google, or the email you used), so your stats and dues
+                      and sign in the way you did before (with Google, your email, or your username), so your stats and dues
                       stay in one place.
                     </p>
                     <button

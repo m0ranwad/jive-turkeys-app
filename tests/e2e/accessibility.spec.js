@@ -37,11 +37,22 @@ test('the sign-in screens', async ({ page }) => {
   await expectAccessible(page, 'Log in');
 
   await page.goto('/register');
-  await expect(page.locator('#email')).toBeVisible();
+  await expect(page.locator('#username')).toBeVisible();
   await expectAccessible(page, 'Sign up');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
+  await expect(page.locator('#email')).toBeVisible();
+  await expectAccessible(page, 'Sign up with email');
 
   await visit(page, '/privacy', 'Privacy');
   await expectAccessible(page, 'Privacy');
+});
+
+test('resetting a password with a code from a captain', async ({ page }) => {
+  await page.goto('/forgot-password');
+  await expectAccessible(page, 'Reset password by email');
+  await page.getByRole('button', { name: 'Signed up with a username? Use a code from a captain' }).click();
+  await expect(page.getByLabel('Code from your captain')).toBeVisible();
+  await expectAccessible(page, 'Reset password with a code');
 });
 
 test("the captain's screens", async ({ page }) => {
@@ -66,6 +77,9 @@ test("the captain's screens", async ({ page }) => {
   await page.locator('button[data-options-for="Jordan Rivera"]').click();
   await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toBeVisible();
   await expectAccessible(page, "a player's options");
+  await page.getByRole('button', { name: "Reset Jordan's password" }).click();
+  await expect(page.getByTestId('reset-code')).toBeVisible();
+  await expectAccessible(page, "a teammate's password reset code");
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Jordan Rivera' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Change your status/ }).click();
@@ -128,6 +142,9 @@ test("the captain's screens", async ({ page }) => {
 
   await visit(page, '/profile', 'Casey Captain');
   await expectAccessible(page, 'My Profile');
+  await page.getByRole('button', { name: 'Add a username', exact: true }).click();
+  await expect(page.getByLabel('Your password')).toBeVisible();
+  await expectAccessible(page, 'Add a username');
 
   await visit(page, '/settings', 'Team settings');
   await expectAccessible(page, 'Team settings');

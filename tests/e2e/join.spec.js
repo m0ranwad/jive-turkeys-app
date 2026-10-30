@@ -2,9 +2,9 @@ import { enterTeamCode, expect, expectTeam, notJoinedRows, test } from './helper
 
 test('a new player has to set up their profile, which puts them on the team', async ({ page }) => {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('newbie@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 
@@ -30,9 +30,9 @@ test('a new player has to set up their profile, which puts them on the team', as
 
 test('a new player can sign out instead of setting up a profile', async ({ page }) => {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('wrong@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 
@@ -43,9 +43,9 @@ test('a new player can sign out instead of setting up a profile', async ({ page 
 // Mike Russo is on the roster (with a paid session) but hasn't joined yet in the sample data.
 test('a new player picks their name on the roster, and their spot and dues come with them', async ({ page }) => {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('mike@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 
@@ -76,9 +76,9 @@ test('a new player picks their name on the roster, and their spot and dues come 
 test('a name someone already picked is no longer on the list', async ({ page }) => {
   // Dana Wells is still on the list; once picked, she's gone from it.
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('dana@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
   await page.getByRole('button', { name: 'Dana Wells' }).click();
@@ -93,9 +93,9 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
   // Signing out finishes by opening the sign-in page; wait for it before signing up again.
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('someone@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
   await expect(page.getByRole('button', { name: 'Mike Russo' })).toBeVisible();
@@ -104,9 +104,9 @@ test('a name someone already picked is no longer on the list', async ({ page }) 
 
 async function register(page, email) {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill(email);
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
 }

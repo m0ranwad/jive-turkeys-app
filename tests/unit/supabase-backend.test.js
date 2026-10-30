@@ -7,6 +7,8 @@ const channels = [];
 let result = { data: [], error: null };
 // The signed-in session the stand-in client reports (auth.getSession).
 let session = null;
+let functionResult = { data: {}, error: null };
+let setSessionError = null;
 
 // A chainable stand-in for supabase.from(...): records each call, resolves to `result`.
 function query(table) {
@@ -41,7 +43,11 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: {
       getSession: async () => ({ data: { session } }),
+      signInWithPassword: async (values) => { calls.push(['auth', 'password', values]); return { error: null }; },
+      signInWithOAuth: async (values) => { calls.push(['auth', 'oauth', values]); return { error: null }; },
+      setSession: async (values) => { calls.push(['auth', 'setSession', values]); return { error: setSessionError }; },
     },
+    functions: { invoke: async (name, options) => { calls.push(['function', name, options]); return functionResult; } },
     from: (table) => query(table),
     rpc: (name, params) => {
       calls.push(['rpc', name, params]);
@@ -73,6 +79,72 @@ beforeEach(() => {
   channels.length = 0;
   result = { data: [], error: null };
   session = null;
+  functionResult = { data: {}, error: null };
+  setSessionError = null;
+});
+
+describe('username and existing sign-in methods', () => {
+  it('keeps email/password sign-in on the original Supabase path', async () => {
+    await api.auth.signIn('player@example.test', 'password');
+    expect(calls).toEqual([['auth', 'password', { email: 'player@example.test', password: 'password' }]]);
+  });
+  it('uses the account service for usernames and installs its real Supabase session', async () => {
+    functionResult = { data: { session: { access_token: 'access', refresh_token: 'refresh' } }, error: null };
+    await api.auth.signIn('player_name', 'password');
+    expect(calls).toEqual([
+      ['function', 'username-auth', { body: { action: 'signin', username: 'player_name', password: 'password' } }],
+      ['auth', 'setSession', { access_token: 'access', refresh_token: 'refresh' }],
+    ]);
+  });
+  it('passes service errors back without installing a session', async () => {
+    functionResult = { error: { context: new Response(JSON.stringify({ error: 'That username is taken.' })) } };
+    await expect(api.auth.signUpUsername('player', 'password', 'TURKEY')).rejects.toThrow('That username is taken.');
+    expect(calls.some((c) => c[1] === 'setSession')).toBe(false);
+  });
+  it('hides internal identifiers for email-free accounts', async () => {
+    session = { user: { id: 'p1', email: 'random@players.jiveturkeys.invalid', app_metadata: { providers: ['email'] } } };
+    result = { data: { username: 'player_name', role: 'user', joined_team_at: '2026-10-01' } };
+    expect(await api.auth.me()).toMatchObject({ id: 'p1', email: null, username: 'player_name', joined: true, hasPassword: true });
+  });
+  it('knows a Google-only account has no password to confirm', async () => {
+    session = { user: { id: 'p2', email: 'player@example.test', app_metadata: { providers: ['google'] } } };
+    result = { data: { role: 'user', joined_team_at: '2026-10-01' } };
+    expect(await api.auth.me()).toMatchObject({ email: 'player@example.test', hasPassword: false });
+  });
+  it('asks for the account and its username at the same time', async () => {
+    session = { user: { id: 'p1', email: 'player@example.test' } };
+    let answer;
+    result = new Promise((resolve) => { answer = resolve; });
+    const me = api.auth.me();
+    // Both are asked before either answers.
+    await vi.waitFor(() => expect(calls.filter((c) => c[1] === 'select').map((c) => c[0])).toEqual(['users', 'username_accounts']));
+    answer({ data: { role: 'user', joined_team_at: '2026-10-01' }, error: null });
+    expect(await me).toMatchObject({ id: 'p1', joined: true });
+  });
+  it("doesn't fail a reset whose password went in when the new session can't be installed", async () => {
+    functionResult = { data: { session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+    setSessionError = { message: 'expired' };
+    expect(await api.auth.resetWithCode('player', 'ABCD-2345', 'password')).toEqual({ session: null });
+    expect(calls).toContainEqual(['function', 'username-auth', {
+      body: { action: 'reset', username: 'player', code: 'ABCD-2345', password: 'password' },
+    }]);
+  });
+  it('installs the new session after a Google player adds a username', async () => {
+    functionResult = { data: { username: 'player', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+    await api.auth.linkUsername('player', 'new-password');
+    expect(calls).toContainEqual(['auth', 'setSession', { access_token: 'a', refresh_token: 'r' }]);
+  });
+  it('drops the space phone autofill leaves after an email address', async () => {
+    await api.auth.signIn(' player@example.test ', 'password');
+    expect(calls).toEqual([['auth', 'password', { email: 'player@example.test', password: 'password' }]]);
+  });
+  it('captains get usernames by account, and ask the account service for reset codes', async () => {
+    result = { data: [{ user_id: 'p1', username: 'josh' }], error: null };
+    expect(await api.users.usernames()).toEqual({ p1: 'josh' });
+    functionResult = { data: { code: 'ABCD-2345', username: 'josh', expiresAt: '2026-10-31T12:00:00Z' }, error: null };
+    expect(await api.users.issueResetCode('p1')).toMatchObject({ code: 'ABCD-2345' });
+    expect(calls).toContainEqual(['function', 'username-auth', { body: { action: 'issue-reset', userId: 'p1' } }]);
+  });
 });
 
 describe('chat.history', () => {
