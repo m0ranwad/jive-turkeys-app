@@ -313,6 +313,20 @@ export function createSupabaseBackend(url, key) {
     },
   };
 
+  const announcements = {
+    /** How many announcements the signed-in player hasn't seen (posts from after they joined). */
+    async unread() {
+      const { data, error } = await supabase.rpc('announcements_unread');
+      if (error) fail(error);
+      return Number(data) || 0;
+    },
+    /** Marks announcements read up to `readAt` (the newest post on screen). Never moves the marker back. */
+    async markRead(readAt) {
+      const { error } = await supabase.rpc('announcements_mark_read', { p_read_at: readAt });
+      if (error) fail(error);
+    },
+  };
+
   const dues = {
     /**
      * Marks players paid (or unpaid again) for a session. Any player can, for anyone. `amounts` is what
@@ -415,5 +429,5 @@ export function createSupabaseBackend(url, key) {
     test: () => notifyChat('test'),
   };
 
-  return { mode: 'supabase', auth, entities, users, chat, dues, games, roster, push };
+  return { mode: 'supabase', auth, entities, users, chat, announcements, dues, games, roster, push };
 }
