@@ -56,4 +56,33 @@ describe('email-free accounts in previews', () => {
     await api.auth.signIn('jordan', 'fresh-pass');
     expect((await api.auth.me()).email).toBe(DEMO_PLAYER_LOGIN.email);
   });
+
+  it('does not make a reset code without signal, and can retry after reconnecting', async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const [jordan] = Object.keys(await api.users.usernames());
+    const before = localStorage.getItem('jt_demo_db_v33');
+    localStorage.setItem('jt_demo_offline', '1');
+    await expect(api.users.issueResetCode(jordan)).rejects.toThrow('Failed to fetch');
+    expect(localStorage.getItem('jt_demo_db_v33')).toBe(before);
+    localStorage.removeItem('jt_demo_offline');
+    expect((await api.users.issueResetCode(jordan)).username).toBe('jordan');
+  });
+
+  it('rejects a replaced code in an older tab and never restores an old password', async () => {
+    const captain = createDemoBackend({ autoSignIn: true });
+    const [jordan] = Object.keys(await captain.users.usernames());
+    const first = await captain.users.issueResetCode(jordan);
+    const player = createDemoBackend();
+    const stale = createDemoBackend();
+    const second = await captain.users.issueResetCode(jordan);
+    await expect(player.auth.resetWithCode('jordan', first.code, 'first-password')).rejects.toThrow('Ask a captain');
+    await player.auth.resetWithCode('jordan', second.code, 'fresh-password');
+
+    // A different change saved by the older tab must not bring the used code or password back.
+    const [profile] = await stale.entities.PlayerProfile.filter({ user_id: jordan });
+    await stale.entities.PlayerProfile.update(profile.id, { phone: '5551234567' });
+    await expect(stale.auth.signIn('jordan', DEMO_PLAYER_LOGIN.password)).rejects.toThrow('Invalid');
+    await stale.auth.signIn('jordan', 'fresh-password');
+    await expect(stale.auth.resetWithCode('jordan', second.code, 'another-password')).rejects.toThrow('Ask a captain');
+  });
 });

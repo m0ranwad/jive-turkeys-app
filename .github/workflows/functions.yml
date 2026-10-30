@@ -80,8 +80,12 @@ jobs:
         run: |
           if [ -d supabase/functions/username-auth ]; then
             supabase functions deploy username-auth --project-ref "$PROJECT_REF" --use-api
-          elif supabase functions list --project-ref "$PROJECT_REF" | grep -qw username-auth; then
-            supabase functions delete username-auth --project-ref "$PROJECT_REF"
           else
-            echo "Username sign-in isn't on Supabase."
+            # A lookup failure must fail the undo, not look like an absent function.
+            existing=$(supabase functions list --project-ref "$PROJECT_REF")
+            if grep -qw username-auth <<< "$existing"; then
+              supabase functions delete username-auth --project-ref "$PROJECT_REF"
+            else
+              echo "Username sign-in isn't on Supabase."
+            fi
           fi

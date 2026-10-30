@@ -5,6 +5,7 @@ ignores capital letters and stray spaces in either. Email signup still verifies 
 existing code/link flow. Every password box has a **Show** button instead of a second "confirm"
 box. A failed log in adds a hint: for a username, that it isn't your name on the team and that a
 captain can help; for an email, to try Continue with Google or Forgot password.
+The Show button has a touch area at least 44px high on every password form.
 
 **Username (no email)** is the first and preselected choice on Create account: a unique username,
 a password and the team code. Usernames are case-insensitive, 3–24 characters, letters and numbers
@@ -71,10 +72,15 @@ unverified email.
   than "try again shortly".
 - `.github/workflows/functions.yml` publishes the account service alongside the notification
   service, and takes it off Supabase once its folder is gone (so an undo keeps that file; see
-  CLAUDE.md). New account data is additive; no existing team records are rewritten.
+  CLAUDE.md). A failed lookup or deletion fails that step; it never reports that the service
+  is absent after a failed lookup. New account data is additive; no existing team records are rewritten.
 
 In previews, Jordan Rivera has the username `jordan` (password `demo1234`), so captains can try
 **Reset Jordan's password** on the Team page.
+The no-signal switch (`jt_demo_offline`) makes creating a reset code fail with **That didn't save**;
+retrying after signal is restored works. Preview operations refresh saved data before using or
+changing it, so a code replaced in another tab is rejected, and an older tab cannot save the old
+password or used code back over a completed reset.
 
 Tests cover the account handler, real-backend session integration, preview account behavior,
 database privileges and rate limits, and mobile/desktop signup, sign-in hints, linking and captain

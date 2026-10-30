@@ -302,6 +302,9 @@ describe('the account service', () => {
     const req = (headers) => new Request('https://example.test', { headers });
     expect(clientIp(req({ 'cf-connecting-ip': '192.0.2.9', 'x-forwarded-for': '10.0.0.1' }))).toBe('192.0.2.9');
     expect(clientIp(req({ 'x-forwarded-for': '192.0.2.1, 10.0.0.1, 172.70.1.1' }))).toBe('192.0.2.1');
+    expect(clientIp(req({ 'x-real-ip': '10.0.0.9', 'x-forwarded-for': '192.0.2.1, 10.0.0.1' }))).toBe('192.0.2.1');
+    expect(clientIp(req({ 'cf-connecting-ip': ' ', 'x-forwarded-for': ' 192.0.2.1 , 10.0.0.1' }))).toBe('192.0.2.1');
+    expect(clientIp(req({ 'x-real-ip': '10.0.0.9' }))).toBeNull();
     expect(clientIp(req({}))).toBeNull();
   });
 

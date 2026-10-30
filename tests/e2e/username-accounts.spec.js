@@ -115,3 +115,55 @@ test('a captain resets a teammate’s password, and the teammate uses the code o
   await page.getByRole('button', { name: 'Set new password', exact: true }).click();
   await expect(page.getByText("That code isn't right, or it has run out. Ask a captain for a new one.")).toBeVisible();
 });
+
+test('a captain sees a failed save without signal and can retry', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/team');
+  const options = await playerOptions(page, 'Jordan Rivera');
+  await page.evaluate(() => localStorage.setItem('jt_demo_offline', '1'));
+  await options.getByRole('button', { name: "Reset Jordan's password" }).click();
+  await expect(page.getByText("That didn't save", { exact: true })).toBeVisible();
+  await expect(options.getByTestId('reset-code')).toHaveCount(0);
+  await page.evaluate(() => localStorage.removeItem('jt_demo_offline'));
+  await options.getByRole('button', { name: "Reset Jordan's password" }).click();
+  await expect(options.getByTestId('reset-code')).toBeVisible();
+});
+
+test('a code replaced in a second tab cannot reset the password in the older tab', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/team');
+  const options = await playerOptions(page, 'Jordan Rivera');
+  await options.getByRole('button', { name: "Reset Jordan's password" }).click();
+  const first = await options.getByTestId('reset-code').innerText();
+
+  const captain = await page.context().newPage();
+  const errors = [];
+  captain.on('pageerror', (err) => errors.push(err.message));
+  captain.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
+  try {
+    await captain.clock.install({ time: new Date('2026-10-08T12:00:00') });
+    await captain.goto('/team');
+    const otherOptions = await playerOptions(captain, 'Jordan Rivera');
+    await page.goto('/forgot-password');
+    await page.getByRole('button', { name: 'Signed up with a username? Use a code from a captain' }).click();
+    await page.getByLabel('Username', { exact: true }).fill('jordan');
+    await page.getByLabel('Code from your captain').fill(first);
+    await page.locator('#password').fill('fresh-password');
+
+    await otherOptions.getByRole('button', { name: "Reset Jordan's password" }).click();
+    const second = await otherOptions.getByTestId('reset-code').innerText();
+    await page.getByRole('button', { name: 'Set new password', exact: true }).click();
+    await expect(page.getByText("That code isn't right, or it has run out. Ask a captain for a new one.")).toBeVisible();
+    await page.getByLabel('Code from your captain').fill(second);
+    await page.getByRole('button', { name: 'Set new password', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Schedule', exact: true })).toBeVisible();
+    await signOutFromProfile(page);
+    await logIn(page, 'jordan', 'demo1234');
+    await expect(page.getByText('Invalid email, username, or password')).toBeVisible();
+    await logIn(page, 'jordan', 'fresh-password');
+    await expect(page.getByRole('heading', { name: 'Schedule', exact: true })).toBeVisible();
+    expect(errors, 'the second tab reported errors').toEqual([]);
+  } finally {
+    await captain.close();
+  }
+});

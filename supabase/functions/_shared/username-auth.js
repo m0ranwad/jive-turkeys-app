@@ -29,8 +29,9 @@ const RESET_CODE_HOURS = 24;
 // itself. Otherwise the first X-Forwarded-For entry is the original client;
 // later entries are proxies the request passed through.
 export function clientIp(req) {
-  const forwarded = (req.headers.get('x-forwarded-for') || '').split(',')[0];
-  return (req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || forwarded).trim() || null;
+  const cloudflare = (req.headers.get('cf-connecting-ip') || '').trim();
+  const forwarded = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
+  return cloudflare || forwarded || null;
 }
 
 // Supabase Auth turning down an email/password pair, as opposed to being down or busy.
