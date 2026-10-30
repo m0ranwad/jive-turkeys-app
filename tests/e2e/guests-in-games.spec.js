@@ -104,9 +104,9 @@ test('a teammate who has not joined gets a stat line, shows in the stats, and ca
 
 test('when they join and pick their name, their RSVP and stats come with them', async ({ page }) => {
   await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
   await page.locator('#email').fill('mike@demo.test');
   await page.locator('#password').fill('demo1234');
-  await page.locator('#confirm').fill('demo1234');
   await page.getByRole('button', { name: 'Create account' }).click();
   await enterTeamCode(page);
   await page.getByRole('button', { name: 'Mike Russo' }).click();

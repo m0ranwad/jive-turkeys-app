@@ -1,65 +1,70 @@
 # Player accounts
 
-Google and email/password sign-in keep working. Login accepts either an email or a username.
-Email signup still verifies the email with the existing code/link flow.
+Google and email/password sign-in keep working. Login accepts either an email or a username, and
+ignores capital letters and stray spaces in either. Email signup still verifies the email with the
+existing code/link flow. Every password box has a **Show** button instead of a second "confirm"
+box. A failed log in adds a hint: for a username, that it isn't your name on the team and that a
+captain can help; for an email, to try Continue with Google or Forgot password.
 
-**Username (no email)** on Create account asks for a unique username, password, confirmation,
-and the team code. Usernames are case-insensitive, 3–24 ASCII letters, digits or underscores;
-they are separate from display names. The account service verifies the team code before creating
-anything, and joins the new account with the same database code that checks the code on the site
-(`join_team_as()`, which `join_team()` uses too). New accounts are ordinary players and proceed to
-the usual roster-name/profile setup. No personal email address or email verification is needed.
+**Username (no email)** is the first and preselected choice on Create account: a unique username,
+a password and the team code. Usernames are case-insensitive, 3–24 characters, letters and numbers
+plus dots, dashes and underscores, starting with a letter or number; they are separate from display
+names. A username with spaces gets a suggestion ("Josh Smith" → "How about josh_smith?"). The account
+service verifies the team code before creating anything, and joins the new account with the same
+database code that checks the code on the site (`join_team_as()`, which `join_team()` uses too).
+New accounts are ordinary players and go straight to the usual roster-name/profile setup. No email
+address, email verification or recovery code is needed.
 
-After signup, the player must save their recovery code before continuing. It has 128 random bits
-and is shown once. Until they tick "I've saved my recovery code", it stays on that device and comes
-up before every other screen for that signed-in player (`RecoveryCodeGate`), so a reload or a tap
-on another tab can't lose it. The same goes for a code from adding a username, replacing a code,
-or a reset. If the browser won't store it (storage full or blocked), the code is kept for that visit
-and shown on the page right away, instead of the page moving on first.
+## Forgotten passwords and usernames
 
-Forgot password offers email recovery or **Use a recovery code instead**. Username, saved code and
-a new password reset that same account. A successful reset replaces the code, signs the player in
-with the new password, and shows the new code; old codes cannot be reused. Changing the password
-ends every session on the account, so anyone who had the old password is signed out (Supabase does
-this; the service also ends any other session as a safeguard). Without the password, recovery
-code, or another existing sign-in method, the player cannot recover the account automatically.
-Signed-in players can replace a lost recovery code from My Profile by confirming their password.
-That waits 10 minutes after a reset, and only replaces the code the service read before checking the
-password (`replace_username_recovery()`), so a request checked against an old password can't land
-after a reset and hand out a code that undoes it.
+A captain resets a username player's password. In the player's options on the Team page, captains
+see **Signs in with the username …** (so they can also tell a player who forgot it) and **Reset
+[name]'s password**. That makes a one-time code like `K7QM-4XPA` (8 letters and numbers, without
+0, O, 1, I or L) that works for 24 hours; a new code replaces the last one. **Text it** opens the
+phone's messages with the instructions (to the player's phone number, if their profile has one), or
+**Copy message**. The player taps **Forgot password?** → **Signed up with a username? Use a code
+from a captain**, and enters their username, the code (any case, dash optional) and a new password.
+That signs them in. Changing the password ends every session on the account, so anyone who had
+the old password is signed out (Supabase does this; the service also ends any other session as a
+safeguard). The code is used up only once the new password is in, so if Supabase turns down the
+password, the player picks another with the same code.
 
-Existing Google/email players should sign in first and choose **My Profile → Add a username**.
-The service verifies their current session and team membership. Adding a username sets the
-password on that same Supabase identity (also the email sign-in password), so the owner proves it's
-them first: email/password accounts enter their current password, and Google-only accounts must
-have signed in within the last 10 minutes. Setting the password signs the player out everywhere,
-so the service signs them back in with the new one. It never creates or merges identities. Their profile,
-Google login, stats, RSVPs and dues keep the same user ID. Do not guess account ownership from a
-display name, username, or unverified email.
+Email players reset by email as before. Only username accounts get captain codes.
+
+## Adding a username to a Google or email account
+
+Existing Google/email players sign in first and choose **My Profile → Add a username**. The service
+verifies their current session and team membership. Email/password players enter the password they
+already have; it stays their password for both. Google-only players choose a password, which needs a
+sign-in within the last 10 minutes; setting it signs them out everywhere, so the service signs them
+back in with it. It never creates or merges identities. Their profile, Google login, stats, RSVPs and
+dues keep the same user ID. Do not guess account ownership from a display name, username, or
+unverified email.
 
 ## Service and data
 
-- `supabase/functions/username-auth` uses the shared, dependency-injected handler in `_shared/`.
-  The built-in Supabase service credential stays server-side (`_shared/secret-key.ts`, shared with
-  the other functions). Each password sign-in uses a fresh auth client so no service client
-  inherits a player session, and a sign-in that only checks a password is ended right away.
+- `supabase/functions/username-auth` uses the shared, dependency-injected handler in `_shared/`
+  (actions `signup`, `signin`, `link`, `issue-reset` for captains, `reset`). The built-in Supabase
+  service credential stays server-side (`_shared/secret-key.ts`, shared with the other functions).
+  Each password sign-in uses a fresh auth client so no service client inherits a player session,
+  and a sign-in that only checks a password is ended right away.
 - Email-free accounts have a random undeliverable internal Supabase email under
   `players.jiveturkeys.invalid`. `handle_new_user()` leaves it out of `public.users` (email is
   null there), and `me()` hides it from the profile. Google/email accounts retain their email and
   existing identities.
-- `username_accounts` is a credential table, deliberately absent from the generic entity API.
-  Players can select only their own user ID and username. No player, including captains, can
-  select recovery hashes or write aliases. The service alone can read/write them.
-- `username_auth_limits` is also service-only. Atomic counters, per 15 minutes: 60 requests per
-  connecting address; sign-in 10 per username from one address and 50 per username overall, so
-  guesses from elsewhere can't lock a player out on their own phone; signup 5 per username and 10
-  per address; adding a username and replacing a code 10 per account. Recovery has only the
-  address limit, since nobody can guess a 128-bit code. The address is `cf-connecting-ip`, else the
-  first `X-Forwarded-For` entry; with neither, all requests share one counter and the function logs
-  a warning. Keys are hashed. A new key takes over a row whose window is over, so the table stays
+- `username_accounts` is a credential table, deliberately absent from the generic entity API
+  (`api.users.usernames()` reads it). Players can select their own user ID and username; captains
+  can select everyone's. Nobody can select reset codes (stored only as SHA-256 hashes, with
+  `reset_expires_at` and `reset_by`) or write rows. The service alone can read/write them.
+- `username_auth_limits` is also service-only. Atomic counters, per 15 minutes: 300 requests per
+  connecting address (a whole team on the gym's Wi-Fi shares one); sign-in and reset codes 10 per
+  username from one address and 50 per username overall, so guesses from elsewhere can't lock a
+  player out on their own phone; signup 5 per username and 40 per address; adding a username 10 per
+  account; making reset codes 30 per captain. The address is `cf-connecting-ip`, else the first
+  `X-Forwarded-For` entry; with neither, all requests share one counter and the function logs a
+  warning. Keys are hashed. A new key takes over a row whose window is over, so the table stays
   small without deleting rows. Limits fail closed on database errors.
-- Recovery claims atomically replace the matching hash. A password-update failure restores only
-  that request's claim. Responses never expose stored hashes, passwords, or another user's email.
+- Responses never expose stored hashes, passwords, or another user's email.
 - Failures are logged in the function's logs (what failed, never what the player typed). Supabase
   Auth's password rules come back to the player as they are (say, a password that's too short);
   its other refusals get a message saying to use Google or email for now and tell a captain, rather
@@ -68,9 +73,10 @@ display name, username, or unverified email.
   service, and takes it off Supabase once its folder is gone (so an undo keeps that file; see
   CLAUDE.md). New account data is additive; no existing team records are rewritten.
 
-In previews, Jordan Rivera has the username `jordan` (password `demo1234`, recovery code
-`aaaa-bbbb-cccc-dddd-eeee-ffff-0000-1111`).
+In previews, Jordan Rivera has the username `jordan` (password `demo1234`), so captains can try
+**Reset Jordan's password** on the Team page.
 
 Tests cover the account handler, real-backend session integration, preview account behavior,
-database privileges/rate limits/recovery claims, and mobile/desktop signup, linking and recovery.
-Previews use pretend accounts and cannot validate Google's live OAuth or the hosted Supabase service.
+database privileges and rate limits, and mobile/desktop signup, sign-in hints, linking and captain
+resets. Previews use pretend accounts and cannot validate Google's live OAuth or the hosted Supabase
+service.

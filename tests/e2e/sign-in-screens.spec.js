@@ -15,7 +15,11 @@ test('sign-in and sign-up say Jive Turkeys, with empty password boxes', async ({
   await expect(page.getByText('Est. 2015', { exact: true })).toBeVisible();
   await expect(page.getByText("You'll need the team code from your invite to join.")).toBeVisible();
   await expect(page.locator('#password')).toHaveAttribute('placeholder', 'At least 6 characters');
-  await expect(page.locator('#confirm')).not.toHaveAttribute('placeholder', /•/);
+  // A Show button instead of typing the password twice.
+  await expect(page.locator('#confirm')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(page.locator('#password')).toHaveAttribute('type', 'text');
+  await expect(page.getByRole('button', { name: 'Show password' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('a new password says how long it has to be', async ({ page }) => {

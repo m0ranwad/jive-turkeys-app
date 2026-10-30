@@ -121,24 +121,29 @@ describe('username and existing sign-in methods', () => {
     answer({ data: { role: 'user', joined_team_at: '2026-10-01' }, error: null });
     expect(await me).toMatchObject({ id: 'p1', joined: true });
   });
-  it('keeps a new recovery code when the session after a reset cannot be installed', async () => {
-    functionResult = { data: { recoveryCode: 'code', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+  it("doesn't fail a reset whose password went in when the new session can't be installed", async () => {
+    functionResult = { data: { session: { access_token: 'a', refresh_token: 'r' } }, error: null };
     setSessionError = { message: 'expired' };
-    expect(await api.auth.recoverUsername('player', 'old-code', 'password')).toMatchObject({ recoveryCode: 'code', session: null });
-  });
-  it('installs the new session after adding a username, and keeps the code if that fails', async () => {
-    functionResult = { data: { recoveryCode: 'code', username: 'player', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
-    await api.auth.linkUsername('player', 'new-password', 'old-password');
-    expect(calls).toContainEqual(['auth', 'setSession', { access_token: 'a', refresh_token: 'r' }]);
-    setSessionError = { message: 'expired' };
-    expect(await api.auth.linkUsername('player', 'new-password', 'old-password')).toMatchObject({ recoveryCode: 'code', session: null });
-  });
-  it('sends the current password when adding a username', async () => {
-    functionResult = { data: { recoveryCode: 'code', username: 'player' }, error: null };
-    await api.auth.linkUsername('player', 'new-password', 'old-password');
+    expect(await api.auth.resetWithCode('player', 'ABCD-2345', 'password')).toEqual({ session: null });
     expect(calls).toContainEqual(['function', 'username-auth', {
-      body: { action: 'link', username: 'player', password: 'new-password', currentPassword: 'old-password' },
+      body: { action: 'reset', username: 'player', code: 'ABCD-2345', password: 'password' },
     }]);
+  });
+  it('installs the new session after a Google player adds a username', async () => {
+    functionResult = { data: { username: 'player', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+    await api.auth.linkUsername('player', 'new-password');
+    expect(calls).toContainEqual(['auth', 'setSession', { access_token: 'a', refresh_token: 'r' }]);
+  });
+  it('drops the space phone autofill leaves after an email address', async () => {
+    await api.auth.signIn(' player@example.test ', 'password');
+    expect(calls).toEqual([['auth', 'password', { email: 'player@example.test', password: 'password' }]]);
+  });
+  it('captains get usernames by account, and ask the account service for reset codes', async () => {
+    result = { data: [{ user_id: 'p1', username: 'josh' }], error: null };
+    expect(await api.users.usernames()).toEqual({ p1: 'josh' });
+    functionResult = { data: { code: 'ABCD-2345', username: 'josh', expiresAt: '2026-10-31T12:00:00Z' }, error: null };
+    expect(await api.users.issueResetCode('p1')).toMatchObject({ code: 'ABCD-2345' });
+    expect(calls).toContainEqual(['function', 'username-auth', { body: { action: 'issue-reset', userId: 'p1' } }]);
   });
 });
 

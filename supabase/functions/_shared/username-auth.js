@@ -1,6 +1,6 @@
 // Dependency-injected so the same handler is tested without a live account.
 import {
-  INTERNAL_EMAIL_DOMAIN, makeRecoveryCode, normalizeRecoveryCode, normalizeUsername, recoveryHash, usernameProblem,
+  INTERNAL_EMAIL_DOMAIN, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, sha256Hex, usernameProblem,
 } from './username.js';
 
 const cors = {
@@ -14,9 +14,16 @@ const reply = (status, body) => new Response(JSON.stringify(body), {
 const invalid = () => reply(400, { error: 'Invalid username or password.' });
 const tooMany = () => reply(429, { error: 'Too many tries. Please try again in 15 minutes.' });
 const wrongTeamCode = () => reply(400, { error: 'That team code is not right. Ask a captain for the code.' });
+const wrongResetCode = () => reply(400, { error: "That code isn't right, or it has run out. Ask a captain for a new one." });
+const signInFirst = () => reply(401, { error: 'Sign in to your existing account first.' });
 const sessionTokens = (session) => ({ access_token: session.access_token, refresh_token: session.refresh_token });
+const passwordProblem = (password) => typeof password !== 'string' || password.length < 6 || password.length > 256
+  ? 'Use a password between 6 and 256 characters.'
+  : '';
 // A Google-only account has no password to confirm, so adding one needs a sign-in this recent instead.
 const RECENT_SIGN_IN_SECONDS = 10 * 60;
+// How long a captain's reset code works: long enough to reach a player who's at work.
+const RESET_CODE_HOURS = 24;
 
 // The caller's address. Cloudflare, in front of Supabase, sets cf-connecting-ip
 // itself. Otherwise the first X-Forwarded-For entry is the original client;
@@ -65,8 +72,7 @@ async function passwordMatches({ admin, createAuthClient }, email, password) {
 // After a password change, which ends all of the account's sessions (the
 // player's own too), signs them back in with the new password. Ending any
 // other session again is a safeguard, in case Supabase ever stops doing that
-// itself. Never throws: the password and code have already changed, and the
-// player still needs the new code.
+// itself. Never throws: the password has already changed.
 async function signInAlone({ admin, createAuthClient }, email, password) {
   try {
     const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
@@ -109,17 +115,13 @@ export async function handleUsernameAuth(req, deps) {
     try { body = JSON.parse(raw); } catch { return reply(400, { error: 'Invalid request.' }); }
     if (!body || typeof body !== 'object') return reply(400, { error: 'Invalid request.' });
     action = body.action;
-    if (!['signup', 'signin', 'recover', 'link', 'rotate'].includes(action)) return reply(400, { error: 'Invalid request.' });
+    if (!['signup', 'signin', 'link', 'issue-reset', 'reset'].includes(action)) return reply(400, { error: 'Invalid request.' });
     const username = normalizeUsername(body.username);
-    if (usernameProblem(username)) return reply(400, { error: usernameProblem(username) });
     const password = body.password;
-    if (typeof password !== 'string' || password.length < 6 || password.length > 256) {
-      return reply(400, { error: 'Use a password between 6 and 256 characters.' });
-    }
 
     // Counters are keyed by hashes, never raw addresses, usernames or IDs.
     const allow = async (limit, name, ...parts) => {
-      const p_key = `${name}:${await recoveryHash(parts.join(':'))}`;
+      const p_key = `${name}:${await sha256Hex(parts.join(':'))}`;
       const { data, error } = await admin.rpc('username_auth_attempt', { p_key, p_limit: limit });
       if (error) throw error;
       return data === true;
@@ -128,13 +130,15 @@ export async function handleUsernameAuth(req, deps) {
     // Without an address every request shares one counter, so the logs should show it.
     if (!ip) console.warn('username-auth: no client address on the request');
     const from = ip || 'unknown';
-    if (!await allow(60, 'ip', from)) return tooMany();
+    // Generous: a whole team signing up on the same gym Wi-Fi shares one address.
+    if (!await allow(300, 'ip', from)) return tooMany();
 
     if (action === 'signin') {
       // Per address first, so wrong guesses from elsewhere can't lock a player
       // out on their own phone. The per-username ceiling bounds guesses spread
-      // over many addresses; recovery has no such limit, so a player can always get back in.
+      // over many addresses.
       if (!await allow(10, 'signin', username, from) || !await allow(50, 'signin', username)) return tooMany();
+      if (usernameProblem(username) || passwordProblem(password)) return invalid();
       const { data: alias, error: aliasError } = await admin.from('username_accounts').select('user_id').eq('username', username).maybeSingle();
       if (aliasError) throw aliasError;
       // Missing usernames still go through password verification, with the
@@ -148,106 +152,106 @@ export async function handleUsernameAuth(req, deps) {
       return reply(200, { session: sessionTokens(data.session) });
     }
 
-    const recoveryCode = makeRecoveryCode();
-    const hash = await recoveryHash(recoveryCode);
-    if (action === 'rotate') {
+    if (action === 'issue-reset') {
+      // A captain makes a one-time code for a teammate who forgot their password.
       const me = await caller(req, admin);
-      if (!me) return reply(401, { error: 'Sign in to your existing account first.' });
-      if (!await allow(10, 'rotate', me.user.id)) return tooMany();
-      const { data: alias, error: aliasError } = await admin.from('username_accounts').select('user_id, recovery_hash').eq('username', username).maybeSingle();
+      if (!me) return signInFirst();
+      if (!await allow(30, 'issue-reset', me.user.id)) return tooMany();
+      const { data: captain, error: captainError } = await admin.from('users').select('role, removed_at').eq('id', me.user.id).single();
+      if (captainError) throw captainError;
+      if (captain.role !== 'admin' || captain.removed_at) return reply(403, { error: 'Only captains can reset passwords.' });
+      const playerId = String(body.userId || '');
+      const { data: alias, error: aliasError } = await admin.from('username_accounts').select('username').eq('user_id', playerId).maybeSingle();
       if (aliasError) throw aliasError;
-      if (alias?.user_id !== me.user.id) return invalid();
-      if (!await passwordMatches(deps, me.user.email, password)) return invalid();
-      // Only replaces the code read above, and not right after a reset, so a
-      // request checked against an old password can't undo a reset.
-      const { data: replaced, error } = await admin.rpc('replace_username_recovery', {
-        p_user: me.user.id, p_hash: alias.recovery_hash, p_new_hash: hash,
-      });
+      if (!alias) return reply(404, { error: "This player doesn't sign in with a username." });
+      const code = makeResetCode();
+      const expiresAt = new Date(Date.now() + RESET_CODE_HOURS * 60 * 60 * 1000).toISOString();
+      // A new code replaces any earlier one.
+      const { error } = await admin.from('username_accounts')
+        .update({ reset_hash: await resetCodeHash(code), reset_expires_at: expiresAt, reset_by: me.user.id })
+        .eq('user_id', playerId);
       if (error) throw error;
-      if (!replaced) {
-        return reply(409, { error: 'Your recovery code just changed. If you reset your password, try again in 10 minutes.' });
-      }
-      return reply(200, { recoveryCode });
-    }
-    if (action === 'recover') {
-      // Only the per-address limit: nobody can guess a 128-bit code, and a
-      // per-username one would let anyone lock a player out of recovery.
-      if (!/^[a-f0-9]{32}$/.test(normalizeRecoveryCode(body.recoveryCode))) {
-        return reply(400, { error: 'Invalid username or recovery code.' });
-      }
-      const oldHash = await recoveryHash(body.recoveryCode);
-      const { data: userId, error } = await admin.rpc('claim_username_recovery', {
-        p_username: username, p_hash: oldHash, p_new_hash: hash,
-      });
-      if (error) throw error;
-      if (!userId) return reply(400, { error: 'Invalid username or recovery code.' });
-      const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(userId, { password });
-      if (updateError) {
-        // Restore only our own claim; never overwrite another rotation.
-        const { error: restoreError } = await admin.from('username_accounts').update({ recovery_hash: oldHash })
-          .eq('user_id', userId).eq('recovery_hash', hash);
-        if (restoreError) throw restoreError;
-        throw updateError;
-      }
-      return reply(200, { recoveryCode, session: await signInAlone(deps, updated.user.email, password) });
+      return reply(200, { code, username: alias.username, expiresAt });
     }
 
-    let user;
+    if (action === 'reset') {
+      if (!await allow(10, 'reset', username, from) || !await allow(50, 'reset', username)) return tooMany();
+      if (passwordProblem(password)) return reply(400, { error: passwordProblem(password) });
+      if (usernameProblem(username) || !isResetCode(body.code)) return wrongResetCode();
+      const { data: alias, error: aliasError } = await admin.from('username_accounts')
+        .select('user_id, reset_hash, reset_expires_at').eq('username', username).maybeSingle();
+      if (aliasError) throw aliasError;
+      const hash = await resetCodeHash(body.code);
+      if (!alias?.reset_hash || alias.reset_hash !== hash || !(new Date(alias.reset_expires_at) > new Date())) return wrongResetCode();
+      // The code is used up only once the new password is in, so a password
+      // Supabase turns down can be changed and tried again with the same code.
+      const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(alias.user_id, { password });
+      if (updateError) throw updateError;
+      // Only this code: one a captain made a moment ago still works.
+      const { error: usedError } = await admin.from('username_accounts').update({ reset_hash: null, reset_expires_at: null })
+        .eq('user_id', alias.user_id).eq('reset_hash', hash);
+      if (usedError) console.error('username-auth: a used reset code is still stored until it runs out', usedError.message);
+      return reply(200, { session: await signInAlone(deps, updated.user.email, password) });
+    }
+
+    if (usernameProblem(username)) return reply(400, { error: usernameProblem(username) });
+    if (passwordProblem(password)) return reply(400, { error: passwordProblem(password) });
+
     if (action === 'link') {
       const me = await caller(req, admin);
-      if (!me) return reply(401, { error: 'Sign in to your existing account first.' });
+      if (!me) return signInFirst();
       if (!await allow(10, 'link', me.user.id)) return tooMany();
       const { data: member, error: memberError } = await admin.from('users').select('joined_team_at, role').eq('id', me.user.id).single();
       if (memberError) throw memberError;
       if (!member.joined_team_at && member.role !== 'admin') return reply(403, { error: 'Join the team first.' });
-      // This sets the account's password, so the owner proves it's them: with
-      // the current password, or for a Google-only account, a fresh sign-in.
-      if (hasPassword(me.user)) {
-        if (typeof body.currentPassword !== 'string' || !body.currentPassword) {
-          return reply(400, { error: 'Enter your current password.' });
-        }
-        if (!await passwordMatches(deps, me.user.email, body.currentPassword)) {
-          return reply(400, { error: 'Your current password is not right.' });
-        }
+      // Email/password players sign in with the password they already have, so
+      // it only has to be right. Google-only players are choosing one, which
+      // needs a fresh sign-in to show it's really them.
+      const keepsPassword = hasPassword(me.user);
+      if (keepsPassword) {
+        if (!await passwordMatches(deps, me.user.email, password)) return reply(400, { error: "That isn't your password." });
       } else if (!signedInWithin(me.token, RECENT_SIGN_IN_SECONDS)) {
         return reply(401, { error: 'For your security, sign out and sign back in with Google, then add your username.' });
       }
-      user = me.user;
-    } else {
-      if (!await allow(5, 'signup', username) || !await allow(10, 'signup-ip', from)) return tooMany();
-      const teamCode = String(body.teamCode || '');
-      const { data: codeMatches, error: codeError } = await admin.rpc('team_code_matches', { p_code: teamCode });
-      if (codeError) throw codeError;
-      if (!codeMatches) return wrongTeamCode();
-      const { data: existing, error: existingError } = await admin.from('username_accounts').select('user_id').eq('username', username).maybeSingle();
-      if (existingError) throw existingError;
-      if (existing) return reply(409, { error: 'That username is taken. Choose another or log in.' });
-      // Supabase manages the password and session. This random, undeliverable
-      // internal identifier is never presented as the player's contact email.
-      const { data, error } = await admin.auth.admin.createUser({
-        email: `${crypto.randomUUID()}@${INTERNAL_EMAIL_DOMAIN}`, password, email_confirm: true,
-      });
-      if (error || !data?.user) throw error || new Error('Account creation failed');
-      user = data.user;
-    }
-
-    const { error: aliasError } = await admin.from('username_accounts').insert({ user_id: user.id, username, recovery_hash: hash });
-    if (aliasError) {
-      if (action === 'signup') await removeAccount(admin, user.id);
-      if (aliasError.code === '23505') return reply(409, { error: 'That username is taken, or your account already has a username.' });
-      throw aliasError;
-    }
-    if (action === 'link') {
-      const { error } = await admin.auth.admin.updateUserById(user.id, { password });
+      const { error: aliasError } = await admin.from('username_accounts').insert({ user_id: me.user.id, username });
+      if (aliasError) {
+        if (aliasError.code === '23505') return reply(409, { error: 'That username is taken, or your account already has one.' });
+        throw aliasError;
+      }
+      if (keepsPassword) return reply(200, { username });
+      const { error } = await admin.auth.admin.updateUserById(me.user.id, { password });
       if (error) {
-        await admin.from('username_accounts').delete().eq('user_id', user.id);
+        await admin.from('username_accounts').delete().eq('user_id', me.user.id);
         throw error;
       }
       // Setting the password signed the player out, so hand them a new session.
-      return reply(200, { recoveryCode, username, session: await signInAlone(deps, user.email, password) });
+      return reply(200, { username, session: await signInAlone(deps, me.user.email, password) });
+    }
+
+    // Signup.
+    if (!await allow(5, 'signup', username) || !await allow(40, 'signup-ip', from)) return tooMany();
+    const teamCode = String(body.teamCode || '');
+    const { data: codeMatches, error: codeError } = await admin.rpc('team_code_matches', { p_code: teamCode });
+    if (codeError) throw codeError;
+    if (!codeMatches) return wrongTeamCode();
+    const { data: existing, error: existingError } = await admin.from('username_accounts').select('user_id').eq('username', username).maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) return reply(409, { error: 'That username is taken. Choose another or log in.' });
+    // Supabase manages the password and session. This random, undeliverable
+    // internal identifier is never presented as the player's contact email.
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email: `${crypto.randomUUID()}@${INTERNAL_EMAIL_DOMAIN}`, password, email_confirm: true,
+    });
+    if (createError || !created?.user) throw createError || new Error('Account creation failed');
+    const user = created.user;
+    const { error: aliasError } = await admin.from('username_accounts').insert({ user_id: user.id, username });
+    if (aliasError) {
+      await removeAccount(admin, user.id);
+      if (aliasError.code === '23505') return reply(409, { error: 'That username is taken. Choose another or log in.' });
+      throw aliasError;
     }
     // The same joining join_team() does when a player enters the code on the site.
-    const { data: joined, error: joinError } = await admin.rpc('join_team_as', { p_user: user.id, p_code: String(body.teamCode || '') });
+    const { data: joined, error: joinError } = await admin.rpc('join_team_as', { p_user: user.id, p_code: teamCode });
     if (joinError || joined !== 'joined') {
       await removeAccount(admin, user.id);
       if (joinError) throw joinError;
@@ -255,9 +259,8 @@ export async function handleUsernameAuth(req, deps) {
     }
     const { data, error } = await createAuthClient().auth.signInWithPassword({ email: user.email, password });
     if (error) console.error('username-auth: new account could not sign in yet', error.message);
-    // Account exists even if session creation is temporarily unavailable. Give
-    // them their recovery code and let them sign in again without creating a duplicate.
-    return reply(200, { recoveryCode, username, session: !error && data?.session ? sessionTokens(data.session) : null });
+    // The account exists even if signing in failed just now; the player can log in.
+    return reply(200, { username, session: !error && data?.session ? sessionTokens(data.session) : null });
   } catch (error) {
     // For the function's logs: what failed, never what the player typed.
     console.error('username-auth failed', action, error?.status ?? '', error?.code ?? '', error?.message ?? error);

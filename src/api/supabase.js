@@ -120,8 +120,8 @@ export function createSupabaseBackend(url, key) {
     if (data?.session) {
       const { error: sessionError } = await supabase.auth.setSession(data.session);
       if (sessionError) {
-        // The account or password already changed, so the new recovery code must still reach the player.
-        if (data.recoveryCode) return { ...data, session: null };
+        // The account or password already changed; the player can still log in with it.
+        if (action !== 'signin') return { ...data, session: null };
         throw new Error('Please try logging in again.');
       }
     }
@@ -167,7 +167,9 @@ export function createSupabaseBackend(url, key) {
       return !!data.session;
     },
 
-    async signIn(email, password) {
+    async signIn(login, password) {
+      // A phone's autofill can leave a space after an email address.
+      const email = login.trim();
       if (!email.includes('@')) return usernameAccount('signin', { username: email, password });
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Invalid email or password' : error.message);
@@ -176,7 +178,7 @@ export function createSupabaseBackend(url, key) {
     /** Returns { needsVerification } — false when email confirmation is off. */
     async signUp(email, password) {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: { emailRedirectTo: origin() },
       });
@@ -188,9 +190,10 @@ export function createSupabaseBackend(url, key) {
     },
 
     signUpUsername: (username, password, teamCode) => usernameAccount('signup', { username, password, teamCode }),
-    linkUsername: (username, password, currentPassword) => usernameAccount('link', { username, password, currentPassword }),
-    recoverUsername: (username, recoveryCode, password) => usernameAccount('recover', { username, recoveryCode, password }),
-    rotateRecoveryCode: (username, password) => usernameAccount('rotate', { username, password }),
+    /** Email players give the password they have (it stays); Google-only players choose one. */
+    linkUsername: (username, password) => usernameAccount('link', { username, password }),
+    /** With the code a captain gave them: sets the new password and signs the player in. */
+    resetWithCode: (username, code, password) => usernameAccount('reset', { username, code, password }),
 
     async verifySignup(email, code) {
       let { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
@@ -212,7 +215,7 @@ export function createSupabaseBackend(url, key) {
     },
 
     async requestPasswordReset(email) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin()}/reset-password` });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${origin()}/reset-password` });
       if (error) throw new Error(error.message);
     },
 
@@ -248,6 +251,15 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('unlink_team_guest', { p_guest_id: guestId });
       if (error) fail(error);
     },
+
+    /** Usernames by user id: everyone's for captains, otherwise just your own. */
+    async usernames() {
+      const { data, error } = await supabase.from('username_accounts').select('user_id, username');
+      if (error) fail(error);
+      return Object.fromEntries((data || []).map((row) => [row.user_id, row.username]));
+    },
+    /** Captains: a one-time code a teammate uses to set a new password ({ code, username, expiresAt }). */
+    issueResetCode: (userId) => usernameAccount('issue-reset', { userId }),
 
     /** Captains: take a signed-up player off the team (they lose access), or add them back. */
     async setRemoved(userId, removed) {

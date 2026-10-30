@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { KeyRound, LoaderCircle, Lock, Mail } from 'lucide-react';
+import { KeyRound, LoaderCircle, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError, OrDivider, safeReturnTo } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useToast } from '@/components/ui/toast';
-import { GoogleButton, IconInput } from './LoginPage';
-import { RecoveryCodeCard, UsernameField } from '@/components/UsernameAccount';
-import { forgetRecoveryCode, rememberRecoveryCode, usernameProblem } from '@/lib/username';
+import { GoogleButton, IconInput, PasswordInput } from './LoginPage';
+import { UsernameField } from '@/components/UsernameAccount';
+import { usernameProblem } from '@/lib/username';
 
 function VerifyEmail({ email }) {
   const { toast } = useToast();
@@ -74,13 +74,12 @@ function VerifyEmail({ email }) {
 }
 
 export function RegisterPage() {
-  const [method, setMethod] = useState('email');
+  // No email to check, so it's the quickest way in.
+  const [method, setMethod] = useState('username');
   const [username, setUsername] = useState('');
   const [teamCode, setTeamCode] = useState('');
-  const [created, setCreated] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -89,22 +88,14 @@ export function RegisterPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    if (password !== confirm) return setError('Passwords do not match');
-    if (password.length < 6) return setError('Use at least 6 characters for your password');
     if (method === 'username' && usernameProblem(username)) return setError(usernameProblem(username));
+    if (password.length < 6) return setError('Use at least 6 characters for your password');
     setBusy(true);
     try {
       if (method === 'username') {
-        const data = await api.auth.signUpUsername(username, password, teamCode);
-        // Signed in and the code is stored: the site shows it before anything
-        // else (RecoveryCodeGate), even after a reload. Otherwise it's shown here.
-        if (rememberRecoveryCode(data.username, data.recoveryCode) && data.session) {
-          window.location.href = returnTo;
-          return;
-        }
-        setCreated(data);
-        setPassword('');
-        setConfirm('');
+        const { session } = await api.auth.signUpUsername(username, password, teamCode);
+        // Signing in right after can fail; the account is made, so they log in.
+        window.location.href = session ? returnTo : '/login';
         return;
       }
       const { needsVerification } = await api.auth.signUp(email, password);
@@ -118,12 +109,6 @@ export function RegisterPage() {
   };
 
   if (verifying) return <VerifyEmail email={email} />;
-  if (created) return (
-    <AuthShell title="Save your recovery code" subtitle={`Your username is ${created.username}.`}>
-      <RecoveryCodeCard code={created.recoveryCode} continueLabel={created.session ? 'Continue to the team' : 'Log in'}
-        onContinue={() => { forgetRecoveryCode(); window.location.href = created.session ? returnTo : '/login'; }} />
-    </AuthShell>
-  );
 
   return (
     <AuthShell
@@ -178,26 +163,8 @@ export function RegisterPage() {
         )}
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <IconInput
-            icon={Lock}
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 6 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm">Confirm Password</Label>
-          <IconInput
-            icon={Lock}
-            id="confirm"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
+          <PasswordInput id="password" autoComplete="new-password" placeholder="At least 6 characters" minLength={6} maxLength={256}
+            value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <Button type="submit" className="h-12 w-full font-medium" disabled={busy}>
           {busy ? (

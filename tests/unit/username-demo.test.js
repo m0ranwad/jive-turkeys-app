@@ -4,61 +4,56 @@ import { createDemoBackend, DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_USERNAME_LOGIN }
 beforeEach(() => localStorage.clear());
 
 describe('email-free accounts in previews', () => {
-  it('requires the code, persists a new username account, and accepts mixed-case login', async () => {
+  it('requires the code, signs the player in, and accepts mixed-case login', async () => {
     const api = createDemoBackend();
     await expect(api.auth.signUpUsername('new_player', 'password123', 'wrong')).rejects.toThrow('team code');
-    const { recoveryCode } = await api.auth.signUpUsername(' NEW_PLAYER ', 'password123', 'turkey');
+    expect(await api.auth.signUpUsername(' NEW.PLAYER ', 'password123', 'turkey')).toEqual({ username: 'new.player', session: true });
     const me = await api.auth.me();
-    expect(me).toMatchObject({ username: 'new_player', email: null, role: 'user', joined: true });
+    expect(me).toMatchObject({ username: 'new.player', email: null, role: 'user', joined: true });
     await api.auth.signOut();
     const reopened = createDemoBackend();
-    await reopened.auth.signIn('NEW_PLAYER', 'password123');
+    await reopened.auth.signIn('NEW.PLAYER ', 'password123');
     expect((await reopened.auth.me()).id).toBe(me.id);
-    await expect(reopened.auth.signUpUsername('new_player', 'password123', 'TURKEY')).rejects.toThrow('taken');
-    expect(recoveryCode).toMatch(/^[a-f0-9]{4}(-[a-f0-9]{4}){7}$/);
+    await expect(reopened.auth.signUpUsername('new.player', 'password123', 'TURKEY')).rejects.toThrow('taken');
   });
 
-  it('adds a username to the same existing account and preserves email login', async () => {
+  it('adds a username to an email account, keeping the password it has', async () => {
     const api = createDemoBackend();
     await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
     const before = await api.auth.me();
     expect(before.hasPassword).toBe(true);
-    await expect(api.auth.linkUsername('casey_cap', 'new-password', 'guess-123')).rejects.toThrow('current password');
+    await expect(api.auth.linkUsername('casey_cap', 'guess-123')).rejects.toThrow("That isn't your password.");
     expect((await api.auth.me()).username).toBeNull();
-    await api.auth.linkUsername('casey_cap', 'new-password', DEMO_LOGIN.password);
+    await api.auth.linkUsername('casey_cap', DEMO_LOGIN.password);
     await api.auth.signOut();
-    await api.auth.signIn('casey_cap', 'new-password');
+    await api.auth.signIn('casey_cap', DEMO_LOGIN.password);
     expect(await api.auth.me()).toMatchObject({ id: before.id, role: 'admin', email: DEMO_LOGIN.email });
-    await api.auth.signOut();
-    await api.auth.signIn(DEMO_LOGIN.email, 'new-password');
-    expect((await api.auth.me()).id).toBe(before.id);
   });
 
-  it('uses recovery once, preserves identity, and keeps the old password after a wrong code', async () => {
+  it('captains see usernames and reset a teammate’s password with a one-time code', async () => {
     const api = createDemoBackend();
-    const { recoveryCode } = await api.auth.signUpUsername('new_player', 'password123', 'TURKEY');
-    const id = (await api.auth.me()).id;
+    await api.auth.signIn(DEMO_PLAYER_LOGIN.email, DEMO_PLAYER_LOGIN.password);
+    const jordan = (await api.auth.me()).id;
+    expect(Object.values(await api.users.usernames())).toEqual(['jordan']);
+    await expect(api.users.issueResetCode(jordan)).rejects.toThrow('Only captains');
     await api.auth.signOut();
-    await expect(api.auth.recoverUsername('new_player', 'wrong', 'replacement')).rejects.toThrow('Invalid');
-    const replacement = await api.auth.recoverUsername('NEW_PLAYER', recoveryCode, 'replacement');
-    // Signed in with the new password, like the account service.
-    expect(replacement.session).toBe(true);
-    expect((await api.auth.me()).id).toBe(id);
-    await api.auth.signOut();
-    await expect(api.auth.recoverUsername('new_player', recoveryCode, 'another-password')).rejects.toThrow('Invalid');
-    await expect(api.auth.signIn('new_player', 'password123')).rejects.toThrow('Invalid');
-    await api.auth.signIn('new_player', 'replacement');
-    expect((await api.auth.me()).id).toBe(id);
-    expect(replacement.recoveryCode).not.toBe(recoveryCode);
-  });
 
-  it("has a sample player with a username: Jordan, who also keeps their email", async () => {
-    const api = createDemoBackend();
-    await api.auth.signIn(DEMO_USERNAME_LOGIN.username, DEMO_PLAYER_LOGIN.password);
-    expect(await api.auth.me()).toMatchObject({ username: 'jordan', email: DEMO_PLAYER_LOGIN.email, role: 'user' });
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    expect((await api.users.usernames())[jordan]).toBe('jordan');
+    const casey = (await api.auth.me()).id;
+    await expect(api.users.issueResetCode(casey)).rejects.toThrow("doesn't sign in with a username");
+    const { code, username } = await api.users.issueResetCode(jordan);
+    expect(username).toBe('jordan');
+    expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     await api.auth.signOut();
-    const { recoveryCode } = await api.auth.recoverUsername('jordan', DEMO_USERNAME_LOGIN.recoveryCode, 'replacement');
-    expect(recoveryCode).not.toBe(DEMO_USERNAME_LOGIN.recoveryCode);
+
+    await expect(api.auth.resetWithCode('jordan', 'ABCD-EFGH', 'fresh-pass')).rejects.toThrow('Ask a captain for a new one');
+    expect(await api.auth.resetWithCode(DEMO_USERNAME_LOGIN.username, code.toLowerCase(), 'fresh-pass')).toEqual({ session: true });
+    expect((await api.auth.me()).id).toBe(jordan);
+    await api.auth.signOut();
+    await expect(api.auth.resetWithCode('jordan', code, 'another-pass')).rejects.toThrow('Ask a captain');
+    await expect(api.auth.signIn('jordan', DEMO_PLAYER_LOGIN.password)).rejects.toThrow('Invalid');
+    await api.auth.signIn('jordan', 'fresh-pass');
     expect((await api.auth.me()).email).toBe(DEMO_PLAYER_LOGIN.email);
   });
 });

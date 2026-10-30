@@ -7,10 +7,10 @@ import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
-import { makeRecoveryCode, normalizeRecoveryCode, normalizeUsername, recoveryHash, usernameProblem } from '@/lib/username';
+import { isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v32';
+const DB_KEY = 'jt_demo_db_v33';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -19,10 +19,9 @@ const SIGNED_OUT_KEY = 'jt_demo_signed_out';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 // Jordan Rivera, a regular player in the sample data.
 export const DEMO_PLAYER_LOGIN = { email: 'jordan@demo.test', password: 'demo1234' };
-// Jordan also added a username, so the preview can sign in with one and show
-// it on My Profile. This recovery code resets Jordan's password there.
-export const DEMO_USERNAME_LOGIN = { username: 'jordan', recoveryCode: 'aaaa-bbbb-cccc-dddd-eeee-ffff-0000-1111' };
-const DEMO_RECOVERY_HASH = '836a65a7efd82a7e9b922c1b73a8e6ed87a501667b0216c1c2906f2264eb6738';
+// Jordan also added a username, so the preview can sign in with one, show it
+// on My Profile, and let captains reset Jordan's password from the Team page.
+export const DEMO_USERNAME_LOGIN = { username: 'jordan' };
 
 const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -51,7 +50,7 @@ function seed() {
     // Casey and Priya are the captains.
     role: i === 0 || i === 3 ? 'admin' : 'user',
     joined_team_at: now(),
-    ...(i === 1 && { username: DEMO_USERNAME_LOGIN.username, recovery_hash: DEMO_RECOVERY_HASH }),
+    ...(i === 1 && { username: DEMO_USERNAME_LOGIN.username }),
   }));
   // Signed up but hasn't entered the team code, so the preview can show that step.
   users.push({ id: uid(), email: 'nia@demo.test', password: 'demo1234', full_name: 'Nia Newcomer', role: 'user', joined_team_at: null });
@@ -1037,48 +1036,36 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         throw new Error('That team code is not right. Ask a captain for the code.');
       }
       if (db.users.some((u) => u.username === username)) throw new Error('That username is taken. Choose another or log in.');
-      const recoveryCode = makeRecoveryCode();
-      const user = { id: uid(), email: null, username, password, recovery_hash: await recoveryHash(recoveryCode), full_name: '', role: 'user', joined_team_at: now() };
+      const user = { id: uid(), email: null, username, password, full_name: '', role: 'user', joined_team_at: now() };
       db.users.push(user);
       save(db);
       setSession(user.id);
-      return { recoveryCode, username, session: true };
+      return { username, session: true };
     },
-    async linkUsername(value, password, currentPassword) {
+    // Like the account service: email players keep the password they have; others choose one.
+    async linkUsername(value, password) {
       const user = currentUser();
       if (!user) throw new Error('Sign in to your existing account first.');
       if (!user.joined_team_at && user.role !== 'admin') throw new Error('Join the team first.');
-      if (user.password && currentPassword !== user.password) throw new Error('Your current password is not right.');
       const username = normalizeUsername(value);
       if (usernameProblem(username)) throw new Error(usernameProblem(username));
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
-      if (user.username || db.users.some((u) => u.username === username)) throw new Error('That username is taken, or your account already has a username.');
-      const recoveryCode = makeRecoveryCode();
-      Object.assign(user, { username, password, recovery_hash: await recoveryHash(recoveryCode) });
+      if (user.password && password !== user.password) throw new Error("That isn't your password.");
+      if (user.username || db.users.some((u) => u.username === username)) throw new Error('That username is taken, or your account already has one.');
+      Object.assign(user, { username, password });
       save(db);
-      return { recoveryCode, username };
+      return { username };
     },
-    async recoverUsername(value, code, password) {
+    async resetWithCode(value, code, password) {
       const user = db.users.find((u) => u.username === normalizeUsername(value));
-      if (!user || !/^[a-f0-9]{32}$/.test(normalizeRecoveryCode(code)) || user.recovery_hash !== await recoveryHash(code)) {
-        throw new Error('Invalid username or recovery code.');
-      }
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
-      const recoveryCode = makeRecoveryCode();
-      user.password = password;
-      user.recovery_hash = await recoveryHash(recoveryCode);
+      const wrong = "That code isn't right, or it has run out. Ask a captain for a new one.";
+      if (!user?.reset_hash || !isResetCode(code) || user.reset_hash !== await resetCodeHash(code)) throw new Error(wrong);
+      if (!(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
+      Object.assign(user, { password, reset_hash: null, reset_expires_at: null });
       save(db);
-      // Like the account service: signed in with the new password, other sessions ended.
       setSession(user.id);
-      return { recoveryCode, session: true };
-    },
-    async rotateRecoveryCode(username, password) {
-      const user = currentUser();
-      if (!user || user.username !== normalizeUsername(username) || user.password !== password) throw new Error('Invalid username or password.');
-      const recoveryCode = makeRecoveryCode();
-      user.recovery_hash = await recoveryHash(recoveryCode);
-      save(db);
-      return { recoveryCode };
+      return { session: true };
     },
     async verifySignup() {},
     async resendSignup() {},
@@ -1319,6 +1306,24 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       Object.assign(link, { unlinked_at: now(), unlinked_by: currentUser().id });
       save(db);
       return delay(null);
+    },
+    // Like username_accounts' policies: captains see everyone's, players their own.
+    async usernames() {
+      requireUser();
+      const me = currentUser();
+      return delay(Object.fromEntries(db.users.filter((u) => u.username && (me.role === 'admin' || u.id === me.id)).map((u) => [u.id, u.username])));
+    },
+    // Like the account service's issue-reset.
+    async issueResetCode(userId) {
+      requireUser();
+      if (currentUser().role !== 'admin') throw new Error('Only captains can reset passwords.');
+      const user = db.users.find((u) => u.id === userId);
+      if (!user?.username) throw new Error("This player doesn't sign in with a username.");
+      const code = makeResetCode();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      Object.assign(user, { reset_hash: await resetCodeHash(code), reset_expires_at: expiresAt, reset_by: currentUser().id });
+      save(db);
+      return { code, username: user.username, expiresAt };
     },
     // Same as the database's set_team_member_removed().
     async setRemoved(userId, removed) {
