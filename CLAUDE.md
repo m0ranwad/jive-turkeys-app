@@ -315,6 +315,13 @@ manages the GitHub, Cloudflare and Supabase accounts.
   `public/sw.js` (shows them), `supabase/functions/notify-chat/` and `supabase/functions/_shared/` (sending).
   The app icon shows the Chat tab's unread number: each chat notification carries it (`chat_push_unread()`), and
   the open site keeps it in step (`setIconBadge()` in `src/lib/push.js`, called from `Layout.jsx`).
+- Announcements: `src/pages/AnnouncementsPage.jsx`. Captains post, edit and delete them (`announcements_write`); a
+  changed title or text sets `edited_date` ("Edited", set by a trigger), which never notifies and doesn't make a post
+  new. There's no announcement notification: posting offers **Post in Team Chat** with @team instead. Posts you
+  haven't seen are a number on Announcements in the menu and a dot on the Menu button (`useAnnouncementsUnread()`,
+  `Layout.jsx`): `announcements_unread()` counts posts after your `announcement_reads` marker, or after you joined, and
+  opening Announcements calls `announcements_mark_read()` up to the newest post on screen (`newestPostAt()` in
+  `src/lib/announcements.js`). The demo backend's `announcements` mirrors both. The app icon's number stays chat-only.
 - When a save fails, say so with `saveFailedToast()` (`src/lib/errors.js`: "That didn't save" and the reason in plain
   words) and keep what was entered on screen. Browser tests act out no signal with `localStorage.jt_demo_offline`.
 - Tests: `tests/unit/` (Vitest), `tests/e2e/` (Playwright), `supabase/tests/` (database), `scripts/test-db.sh`

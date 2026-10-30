@@ -23,6 +23,7 @@ export const TABLES = {
   MessageReaction: 'message_reactions',
   ChatRead: 'chat_reads',
   Announcement: 'announcements',
+  AnnouncementRead: 'announcement_reads',
 };
 
 /** '-date' -> { column: 'date', ascending: false } */

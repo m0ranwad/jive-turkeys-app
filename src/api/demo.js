@@ -10,7 +10,7 @@ import { JOIN_ERRORS } from '@/lib/team-code';
 import { makeRecoveryCode, normalizeRecoveryCode, normalizeUsername, recoveryHash, usernameProblem } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v31';
+const DB_KEY = 'jt_demo_db_v32';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -509,8 +509,13 @@ function seed() {
     message_reactions: reactions,
     chat_reads: reads,
     announcements: [
+      { id: uid(), title: 'Team photo next game', body: 'Wear your jersey and get there 15 minutes early. We\'re taking a team photo before kickoff.', author_name: 'Priya Shah', created_date: minutesAgo(90), updated_date: minutesAgo(90) },
       { id: uid(), title: 'Welcome to the new team hub', body: 'This is demo mode with sample data. Once Supabase is connected you will see the real team here.', author_name: 'Casey Captain', created_date: minutesAgo(600), updated_date: minutesAgo(600) },
     ],
+    // Everyone on the team has seen the welcome post but not the team photo one, so the preview shows the badge.
+    announcement_reads: users
+      .filter((u) => u.joined_team_at)
+      .map((u) => ({ id: uid(), user_id: u.id, last_read_at: minutesAgo(300), created_date: minutesAgo(300), updated_date: minutesAgo(300) })),
   };
 }
 
@@ -820,12 +825,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       });
     }
     if (table === 'chat_thread_members') return rows.filter((m) => inChat(m.thread_id, me?.id));
+    if (table === 'announcement_reads') return rows.filter((r) => r.user_id === me?.id && onTeam(me));
     return rows;
   };
   const refuse = () => {
     throw new Error("You don't have permission to do that.");
   };
-  // What the policies allow in the chat, beyond reading.
+  // What the policies allow in the chat and announcements, beyond reading.
   const checkChatWrite = (table, action, record, patch = {}) => {
     const me = currentUser();
     const isCaptain = me.role === 'admin';
@@ -848,6 +854,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const m = db.messages.find((x) => x.id === record.message_id);
       if (!m || !canRead(m.thread_id ?? null, me)) refuse();
     }
+    if (table === 'announcements' && me.role !== 'admin') refuse();
     if (table === 'chat_thread_members') {
       // People are added with chat.startPrivate() and chat.addMembers(); anyone leaves, the starter takes people out.
       if (action !== 'delete' || !onTeam(me)) refuse();
@@ -926,8 +933,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         checkChatWrite(table, 'update', record, patch);
         checkAmounts(table, { ...record, ...patch });
         const opensVoting = table === 'games' && patch.has_result && !record.has_result && !record.potm_opened_at;
-        // Same as the database's message_edited(): changing the text marks it edited.
-        const edited = table === 'messages' && 'body' in patch && patch.body !== record.body;
+        // Same as the database's message_edited() and announcement_edited(): changing the text marks it edited.
+        const changed = (key) => key in patch && patch[key] !== record[key];
+        const edited = (table === 'messages' && changed('body')) || (table === 'announcements' && (changed('title') || changed('body')));
         // Same as chat_thread_named(): renaming a room gives it that name.
         const renamed = table === 'chat_threads' && 'title' in patch && patch.title !== record.title;
         const before = { ...record };
@@ -1483,6 +1491,29 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
   };
 
+  // Same as the database's announcements_unread() and announcements_mark_read().
+  const announcements = {
+    async unread() {
+      requireUser();
+      const me = currentUser();
+      if (!onTeam(me)) return delay(0);
+      const read = db.announcement_reads.find((r) => r.user_id === me.id);
+      const since = read?.last_read_at || me.joined_team_at || me.created_date || '';
+      return delay(db.announcements.filter((a) => a.created_date > since).length);
+    },
+    async markRead(readAt) {
+      requireUser();
+      const me = currentUser();
+      if (!onTeam(me)) refuse();
+      const at = readAt < now() ? readAt : now();
+      const read = db.announcement_reads.find((r) => r.user_id === me.id);
+      if (!read) db.announcement_reads.push({ id: uid(), user_id: me.id, last_read_at: at, created_date: now(), updated_date: now() });
+      else if (at > read.last_read_at) Object.assign(read, { last_read_at: at, updated_date: now() });
+      save(db);
+      return delay(null);
+    },
+  };
+
   // Same as the database functions mark_dues_paid(), set_dues_partner() and
   // link_team_guest(). Ids can be app players' or guests' (roster players who haven't joined yet).
   const isGuest = (id) => db.team_guests.some((g) => g.id === id);
@@ -1750,6 +1781,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     entities,
     users,
     chat,
+    announcements,
     dues,
     games,
     roster,
