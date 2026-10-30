@@ -3,6 +3,7 @@ import { CircleHelp, LogOut } from 'lucide-react';
 import { api } from '@/api';
 import { PageSpinner } from '@/components/PageSpinner';
 import { ProfileForm } from '@/components/ProfileForm';
+import { UsernameAccount } from '@/components/UsernameAccount';
 import { Walkthrough } from '@/components/Walkthrough';
 import { NotificationSettings, usePush } from '@/components/chat/Notifications';
 import { useToast } from '@/components/ui/toast';
@@ -77,7 +78,7 @@ export function ProfilePage() {
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-xl font-extrabold uppercase tracking-tight">{name}</h1>
-            <p className="mt-0.5 truncate text-xs font-medium text-white/50">{user?.email}</p>
+            <p className="mt-0.5 truncate text-xs font-medium text-white/50">{user?.email || user?.username}</p>
             {isCaptain && (
               <span className="mt-2 inline-block rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">
                 Captain
@@ -123,6 +124,8 @@ export function ProfilePage() {
           <NotificationSettings state={pushStatus} />
         </section>
       )}
+
+      <UsernameAccount user={user} onSaved={reload} />
 
       <div className="grid gap-2 sm:grid-cols-2">
         <button onClick={() => setWalkthroughOpen(true)} className={cn(softButton, 'text-zinc-700')}>

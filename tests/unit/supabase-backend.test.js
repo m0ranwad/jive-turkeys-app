@@ -7,6 +7,7 @@ const channels = [];
 let result = { data: [], error: null };
 // The signed-in session the stand-in client reports (auth.getSession).
 let session = null;
+let functionResult = { data: {}, error: null };
 
 // A chainable stand-in for supabase.from(...): records each call, resolves to `result`.
 function query(table) {
@@ -41,7 +42,11 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: {
       getSession: async () => ({ data: { session } }),
+      signInWithPassword: async (values) => { calls.push(['auth', 'password', values]); return { error: null }; },
+      signInWithOAuth: async (values) => { calls.push(['auth', 'oauth', values]); return { error: null }; },
+      setSession: async (values) => { calls.push(['auth', 'setSession', values]); return { error: null }; },
     },
+    functions: { invoke: async (name, options) => { calls.push(['function', name, options]); return functionResult; } },
     from: (table) => query(table),
     rpc: (name, params) => {
       calls.push(['rpc', name, params]);
@@ -73,6 +78,32 @@ beforeEach(() => {
   channels.length = 0;
   result = { data: [], error: null };
   session = null;
+  functionResult = { data: {}, error: null };
+});
+
+describe('username and existing sign-in methods', () => {
+  it('keeps email/password sign-in on the original Supabase path', async () => {
+    await api.auth.signIn('player@example.test', 'password');
+    expect(calls).toEqual([['auth', 'password', { email: 'player@example.test', password: 'password' }]]);
+  });
+  it('uses the account service for usernames and installs its real Supabase session', async () => {
+    functionResult = { data: { session: { access_token: 'access', refresh_token: 'refresh' } }, error: null };
+    await api.auth.signIn('player_name', 'password');
+    expect(calls).toEqual([
+      ['function', 'username-auth', { body: { action: 'signin', username: 'player_name', password: 'password' } }],
+      ['auth', 'setSession', { access_token: 'access', refresh_token: 'refresh' }],
+    ]);
+  });
+  it('passes service errors back without installing a session', async () => {
+    functionResult = { error: { context: new Response(JSON.stringify({ error: 'That username is taken.' })) } };
+    await expect(api.auth.signUpUsername('player', 'password', 'TURKEY')).rejects.toThrow('That username is taken.');
+    expect(calls.some((c) => c[1] === 'setSession')).toBe(false);
+  });
+  it('hides internal identifiers for email-free accounts', async () => {
+    session = { user: { id: 'p1', email: 'random@players.jiveturkeys.invalid' } };
+    result = { data: { username: 'player_name', role: 'user', joined_team_at: '2026-10-01' } };
+    expect(await api.auth.me()).toMatchObject({ id: 'p1', email: null, username: 'player_name', joined: true });
+  });
 });
 
 describe('chat.history', () => {

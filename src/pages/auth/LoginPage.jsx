@@ -70,14 +70,14 @@ export function LoginPage() {
       <FormError>{error}</FormError>
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email or username</Label>
           <IconInput
             icon={Mail}
             id="email"
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             autoFocus
-            placeholder="you@example.com"
+            placeholder="Your email or username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />

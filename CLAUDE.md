@@ -10,6 +10,11 @@ README.md has the service inventory and the current setup status.
 - Sign-in is **Continue with Google**, or email + password with a 6-digit email code. `/privacy` and
   `/terms` (`src/pages/LegalPages.jsx`) exist because Google requires them. Keep them public and linked
   from the sign-in screens.
+- Players can also choose **Username (no email)** and enter the team code at signup. The
+  `username-auth` account service uses Supabase for passwords and sessions, and stores aliases and
+  hashed recovery codes in `username_accounts`. Never expose recovery hashes or internal email
+  identifiers. Google/email players add a username from My Profile to keep the same account.
+  `docs/accounts.md` describes signup, linking and recovery; keep its tests in step with changes.
 - Only teammates get in: a new account enters the **team code** before it sees anything
   (`src/pages/auth/JoinTeamPage.jsx`, database function `join_team()`; ten wrong tries block it for an hour).
   Captains see and change the code in Team Settings (`src/components/TeamCodeCard.jsx`), and Copy invite on the

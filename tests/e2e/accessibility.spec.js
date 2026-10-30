@@ -44,6 +44,23 @@ test('the sign-in screens', async ({ page }) => {
   await expectAccessible(page, 'Privacy');
 });
 
+test('username signup, saved recovery codes, and password recovery', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByRole('button', { name: 'Username (no email)' }).click();
+  await expectAccessible(page, 'Username signup');
+  await page.getByLabel('Username', { exact: true }).fill('accessible_player');
+  await page.getByLabel('Team code', { exact: true }).fill('TURKEY');
+  await page.locator('#password').fill('password123');
+  await page.locator('#confirm').fill('password123');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByLabel('Your recovery code')).toBeVisible();
+  await expectAccessible(page, 'Save recovery code');
+  await page.goto('/forgot-password');
+  await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+  await expect(page.getByLabel('Recovery code', { exact: true })).toBeVisible();
+  await expectAccessible(page, 'Recover with a code');
+});
+
 test("the captain's screens", async ({ page }) => {
   test.setTimeout(90_000);
   await signIn(page);

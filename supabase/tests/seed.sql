@@ -273,3 +273,16 @@ begin
   end if;
 end;
 $$;
+-- Credential tables are service-only, rather than app entities. Include sample
+-- rows once available so future rehearsals protect existing player aliases too.
+do $$
+begin
+  if to_regclass('public.username_accounts') is not null then
+    execute $sql$
+      insert into public.username_accounts(user_id, username, recovery_hash)
+      values ('22222222-2222-4222-8222-222222222222', 'jordan_sample', repeat('a', 64));
+      insert into public.username_auth_limits(key) values ('sample-hashed-key');
+    $sql$;
+  end if;
+end;
+$$;

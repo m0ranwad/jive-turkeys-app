@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { LoaderCircle, Lock, Mail } from 'lucide-react';
+import { KeyRound, LoaderCircle, Lock, Mail } from 'lucide-react';
 import { api } from '@/api';
 import { AuthShell, FormError, OrDivider, safeReturnTo } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useToast } from '@/components/ui/toast';
 import { GoogleButton, IconInput } from './LoginPage';
+import { RecoveryCodeCard, UsernameField } from '@/components/UsernameAccount';
+import { usernameProblem } from '@/lib/username';
 
 function VerifyEmail({ email }) {
   const { toast } = useToast();
@@ -72,6 +74,10 @@ function VerifyEmail({ email }) {
 }
 
 export function RegisterPage() {
+  const [method, setMethod] = useState('email');
+  const [username, setUsername] = useState('');
+  const [teamCode, setTeamCode] = useState('');
+  const [created, setCreated] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -85,8 +91,15 @@ export function RegisterPage() {
     setError('');
     if (password !== confirm) return setError('Passwords do not match');
     if (password.length < 6) return setError('Use at least 6 characters for your password');
+    if (method === 'username' && usernameProblem(username)) return setError(usernameProblem(username));
     setBusy(true);
     try {
+      if (method === 'username') {
+        setCreated(await api.auth.signUpUsername(username, password, teamCode));
+        setPassword('');
+        setConfirm('');
+        return;
+      }
       const { needsVerification } = await api.auth.signUp(email, password);
       if (needsVerification) setVerifying(true);
       else window.location.href = returnTo;
@@ -98,6 +111,12 @@ export function RegisterPage() {
   };
 
   if (verifying) return <VerifyEmail email={email} />;
+  if (created) return (
+    <AuthShell title="Save your recovery code" subtitle={`Your username is ${created.username}.`}>
+      <RecoveryCodeCard code={created.recoveryCode} continueLabel={created.session ? 'Continue to the team' : 'Log in'}
+        onContinue={() => { window.location.href = created.session ? returnTo : '/login'; }} />
+    </AuthShell>
+  );
 
   return (
     <AuthShell
@@ -117,8 +136,25 @@ export function RegisterPage() {
     >
       <GoogleButton returnTo={returnTo} onError={setError} />
       <OrDivider />
+      <div className="mb-5 grid grid-cols-2 gap-2">
+        {[['username', 'Username (no email)'], ['email', 'Email']].map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={method === value} disabled={busy}
+            className={`rounded-xl px-3 py-3 text-sm font-semibold ${method === value ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600'}`}
+            onClick={() => { setMethod(value); setError(''); }}>{label}</button>
+        ))}
+      </div>
       <FormError>{error}</FormError>
       <form onSubmit={submit} className="space-y-4">
+        {method === 'username' ? (
+          <>
+            <p className="text-sm text-zinc-600">Already use Google or email? <Link className="text-lime-700 underline" to="/login">Log in first</Link>, then add a username in My Profile to keep the same account.</p>
+            <UsernameField value={username} onChange={setUsername} />
+            <div className="space-y-2">
+              <Label htmlFor="team-code">Team code</Label>
+              <IconInput icon={KeyRound} id="team-code" autoComplete="off" maxLength={40} value={teamCode} onChange={(e) => setTeamCode(e.target.value)} />
+            </div>
+          </>
+        ) : (
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <IconInput
@@ -132,6 +168,7 @@ export function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <IconInput

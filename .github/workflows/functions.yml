@@ -1,7 +1,7 @@
 name: Supabase functions
 
-# Puts the chat notification sender (supabase/functions/notify-chat) on
-# Supabase when it changes on main, creating its signing keys the first time.
+# Puts the account service and chat notification sender on Supabase when they
+# change on main, creating notification signing keys the first time.
 # On pull requests it only checks that the SUPABASE_ACCESS_TOKEN secret can see
 # the project's functions and secrets; nothing is changed until publish.
 #
@@ -44,7 +44,7 @@ jobs:
           echo "::notice title=Supabase access::The token can see the project's functions and secrets."
 
   deploy:
-    name: Deploy notify-chat
+    name: Deploy account and notification services
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     concurrency:
@@ -74,3 +74,5 @@ jobs:
           fi
       - name: Deploy the notification sender
         run: supabase functions deploy notify-chat --project-ref "$PROJECT_REF" --use-api
+      - name: Deploy username sign-in
+        run: supabase functions deploy username-auth --project-ref "$PROJECT_REF" --use-api

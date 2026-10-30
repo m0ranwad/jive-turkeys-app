@@ -108,6 +108,24 @@ export function createSupabaseBackend(url, key) {
 
   const entities = Object.fromEntries(Object.entries(TABLES).map(([name, table]) => [name, entity(table)]));
 
+  async function usernameAccount(action, values) {
+    const { data, error } = await supabase.functions.invoke('username-auth', { body: { action, ...values } });
+    if (error) {
+      let message;
+      try { message = (await error.context.json()).error; } catch { /* Network or service unavailable. */ }
+      throw new Error(message || 'Account sign-in is unavailable right now. Please try again shortly.');
+    }
+    if (data?.error) throw new Error(data.error);
+    if (data?.session) {
+      const { error: sessionError } = await supabase.auth.setSession(data.session);
+      if (sessionError) {
+        if (action === 'signup') return { ...data, session: null };
+        throw new Error('Please try logging in again.');
+      }
+    }
+    return data;
+  }
+
   const auth = {
     /**
      * The signed-in user ({ id, email, full_name, role, joined }) or null. `joined`: on the
@@ -118,9 +136,11 @@ export function createSupabaseBackend(url, key) {
       const sessionUser = data.session?.user;
       if (!sessionUser) return null;
       const { data: row } = await supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle();
+      const { data: alias } = await supabase.from('username_accounts').select('username').eq('user_id', sessionUser.id).maybeSingle();
       return {
         id: sessionUser.id,
-        email: sessionUser.email,
+        email: sessionUser.email?.endsWith('@players.jiveturkeys.invalid') ? null : sessionUser.email,
+        username: alias?.username || null,
         full_name: row?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
         role: row?.role || 'user',
         joined: row ? row.joined_team_at !== null || row.role === 'admin' : true,
@@ -141,6 +161,7 @@ export function createSupabaseBackend(url, key) {
     },
 
     async signIn(email, password) {
+      if (!email.includes('@')) return usernameAccount('signin', { username: email, password });
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Invalid email or password' : error.message);
     },
@@ -158,6 +179,11 @@ export function createSupabaseBackend(url, key) {
       }
       return { needsVerification: !data.session };
     },
+
+    signUpUsername: (username, password, teamCode) => usernameAccount('signup', { username, password, teamCode }),
+    linkUsername: (username, password) => usernameAccount('link', { username, password }),
+    recoverUsername: (username, recoveryCode, password) => usernameAccount('recover', { username, recoveryCode, password }),
+    rotateRecoveryCode: (username, password) => usernameAccount('rotate', { username, password }),
 
     async verifySignup(email, code) {
       let { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });

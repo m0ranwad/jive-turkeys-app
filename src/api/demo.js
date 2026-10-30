@@ -7,6 +7,7 @@ import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
+import { makeRecoveryCode, normalizeRecoveryCode, normalizeUsername, recoveryHash, usernameProblem } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v30';
@@ -990,7 +991,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const user = currentUser();
       if (!user) return null;
       const joined = !!user.joined_team_at || user.role === 'admin';
-      return delay({ id: user.id, email: user.email, full_name: user.full_name, role: user.role, joined });
+      return delay({ id: user.id, email: user.email, username: user.username || null, full_name: user.full_name, role: user.role, joined });
     },
     onChange(callback) {
       authListeners.add(callback);
@@ -1000,12 +1001,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       return !!currentUser();
     },
     async signIn(email, password) {
-      const user = db.users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-      if (!user || user.password !== password) throw new Error('Invalid email or password');
+      const login = email.trim().toLowerCase();
+      const user = db.users.find((u) => login.includes('@') ? u.email?.toLowerCase() === login : u.username === login);
+      if (!user || user.password !== password) throw new Error('Invalid email, username, or password');
       setSession(user.id);
     },
     async signUp(email, password) {
-      if (db.users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
+      if (db.users.some((u) => u.email?.toLowerCase() === email.trim().toLowerCase())) {
         throw new Error('An account with this email already exists. Try logging in.');
       }
       const user = { id: uid(), email: email.trim(), password, full_name: '', role: 'user', joined_team_at: null };
@@ -1013,6 +1015,54 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       save(db);
       setSession(user.id);
       return { needsVerification: false };
+    },
+    async signUpUsername(value, password, teamCode) {
+      const username = normalizeUsername(value);
+      if (usernameProblem(username)) throw new Error(usernameProblem(username));
+      if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
+      if (String(teamCode).trim().toLowerCase() !== db.team_join_code[0].code.trim().toLowerCase()) {
+        throw new Error('That team code is not right. Ask a captain for the code.');
+      }
+      if (db.users.some((u) => u.username === username)) throw new Error('That username is taken. Choose another or log in.');
+      const recoveryCode = makeRecoveryCode();
+      const user = { id: uid(), email: null, username, password, recovery_hash: await recoveryHash(recoveryCode), full_name: '', role: 'user', joined_team_at: now() };
+      db.users.push(user);
+      save(db);
+      setSession(user.id);
+      return { recoveryCode, username, session: true };
+    },
+    async linkUsername(value, password) {
+      const user = currentUser();
+      if (!user) throw new Error('Sign in to your existing account first.');
+      if (!user.joined_team_at && user.role !== 'admin') throw new Error('Join the team first.');
+      const username = normalizeUsername(value);
+      if (usernameProblem(username)) throw new Error(usernameProblem(username));
+      if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
+      if (user.username || db.users.some((u) => u.username === username)) throw new Error('That username is taken, or your account already has a username.');
+      const recoveryCode = makeRecoveryCode();
+      Object.assign(user, { username, password, recovery_hash: await recoveryHash(recoveryCode) });
+      save(db);
+      return { recoveryCode, username };
+    },
+    async recoverUsername(value, code, password) {
+      const user = db.users.find((u) => u.username === normalizeUsername(value));
+      if (!user || !/^[a-f0-9]{32}$/.test(normalizeRecoveryCode(code)) || user.recovery_hash !== await recoveryHash(code)) {
+        throw new Error('Invalid username or recovery code.');
+      }
+      if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
+      const recoveryCode = makeRecoveryCode();
+      user.password = password;
+      user.recovery_hash = await recoveryHash(recoveryCode);
+      save(db);
+      return { recoveryCode };
+    },
+    async rotateRecoveryCode(username, password) {
+      const user = currentUser();
+      if (!user || user.username !== normalizeUsername(username) || user.password !== password) throw new Error('Invalid username or password.');
+      const recoveryCode = makeRecoveryCode();
+      user.recovery_hash = await recoveryHash(recoveryCode);
+      save(db);
+      return { recoveryCode };
     },
     async verifySignup() {},
     async resendSignup() {},

@@ -79,7 +79,7 @@ export function AuthShell({ icon: Icon, title, subtitle, footer, children }) {
 
 export function FormError({ children }) {
   if (!children) return null;
-  return <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{children}</div>;
+  return <div role="alert" className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{children}</div>;
 }
 
 export function GoogleIcon({ className = 'w-5 h-5' }) {

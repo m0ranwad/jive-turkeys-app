@@ -7,29 +7,55 @@ import { PageSpinner } from '@/components/PageSpinner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/input';
 import { IconInput } from './LoginPage';
+import { RecoveryCodeCard, UsernameField } from '@/components/UsernameAccount';
 
 export function ForgotPasswordPage() {
+  const [useCode, setUseCode] = useState(false);
+  const [username, setUsername] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [replacement, setReplacement] = useState('');
+  const [error, setError] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
+    setError('');
+    if (useCode && password !== confirm) return setError('Passwords do not match');
+    if (useCode && password.length < 6) return setError('Use at least 6 characters for your password');
     setBusy(true);
     try {
+      if (useCode) {
+        const data = await api.auth.recoverUsername(username, code, password);
+        setReplacement(data.recoveryCode);
+        setPassword('');
+        setConfirm('');
+        setCode('');
+        return;
+      }
       await api.auth.requestPasswordReset(email);
-    } catch {
+    } catch (err) {
+      if (useCode) setError(err.message || 'Could not reset your password.');
       // Same message either way so the form doesn't reveal who has an account.
     } finally {
       setBusy(false);
-      setSent(true);
+      if (!useCode) setSent(true);
     }
   };
+
+  if (replacement) return (
+    <AuthShell title="Password reset" subtitle="Save your new recovery code. Your old code no longer works.">
+      <RecoveryCodeCard code={replacement} continueLabel="Back to log in" onContinue={() => { window.location.href = '/login'; }} />
+    </AuthShell>
+  );
 
   return (
     <AuthShell
       title="Reset password"
-      subtitle="We'll send you a link to reset it"
+      subtitle={useCode ? 'Use the recovery code you saved when you added your username.' : "We'll send you a link to reset it"}
       footer={
         <Link to="/login" className="font-medium text-lime-700 hover:underline">
           <ArrowLeft className="mr-1 inline h-3 w-3" />
@@ -43,6 +69,24 @@ export function ForgotPasswordPage() {
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-4">
+          <FormError>{error}</FormError>
+          {useCode ? (
+            <>
+              <UsernameField value={username} onChange={setUsername} />
+              <div className="space-y-2">
+                <Label htmlFor="saved-recovery-code">Recovery code</Label>
+                <IconInput icon={Lock} id="saved-recovery-code" autoComplete="off" autoCapitalize="none" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">New password</Label>
+                <IconInput icon={Lock} id="password" type="password" autoComplete="new-password" minLength={6} maxLength={256} value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm">Confirm password</Label>
+                <IconInput icon={Lock} id="confirm" type="password" autoComplete="new-password" minLength={6} maxLength={256} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              </div>
+            </>
+          ) : (
           <div className="space-y-2">
             <Label htmlFor="email">Email address</Label>
             <IconInput
@@ -56,6 +100,7 @@ export function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+          )}
           <Button type="submit" className="h-12 w-full font-medium" disabled={busy}>
             {busy ? (
               <>
@@ -63,9 +108,11 @@ export function ForgotPasswordPage() {
                 Sending...
               </>
             ) : (
-              'Send reset link'
+              useCode ? 'Reset password' : 'Send reset link'
             )}
           </Button>
+          <button type="button" disabled={busy} className="w-full text-center text-sm font-medium text-lime-700 underline"
+            onClick={() => { setUseCode(!useCode); setError(''); }}>{useCode ? 'Use email instead' : 'Use a recovery code instead'}</button>
         </form>
       )}
     </AuthShell>

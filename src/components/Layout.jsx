@@ -74,7 +74,7 @@ export function Layout() {
   // No badges while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.unread : 0);
   const mentionsFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.mentions : 0);
-  const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';
+  const myInitials = user ? initials(profile?.display_name || user.full_name || user.username || user.email || 'Player') : '';
 
   useEffect(() => {
     if (!user) return;
