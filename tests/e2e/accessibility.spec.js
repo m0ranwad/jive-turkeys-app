@@ -112,6 +112,19 @@ test("the captain's screens", async ({ page }) => {
 
   await visit(page, '/announcements', 'Announcements');
   await expectAccessible(page, 'Announcements');
+  const post = page.getByRole('article').filter({ hasText: 'Team photo next game' });
+  await post.getByRole('button', { name: 'Announcement options' }).click();
+  await expect(page.getByRole('dialog', { name: 'Announcement options' })).toBeVisible();
+  await expectAccessible(page, 'Announcement options');
+  await page.getByRole('dialog', { name: 'Announcement options' }).getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit announcement' })).toBeVisible();
+  await expectAccessible(page, 'Editing an announcement');
+  await page.keyboard.press('Escape');
+  await post.getByRole('button', { name: 'Announcement options' }).click();
+  await page.getByRole('dialog', { name: 'Announcement options' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('dialog', { name: 'Delete announcement?' })).toBeVisible();
+  await expectAccessible(page, 'Deleting an announcement');
+  await page.keyboard.press('Escape');
 
   await visit(page, '/profile', 'Casey Captain');
   await expectAccessible(page, 'My Profile');

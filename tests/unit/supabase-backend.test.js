@@ -115,6 +115,24 @@ describe('chat.overview and markRead', () => {
   });
 });
 
+describe('announcements.unread and markRead', () => {
+  it('asks the database how many are new, as a number', async () => {
+    result = { data: 2, error: null };
+    expect(await api.announcements.unread()).toBe(2);
+    expect(calls).toEqual([['rpc', 'announcements_unread', undefined]]);
+  });
+
+  it('marks them read up to the newest post on screen', async () => {
+    await api.announcements.markRead('2026-10-08T19:00:00.123456+00:00');
+    expect(calls).toEqual([['rpc', 'announcements_mark_read', { p_read_at: '2026-10-08T19:00:00.123456+00:00' }]]);
+  });
+
+  it('says why when the database refuses', async () => {
+    result = { data: null, error: { message: 'new row violates row-level security policy' } };
+    await expect(api.announcements.markRead('2026-10-08T19:00:00Z')).rejects.toThrow('row-level security');
+  });
+});
+
 describe('private chats', () => {
   it('starts one and adds people through the database functions', async () => {
     result = { data: { id: 't1', title: 'Ride', visibility: 'private' }, error: null };

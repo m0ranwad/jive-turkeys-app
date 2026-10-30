@@ -21,9 +21,11 @@ import { InstallGuide, useInstall } from '@/components/InstallApp';
 import { PageSpinner } from '@/components/PageSpinner';
 import { Walkthrough } from '@/components/Walkthrough';
 import { Dialog, DialogClose, DialogSidePanel, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useAnnouncementsUnread } from '@/hooks/useAnnouncementsUnread';
 import { useChatUnread } from '@/hooks/useChatUnread';
 import { useTeam } from '@/hooks/useTeam';
 import { signOut } from '@/lib/actions';
+import { newPostsLabel } from '@/lib/announcements';
 import { lastChatRoom } from '@/lib/chat';
 import { NOTIFY_CHOICES_EVENT, resyncPush, setIconBadge } from '@/lib/push';
 import { STATUS_LABEL, TEAM_FOUNDED } from '@/lib/constants';
@@ -31,6 +33,7 @@ import { initials, seasonLabel, sessionOf, today } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const CHAT_PATH = '/banter';
+const ANNOUNCEMENTS_PATH = '/announcements';
 
 const TABS = [
   { to: '/', label: 'Schedule', icon: CalendarDays },
@@ -40,12 +43,15 @@ const TABS = [
   { to: '/dues', label: 'Dues', icon: DollarSign },
 ];
 
-/** The Chat tab's unread number, or (with `mention`) its separate @ count of messages that mention you. */
-function Badge({ n, mention, className }) {
+/**
+ * The Chat tab's unread number, or (with `mention`) its separate @ count of messages that mention you.
+ * Also the menu's count of new announcements, with its own `label`.
+ */
+function Badge({ n, mention, label, className }) {
   if (!n) return null;
   return (
     <span
-      aria-label={mention ? `${n} ${n === 1 ? 'mention' : 'mentions'}` : `${n} unread`}
+      aria-label={label || (mention ? `${n} ${n === 1 ? 'mention' : 'mentions'}` : `${n} unread`)}
       className={cn(
         'grid h-[18px] min-w-[18px] place-items-center rounded-full bg-lime-400 px-1 text-[11px] font-black leading-none tracking-normal text-black ring-2 ring-white',
         className,
@@ -74,6 +80,9 @@ export function Layout() {
   // No badges while reading the chat itself.
   const unreadFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.unread : 0);
   const mentionsFor = (to) => (to === CHAT_PATH && !onChat ? chatUnread.mentions : 0);
+  // Announcements you haven't opened: a number on its menu item and a dot on the Menu button. None while reading them.
+  const announcementsUnread = useAnnouncementsUnread(!!user, pathname);
+  const newPosts = pathname === ANNOUNCEMENTS_PATH ? 0 : announcementsUnread;
   const myInitials = user ? initials(profile?.display_name || user.full_name || user.email) : '';
 
   useEffect(() => {
@@ -111,7 +120,7 @@ export function Layout() {
 
   // Only what isn't a tab (the tabs and the profile button are always on screen). Your name at the top opens My Profile.
   const menuItems = [
-    { to: '/announcements', label: 'Announcements', icon: Megaphone, show: true },
+    { to: ANNOUNCEMENTS_PATH, label: 'Announcements', icon: Megaphone, show: true, badge: newPosts },
     { to: '/rules', label: 'Field Rules', icon: BookOpen, show: true },
     { to: '/settings', label: 'Team Settings', icon: SlidersHorizontal, show: isCaptain },
   ];
@@ -181,11 +190,18 @@ export function Layout() {
               >
                 {myInitials || <User className="h-5 w-5" />}
               </NavLink>
+              {/* Still named "Menu" with a new post, so voice control finds it by what's on screen; the dot is its description. */}
               <DialogTrigger
                 aria-label="Menu"
-                className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 transition hover:bg-white/10"
+                aria-describedby={newPosts ? 'menu-new-posts' : undefined}
+                className="relative grid h-10 w-10 place-items-center rounded-2xl bg-white/5 transition hover:bg-white/10"
               >
                 <Menu className="h-5 w-5" />
+                {newPosts > 0 && (
+                  <span id="menu-new-posts" data-new-posts-dot className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-lime-400 ring-2 ring-zinc-950">
+                    <span className="sr-only">{newPostsLabel(newPosts)}</span>
+                  </span>
+                )}
               </DialogTrigger>
             </div>
           </div>
@@ -287,6 +303,7 @@ export function Layout() {
                 >
                   <item.icon className="h-4 w-4 text-lime-400" />
                   {item.label}
+                  <Badge n={item.badge} label={item.badge ? newPostsLabel(item.badge) : ''} className="ml-auto ring-zinc-950" />
                 </Link>
               ))}
             <button

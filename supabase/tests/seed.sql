@@ -273,3 +273,13 @@ begin
   end if;
 end;
 $$;
+
+-- Jordan opened Announcements after the welcome post (once read markers exist).
+do $$
+begin
+  if to_regclass('public.announcement_reads') is not null then
+    insert into public.announcement_reads (user_id, last_read_at) values
+      ('22222222-2222-4222-8222-222222222222', '2026-10-02 12:00+00');
+  end if;
+end;
+$$;

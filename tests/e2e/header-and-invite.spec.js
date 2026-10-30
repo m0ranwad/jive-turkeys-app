@@ -31,13 +31,14 @@ test('anyone can copy an invite from the Team page, even once everyone has joine
 });
 
 test('announcement dates are in local time', async ({ page }) => {
-  // The sample post went up 10 hours ago. Its date is the local calendar day, not the UTC one (which runs ahead
-  // in the evening in the US).
+  // The sample welcome post went up 10 hours ago. Its date is the local calendar day, not the UTC one (which runs
+  // ahead in the evening in the US).
   await signIn(page);
   await page.goto('/announcements');
   const shown = await page.evaluate(() => {
     const d = new Date(Date.now() - 600 * 60000);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   });
-  await expect(page.getByText(new RegExp(`· ${shown}`))).toBeVisible();
+  const welcome = page.getByRole('article').filter({ hasText: 'Welcome to the new team hub' });
+  await expect(welcome.getByText(new RegExp(`· ${shown}`))).toBeVisible();
 });
