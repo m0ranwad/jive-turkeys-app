@@ -479,6 +479,7 @@ describe('dues', () => {
     expect([alex.pays_with, riley.pays_with]).toEqual([riley.user_id, alex.user_id]);
     const [settings] = await api.entities.TeamSettings.list();
     expect(settings.pay_venmo).toBeTruthy();
+    expect(settings.pay_paypal).toBe('kircherbrian');
   });
 
   it('lets any player mark players paid, recording who did it, without touching custom amounts', async () => {

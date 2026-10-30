@@ -133,7 +133,7 @@ test('captains can correct who was on a past session, and only that session chan
   await expect(page.getByTestId('dues-session')).toHaveText('Session 3 · 2026–27');
   await page.getByRole('button', { name: 'Set the fee' }).click();
   await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
-  await expect(page.getByTestId('dues-not-started')).toContainText("Session 3 hasn't started, so this uses today's roster.");
+  await expect(page.getByTestId('dues-not-started')).toContainText('Estimated shares. Amounts may change as players confirm.');
 });
 
 test('once a session is over, status changes count from the next one and its dues stay put; captains can correct it', async ({ page }) => {
@@ -154,7 +154,7 @@ test('once a session is over, status changes count from the next one and its due
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
   await expect(page.getByText('$61 each')).toBeVisible();
   // Adding players on the Team page doesn't change it any more; correcting it does.
-  await expect(page.getByRole('link', { name: /Add players to the roster on the Team page/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add players on Team' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Change who was on session 2' }).click();
   const dialog = page.getByRole('dialog', { name: 'Who was on session 2' });
   await expect(dialog.getByLabel('Kelly Moss in session 2')).toHaveValue('active');

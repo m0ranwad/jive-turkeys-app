@@ -67,7 +67,7 @@ requests or merges, and shouldn't need to. Run the whole process yourself and ta
    touched the chat or the database, also run `npm run test:e2e` and `npm run test:db` (see
    [Tests](#tests)). If you change how the chat works on purpose, update `docs/chat.md` and its tests in
    the same change; the same goes for game day (RSVPs, results, stats, Player of the Match) and
-   `docs/games.md`.
+   `docs/games.md`. Changes to dues update `docs/dues.md` and its tests in the same change.
 2. **Preview.** Push the branch and open a pull request yourself, with a plain-English title and summary.
    Use your GitHub tools or `gh api` (REST). `gh pr` doesn't work in cloud sessions.
    - Cloudflare builds the preview in about a minute. Poll the `Workers Builds: jive-turkeys-app` check
@@ -192,8 +192,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
   notifications and mentions) and the demo backend's `canRead()` must agree. A player taken off the team keeps their
   rows, but they stop counting (`chat_member_active()`), since database updates never delete. A chat with
   `named = false` shows the other people in it (`roomTitle()` in `src/lib/chat.js`, `chat_room_label()` in SQL).
-- Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. The whole team sees the dues and
-  can mark anyone paid or link a couple (database functions `mark_dues_paid()` and `set_dues_partner()`); every
+- Dues: `src/pages/DuesPage.jsx`, `src/components/dues/`, `src/lib/dues.js`. `docs/dues.md` is the expected behavior.
+  The whole team sees the dues and can mark anyone paid or link a couple (database functions
+  `mark_dues_paid()` and `set_dues_partner()`); every
   paid / not paid change is kept in `dues_history`, which only `mark_dues_paid()` writes. Marking someone not paid
   always asks first. Couples are kept per session (`session_roster.pays_with_user` / `pays_with_guest`, read by
   `membersForSession()`; a couple counts only when each points at the other): `set_dues_partner()` sets who pays together

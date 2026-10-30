@@ -475,7 +475,7 @@ function seed() {
         rules_footer: 'Final decisions regarding all rules and interpretations are made by the owners of North Coast Premier Soccer Complex.',
         // The team's real Venmo and PayPal, so the preview's pay buttons can be tried.
         pay_venmo: 'B-Kircher',
-        pay_paypal: 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ',
+        pay_paypal: 'kircherbrian',
         pay_cashapp: null,
         pay_zelle: null,
         pay_note: 'Cash at the field works too.',
