@@ -96,9 +96,9 @@ export function RegisterPage() {
     try {
       if (method === 'username') {
         const data = await api.auth.signUpUsername(username, password, teamCode);
-        rememberRecoveryCode(data.username, data.recoveryCode);
-        // Signed in: the site shows the code before anything else (RecoveryCodeGate), even after a reload.
-        if (data.session) {
+        // Signed in and the code is stored: the site shows it before anything
+        // else (RecoveryCodeGate), even after a reload. Otherwise it's shown here.
+        if (rememberRecoveryCode(data.username, data.recoveryCode) && data.session) {
           window.location.href = returnTo;
           return;
         }
@@ -120,8 +120,8 @@ export function RegisterPage() {
   if (verifying) return <VerifyEmail email={email} />;
   if (created) return (
     <AuthShell title="Save your recovery code" subtitle={`Your username is ${created.username}.`}>
-      <RecoveryCodeCard code={created.recoveryCode} continueLabel="Log in"
-        onContinue={() => { forgetRecoveryCode(); window.location.href = '/login'; }} />
+      <RecoveryCodeCard code={created.recoveryCode} continueLabel={created.session ? 'Continue to the team' : 'Log in'}
+        onContinue={() => { forgetRecoveryCode(); window.location.href = created.session ? returnTo : '/login'; }} />
     </AuthShell>
   );
 

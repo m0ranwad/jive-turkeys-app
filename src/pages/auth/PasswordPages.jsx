@@ -16,7 +16,7 @@ export function ForgotPasswordPage() {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [replacement, setReplacement] = useState('');
+  const [replacement, setReplacement] = useState(null);
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -31,13 +31,13 @@ export function ForgotPasswordPage() {
     try {
       if (useCode) {
         const data = await api.auth.recoverUsername(username, code, password);
-        rememberRecoveryCode(normalizeUsername(username), data.recoveryCode);
-        // Signed in with the new password: the site shows the new code first (RecoveryCodeGate).
-        if (data.session) {
+        // Signed in with the new password and the code is stored: the site
+        // shows the new code first (RecoveryCodeGate). Otherwise it's shown here.
+        if (rememberRecoveryCode(normalizeUsername(username), data.recoveryCode) && data.session) {
           window.location.href = '/';
           return;
         }
-        setReplacement(data.recoveryCode);
+        setReplacement(data);
         setPassword('');
         setConfirm('');
         setCode('');
@@ -55,7 +55,8 @@ export function ForgotPasswordPage() {
 
   if (replacement) return (
     <AuthShell title="Password reset" subtitle="Save your new recovery code. Your old code no longer works.">
-      <RecoveryCodeCard code={replacement} continueLabel="Back to log in" onContinue={() => { forgetRecoveryCode(); window.location.href = '/login'; }} />
+      <RecoveryCodeCard code={replacement.recoveryCode} continueLabel={replacement.session ? 'Continue to the team' : 'Back to log in'}
+        onContinue={() => { forgetRecoveryCode(); window.location.href = replacement.session ? '/' : '/login'; }} />
     </AuthShell>
   );
 

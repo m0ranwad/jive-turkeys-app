@@ -62,18 +62,20 @@ async function passwordMatches({ admin, createAuthClient }, email, password) {
   return true;
 }
 
-// Signs the player in with their new password and ends every other session, so
-// whoever had the old password is signed out too. Never throws: the password
-// and code have already changed, and the player still needs the new code.
+// After a password change, which ends all of the account's sessions (the
+// player's own too), signs them back in with the new password. Ending any
+// other session again is a safeguard, in case Supabase ever stops doing that
+// itself. Never throws: the password and code have already changed, and the
+// player still needs the new code.
 async function signInAlone({ admin, createAuthClient }, email, password) {
   try {
     const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
     if (error || !data?.session) throw error || new Error('No session');
     const { error: signOutError } = await admin.auth.admin.signOut(data.session.access_token, 'others');
-    if (signOutError) console.error('username-auth: could not end other sessions after a reset', signOutError.message);
+    if (signOutError) console.error('username-auth: could not end other sessions after a password change', signOutError.message);
     return sessionTokens(data.session);
   } catch (error) {
-    console.error('username-auth: could not sign in after a reset; other sessions are still open', error?.message);
+    console.error('username-auth: could not sign in after a password change', error?.message);
     return null;
   }
 }
@@ -152,12 +154,19 @@ export async function handleUsernameAuth(req, deps) {
       const me = await caller(req, admin);
       if (!me) return reply(401, { error: 'Sign in to your existing account first.' });
       if (!await allow(10, 'rotate', me.user.id)) return tooMany();
-      const { data: alias, error: aliasError } = await admin.from('username_accounts').select('user_id').eq('username', username).maybeSingle();
+      const { data: alias, error: aliasError } = await admin.from('username_accounts').select('user_id, recovery_hash').eq('username', username).maybeSingle();
       if (aliasError) throw aliasError;
       if (alias?.user_id !== me.user.id) return invalid();
       if (!await passwordMatches(deps, me.user.email, password)) return invalid();
-      const { error } = await admin.from('username_accounts').update({ recovery_hash: hash }).eq('user_id', me.user.id);
+      // Only replaces the code read above, and not right after a reset, so a
+      // request checked against an old password can't undo a reset.
+      const { data: replaced, error } = await admin.rpc('replace_username_recovery', {
+        p_user: me.user.id, p_hash: alias.recovery_hash, p_new_hash: hash,
+      });
       if (error) throw error;
+      if (!replaced) {
+        return reply(409, { error: 'Your recovery code just changed. If you reset your password, try again in 10 minutes.' });
+      }
       return reply(200, { recoveryCode });
     }
     if (action === 'recover') {
@@ -234,7 +243,8 @@ export async function handleUsernameAuth(req, deps) {
         await admin.from('username_accounts').delete().eq('user_id', user.id);
         throw error;
       }
-      return reply(200, { recoveryCode, username });
+      // Setting the password signed the player out, so hand them a new session.
+      return reply(200, { recoveryCode, username, session: await signInAlone(deps, user.email, password) });
     }
     // The same joining join_team() does when a player enters the code on the site.
     const { data: joined, error: joinError } = await admin.rpc('join_team_as', { p_user: user.id, p_code: String(body.teamCode || '') });

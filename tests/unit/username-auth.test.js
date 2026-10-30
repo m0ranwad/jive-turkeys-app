@@ -29,8 +29,14 @@ function setup() {
         users.find((u) => u.id === p.p_user).joined_team_at = '2026-10-30';
         return { data: 'joined' };
       }
+      if (name === 'replace_username_recovery') {
+        const row = aliases.find((a) => a.user_id === p.p_user && a.recovery_hash === p.p_hash
+          && !(a.reset_at > Date.now() - 10 * 60 * 1000));
+        if (row) row.recovery_hash = p.p_new_hash;
+        return { data: !!row };
+      }
       const row = aliases.find((a) => a.username === p.p_username && a.recovery_hash === p.p_hash);
-      if (row) row.recovery_hash = p.p_new_hash;
+      if (row) Object.assign(row, { recovery_hash: p.p_new_hash, reset_at: Date.now() });
       return { data: row?.user_id || null };
     }),
     from: (table) => {
@@ -339,5 +345,37 @@ describe('username account service', () => {
     s.admin.rpc.mockResolvedValueOnce({ error: { message: 'connection refused' } });
     expect((await s.signup()).status).toBe(503);
     expect(console.error).toHaveBeenCalledWith('username-auth failed', 'signup', '', '', 'connection refused');
+  });
+  it("a code replacement checked before a reset can't undo the reset", async () => {
+    const s = setup();
+    const linked = await s.link({ password: 'linked-password' });
+    let reset;
+    s.signIn.mockImplementationOnce(async () => {
+      // The reset lands while the replacement is still checking the old password.
+      reset = await s.request({ action: 'recover', username: 'my_alias', password: 'reset-password', recoveryCode: linked.body.recoveryCode });
+      return { data: { session: { access_token: 'checked-before-the-reset', refresh_token: 'refresh' } } };
+    });
+    const late = await s.request({ action: 'rotate', username: 'my_alias', password: 'linked-password' }, 'valid');
+    expect(reset.status).toBe(200);
+    expect(late.status).toBe(409);
+    expect(late.body).not.toHaveProperty('recoveryCode');
+    expect(s.aliases[0].recovery_hash).toBe(await recoveryHash(reset.body.recoveryCode));
+  });
+
+  it('waits 10 minutes after a reset before replacing the code', async () => {
+    const s = setup();
+    const linked = await s.link({ password: 'linked-password' });
+    await s.request({ action: 'recover', username: 'my_alias', password: 'reset-password', recoveryCode: linked.body.recoveryCode });
+    const rotate = { action: 'rotate', username: 'my_alias', password: 'reset-password' };
+    expect((await s.request(rotate, 'valid')).body.error).toMatch(/try again in 10 minutes/);
+    s.aliases[0].reset_at = Date.now() - 11 * 60 * 1000;
+    expect((await s.request(rotate, 'valid')).status).toBe(200);
+  });
+
+  it('signs the player back in after adding a username, since setting a password signs them out', async () => {
+    const s = setup();
+    const linked = await s.link();
+    expect(linked.body.session).toEqual({ access_token: 'access-2', refresh_token: 'refresh' });
+    expect(s.signIn).toHaveBeenLastCalledWith({ email: 'player@example.test', password: 'new-password' });
   });
 });

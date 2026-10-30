@@ -126,6 +126,13 @@ describe('username and existing sign-in methods', () => {
     setSessionError = { message: 'expired' };
     expect(await api.auth.recoverUsername('player', 'old-code', 'password')).toMatchObject({ recoveryCode: 'code', session: null });
   });
+  it('installs the new session after adding a username, and keeps the code if that fails', async () => {
+    functionResult = { data: { recoveryCode: 'code', username: 'player', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+    await api.auth.linkUsername('player', 'new-password', 'old-password');
+    expect(calls).toContainEqual(['auth', 'setSession', { access_token: 'a', refresh_token: 'r' }]);
+    setSessionError = { message: 'expired' };
+    expect(await api.auth.linkUsername('player', 'new-password', 'old-password')).toMatchObject({ recoveryCode: 'code', session: null });
+  });
   it('sends the current password when adding a username', async () => {
     functionResult = { data: { recoveryCode: 'code', username: 'player' }, error: null };
     await api.auth.linkUsername('player', 'new-password', 'old-password');

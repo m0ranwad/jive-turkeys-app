@@ -14,20 +14,26 @@ After signup, the player must save their recovery code before continuing. It has
 and is shown once. Until they tick "I've saved my recovery code", it stays on that device and comes
 up before every other screen for that signed-in player (`RecoveryCodeGate`), so a reload or a tap
 on another tab can't lose it. The same goes for a code from adding a username, replacing a code,
-or a reset.
+or a reset. If the browser won't store it (storage full or blocked), the code is kept for that visit
+and shown on the page right away, instead of the page moving on first.
 
 Forgot password offers email recovery or **Use a recovery code instead**. Username, saved code and
 a new password reset that same account. A successful reset replaces the code, signs the player in
-with the new password, ends every other session on the account (anyone who had the old password is
-signed out), and shows the new code; old codes cannot be reused. Without the password, recovery
+with the new password, and shows the new code; old codes cannot be reused. Changing the password
+ends every session on the account, so anyone who had the old password is signed out (Supabase does
+this; the service also ends any other session as a safeguard). Without the password, recovery
 code, or another existing sign-in method, the player cannot recover the account automatically.
 Signed-in players can replace a lost recovery code from My Profile by confirming their password.
+That waits 10 minutes after a reset, and only replaces the code the service read before checking the
+password (`replace_username_recovery()`), so a request checked against an old password can't land
+after a reset and hand out a code that undoes it.
 
 Existing Google/email players should sign in first and choose **My Profile → Add a username**.
 The service verifies their current session and team membership. Adding a username sets the
 password on that same Supabase identity (also the email sign-in password), so the owner proves it's
 them first: email/password accounts enter their current password, and Google-only accounts must
-have signed in within the last 10 minutes. It never creates or merges identities. Their profile,
+have signed in within the last 10 minutes. Setting the password signs the player out everywhere,
+so the service signs them back in with the new one. It never creates or merges identities. Their profile,
 Google login, stats, RSVPs and dues keep the same user ID. Do not guess account ownership from a
 display name, username, or unverified email.
 

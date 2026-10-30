@@ -54,7 +54,13 @@ test('an existing Google/email player can add a username without a second profil
   await page.locator('#username-password').fill(PASSWORD);
   await page.locator('#username-confirm').fill(PASSWORD);
   await page.getByRole('button', { name: 'Add username', exact: true }).click();
-  await saveCode(page, 'Done');
+  // The code comes before everything else: no tabs to wander off with, even by going back.
+  await expect(page.getByLabel('Your recovery code')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Schedule' })).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByLabel('Your recovery code')).toBeVisible();
+  await saveCode(page);
+  await page.goto('/profile');
   await expect(page.getByText('casey_cap', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByLabel('Email or username').fill('CASEY_CAP');
@@ -123,4 +129,32 @@ test('the sample player Jordan signs in with a username', async ({ page }) => {
   await page.goto('/profile');
   await expect(page.getByText('Your username is')).toContainText('jordan');
   await expect(page.getByRole('button', { name: 'Replace recovery code' })).toBeVisible();
+});
+
+test("if the browser won't store the code, it's shown before leaving the page", async ({ page }) => {
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'jt_unsaved_recovery_code') throw new DOMException('Storage is full', 'QuotaExceededError');
+      return setItem.call(this, key, value);
+    };
+  });
+  await startSignup(page, 'full_storage');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page).toHaveURL(/\/register/);
+  const code = await saveCode(page);
+  await expect(page.getByRole('heading', { name: 'Join the team' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+
+  await page.goto('/forgot-password');
+  await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+  await page.getByLabel('Username', { exact: true }).fill('full_storage');
+  await page.getByLabel('Recovery code', { exact: true }).fill(code);
+  await page.locator('#password').fill('replacement123');
+  await page.locator('#confirm').fill('replacement123');
+  await page.getByRole('button', { name: 'Reset password', exact: true }).click();
+  await expect(page).toHaveURL(/\/forgot-password/);
+  expect(await saveCode(page)).not.toBe(code);
+  await expect(page.getByRole('heading', { name: 'Join the team' })).toBeVisible();
 });

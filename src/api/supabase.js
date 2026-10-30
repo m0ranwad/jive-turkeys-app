@@ -121,7 +121,7 @@ export function createSupabaseBackend(url, key) {
       const { error: sessionError } = await supabase.auth.setSession(data.session);
       if (sessionError) {
         // The account or password already changed, so the new recovery code must still reach the player.
-        if (action === 'signup' || action === 'recover') return { ...data, session: null };
+        if (data.recoveryCode) return { ...data, session: null };
         throw new Error('Please try logging in again.');
       }
     }

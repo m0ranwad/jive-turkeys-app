@@ -4,6 +4,8 @@ create table public.username_accounts (
   user_id uuid primary key references public.users(id) on delete cascade,
   username text not null unique check (username ~ '^[a-z0-9_]{3,24}$'),
   recovery_hash text not null check (recovery_hash ~ '^[a-f0-9]{64}$'),
+  -- The last reset with a recovery code (see claim_username_recovery).
+  reset_at timestamptz,
   created_date timestamptz not null default now()
 );
 alter table public.username_accounts enable row level security;
@@ -56,11 +58,29 @@ grant execute on function public.username_auth_attempt(text, integer) to service
 -- account service changes the password after this claim, then returns the new code.
 create function public.claim_username_recovery(p_username text, p_hash text, p_new_hash text)
 returns uuid language sql security definer set search_path = public as $$
-  update public.username_accounts set recovery_hash = p_new_hash
+  update public.username_accounts set recovery_hash = p_new_hash, reset_at = now()
   where username = p_username and recovery_hash = p_hash returning user_id;
 $$;
 revoke all on function public.claim_username_recovery(text, text, text) from public, anon, authenticated;
 grant execute on function public.claim_username_recovery(text, text, text) to service_role;
+
+-- Replacing a lost code (My Profile): only if the code is still the one the
+-- service read before checking the password, and not within 10 minutes of a
+-- reset. Ten minutes is longer than a request can run, so a replacement that
+-- was checked against the old password can't land after a reset and hand out
+-- a code that undoes it.
+create function public.replace_username_recovery(p_user uuid, p_hash text, p_new_hash text)
+returns boolean language sql security definer set search_path = public as $$
+  with replaced as (
+    update public.username_accounts set recovery_hash = p_new_hash
+    where user_id = p_user and recovery_hash = p_hash
+      and (reset_at is null or reset_at <= now() - interval '10 minutes')
+    returning 1
+  )
+  select exists (select 1 from replaced);
+$$;
+revoke all on function public.replace_username_recovery(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.replace_username_recovery(uuid, text, text) to service_role;
 
 -- Email-free accounts sign in with an internal address (see the account
 -- service). Keep it out of public.users, where captains can read emails, so

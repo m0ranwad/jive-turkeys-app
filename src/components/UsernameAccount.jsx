@@ -4,6 +4,7 @@ import { api } from '@/api';
 import { AuthShell, FormError } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
+import { useAuth } from '@/hooks/useAuth';
 import { IconInput } from '@/pages/auth/LoginPage';
 import { forgetRecoveryCode, rememberRecoveryCode, unsavedRecoveryCode, usernameProblem } from '@/lib/username';
 import { CARD } from '@/lib/constants';
@@ -61,6 +62,7 @@ export function RecoveryCodeGate({ user, children }) {
 }
 
 export function UsernameAccount({ user, onSaved }) {
+  const { refresh } = useAuth();
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -69,6 +71,16 @@ export function UsernameAccount({ user, onSaved }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // The signed-in player now has a username, so RecoveryCodeGate takes over
+  // until they save the code, on every tab. This card shows it if that fails.
+  const showUnsavedCode = async () => {
+    try {
+      await onSaved();
+      await refresh();
+    } catch {
+      // The card below still shows the code.
+    }
+  };
   const submit = async (e) => {
     e.preventDefault();
     setError('');
@@ -83,6 +95,7 @@ export function UsernameAccount({ user, onSaved }) {
       setPassword('');
       setConfirm('');
       setCurrent('');
+      await showUnsavedCode();
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -95,6 +108,7 @@ export function UsernameAccount({ user, onSaved }) {
       rememberRecoveryCode(user.username, data.recoveryCode);
       setCode(data.recoveryCode);
       setPassword('');
+      await showUnsavedCode();
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
