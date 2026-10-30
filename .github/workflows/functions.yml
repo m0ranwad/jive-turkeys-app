@@ -3,7 +3,9 @@ name: Supabase functions
 # Puts the account service and chat notification sender on Supabase when they
 # change on main, creating notification signing keys the first time. Once the
 # account service's folder is gone (an undo), it takes it off Supabase, since
-# it's public and holds the project's secret key.
+# it's public and holds the project's secret key. Before deploying, it waits
+# until the live database has every database update in the commit, since the
+# Database update workflow applies them separately (scripts/wait-for-database.sh).
 # On pull requests it only checks that the SUPABASE_ACCESS_TOKEN secret can see
 # the project's functions and secrets; nothing is changed until publish.
 #
@@ -74,6 +76,15 @@ jobs:
             supabase secrets set --env-file "$keys" --project-ref "$PROJECT_REF"
             rm -f "$keys"
           fi
+      - name: Make sure psql is installed
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      # A function can call database functions its own publish adds. Those reach
+      # the live database through database.yml, which takes several minutes, so
+      # wait for them; if that update fails, nothing new goes live.
+      - name: Wait for this commit's database updates
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/wait-for-database.sh
       - name: Deploy the notification sender
         run: supabase functions deploy notify-chat --project-ref "$PROJECT_REF" --use-api
       - name: Deploy username sign-in, or remove it once its code is gone

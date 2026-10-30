@@ -45,8 +45,10 @@ select reset_test.refused($q$select public.username_reset_claim('reset_player', 
   'visitors cannot claim a reset');
 select reset_test.refused($q$select public.username_reset_issue(null, null, repeat('a',64), now())$q$,
   'visitors cannot issue reset codes');
-select reset_test.refused($q$select public.username_reset_release(null, null)$q$,
+select reset_test.refused($q$select public.username_reset_release(null, null, null)$q$,
   'visitors cannot release a claim');
+select reset_test.refused($q$select public.username_reset_finish(null, null)$q$,
+  'visitors cannot finish a reset');
 reset role;
 
 select set_config('request.jwt.claim.sub', '88888888-2222-4222-8222-222222222222', true);
@@ -57,8 +59,12 @@ select reset_test.refused($q$select public.username_reset_claim('reset_player', 
   'players cannot call the service-only claim function');
 select reset_test.refused($q$select public.username_reset_issue(null, null, repeat('a',64), now())$q$,
   'players cannot call the service-only issue function');
-select reset_test.refused('select public.username_reset_release(null, null)',
+select reset_test.refused('select public.username_reset_release(null, null, null)',
   'players cannot release another reset');
+select reset_test.refused('select public.username_reset_finish(null, null)',
+  'players cannot finish another reset');
+select reset_test.refused('select public.username_reset_claim_live(now())',
+  'players cannot call the claim timer');
 reset role;
 select set_config('request.jwt.claim.sub', '88888888-1111-4111-8111-111111111111', true);
 set local role authenticated;
@@ -68,33 +74,48 @@ reset role;
 
 set local role service_role;
 select reset_test.ok(public.username_reset_issue('88888888-2222-4222-8222-222222222222',
-  '88888888-2222-4222-8222-222222222222', repeat('a',64), now()+interval '1 day') = 'forbidden',
+  '88888888-2222-4222-8222-222222222222', repeat('a',64), now()+interval '1 day') = '{"status":"forbidden"}',
   'issuing a code rechecks that its maker is a captain');
 select reset_test.ok(public.username_reset_issue('88888888-3333-4333-8333-333333333333',
-  '88888888-1111-4111-8111-111111111111', repeat('a',64), now()+interval '1 day') = 'missing',
+  '88888888-1111-4111-8111-111111111111', repeat('a',64), now()+interval '1 day') = '{"status":"missing"}',
   'only accounts with a username have reset codes');
+select reset_test.ok(public.username_reset_issue(null,
+  '88888888-1111-4111-8111-111111111111', repeat('a',64), now()+interval '1 day') = '{"status":"missing"}',
+  'a code for nobody is missing, not an error');
 select reset_test.ok(public.username_reset_issue('88888888-2222-4222-8222-222222222222',
-  '88888888-1111-4111-8111-111111111111', repeat('b',64), now()+interval '1 day') = 'issued', 'a captain makes a code');
-select reset_test.ok(public.username_reset_claim('reset_player', repeat('x',64), gen_random_uuid()) is null,
+  '88888888-1111-4111-8111-111111111111', repeat('b',64), now()+interval '1 day')
+  = '{"status":"issued","username":"reset_player"}', 'a captain makes a code, and learns the username to text');
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('x',64), gen_random_uuid()) = '{"status":"wrong"}',
   'a wrong hash does not claim the code');
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('b',64), null) = '{"status":"wrong"}',
+  'a claim needs its own ID');
 select reset_test.ok(public.username_reset_claim('reset_player', repeat('b',64), 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
-  = '88888888-2222-4222-8222-222222222222', 'one reset claims the code');
-select reset_test.ok(public.username_reset_claim('reset_player', repeat('b',64), gen_random_uuid()) is null,
-  'another reset cannot claim it concurrently');
+  = '{"status":"claimed","user_id":"88888888-2222-4222-8222-222222222222"}', 'one reset claims the code');
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('b',64), gen_random_uuid()) = '{"status":"busy"}',
+  'another reset with the right code is told to wait, not that the code is wrong');
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('x',64), gen_random_uuid()) = '{"status":"wrong"}',
+  'a wrong code is still wrong while the right one is busy');
 select reset_test.ok(public.username_reset_issue('88888888-2222-4222-8222-222222222222',
-  '88888888-1111-4111-8111-111111111111', repeat('c',64), now()+interval '1 day') = 'busy',
+  '88888888-1111-4111-8111-111111111111', repeat('c',64), now()+interval '1 day') = '{"status":"busy"}',
   'a captain is asked to retry while the reset is finishing');
 select reset_test.ok((select reset_hash = repeat('b',64) from public.username_accounts where username = 'reset_player'),
   'the busy response leaves the existing code intact');
 reset role;
 
-select reset_test.refused($q$select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'bypass-hash')$q$,
-  'a password update cannot bypass a reset claim by omitting its marker');
-select reset_test.ok((select encrypted_password = 'old-hash' from auth.users where email = 'player@reset.test'),
-  'a rejected write does not change the password');
-select public.username_reset_release('88888888-2222-4222-8222-222222222222', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+-- The account's own password change (an email reset link) carries no marker.
+-- It goes ahead even during a reset, so resets don't depend on how Auth orders
+-- its writes; whichever finishes last wins.
+select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'own-change-hash');
+select reset_test.ok((select encrypted_password = 'own-change-hash' from auth.users where email = 'player@reset.test'),
+  'a player''s own password change goes ahead while a reset is finishing');
+select reset_test.ok((select reset_hash = repeat('b',64) and reset_claim_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  from public.username_accounts where username = 'reset_player'), 'and leaves the code and its claim alone');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('b',64)) = 'released', 'a refused password releases its claim');
 select reset_test.ok((select reset_hash = repeat('b',64) and reset_claim_id is null from public.username_accounts where username = 'reset_player'),
   'releasing a refused password keeps its code for a retry');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('b',64)) = 'released', 'releasing twice changes nothing');
 select public.username_reset_claim('reset_player', repeat('b',64), 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'new-hash', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 select reset_test.ok((select encrypted_password = 'new-hash' from auth.users where email = 'player@reset.test'),
@@ -107,6 +128,13 @@ select reset_test.refused($q$select reset_test.write_password('88888888-2222-422
   'replayed-hash', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')$q$, 'a used claim cannot change the password again');
 select reset_test.ok((select encrypted_password = 'new-hash' from auth.users where email = 'player@reset.test'),
   'a replay rolls back the password update');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222',
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', repeat('b',64)) = 'used',
+  'after a lost reply, releasing says the code was used rather than inviting a retry');
+select public.username_reset_finish('88888888-2222-4222-8222-222222222222', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+select reset_test.ok((select encrypted_password = 'new-hash' from auth.users where email = 'player@reset.test')
+  and (select reset_hash is null from public.username_accounts where username = 'reset_player'),
+  'finishing after Auth already used the code changes nothing');
 
 -- Act out the database failing when the code would be consumed. Since the
 -- consumption is in Auth's transaction, the password must roll back too.
@@ -128,7 +156,7 @@ select reset_test.ok((select encrypted_password = 'new-hash' and not(raw_app_met
 select reset_test.ok((select reset_hash = repeat('c',64) from public.username_accounts where username = 'reset_player'),
   'the failed transaction leaves the code available');
 drop trigger reset_test_storage_failure on public.username_accounts;
-select public.username_reset_release('88888888-2222-4222-8222-222222222222', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+select public.username_reset_release('88888888-2222-4222-8222-222222222222', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', repeat('c',64));
 select public.username_reset_claim('reset_player', repeat('c',64), 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'retry-hash', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 
@@ -141,13 +169,21 @@ update public.username_accounts set reset_claimed_at = clock_timestamp() - inter
 select reset_test.refused($q$select reset_test.write_password('88888888-2222-4222-8222-222222222222',
   'late-hash', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')$q$, 'a claim that timed out cannot commit a late password change');
 select reset_test.ok(public.username_reset_issue('88888888-2222-4222-8222-222222222222',
-  '88888888-1111-4111-8111-111111111111', repeat('f',64), now()+interval '1 day') = 'issued',
+  '88888888-1111-4111-8111-111111111111', repeat('f',64), now()+interval '1 day') ->> 'status' = 'issued',
   'a captain can replace a code after an abandoned claim times out');
 select reset_test.refused($q$select reset_test.write_password('88888888-2222-4222-8222-222222222222',
   'late-hash', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')$q$, 'replacement also fences a delayed older request');
 select reset_test.ok((select reset_hash = repeat('f',64) from public.username_accounts where username = 'reset_player'),
   'a stale request leaves the replacement code untouched');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222',
+  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', repeat('e',64)) = 'replaced',
+  'the stale request learns its code was replaced, rather than to try again');
 select public.username_reset_claim('reset_player', repeat('f',64), 'ffffffff-ffff-4fff-8fff-ffffffffffff');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222',
+  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', repeat('f',64)) = 'busy',
+  'a request whose claim another reset took over is told to wait');
+select reset_test.ok((select reset_claim_id = 'ffffffff-ffff-4fff-8fff-ffffffffffff' from public.username_accounts
+  where username = 'reset_player'), 'and does not release the other reset''s claim');
 select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'newest-hash', 'ffffffff-ffff-4fff-8fff-ffffffffffff');
 select reset_test.refused($q$select reset_test.write_password('88888888-2222-4222-8222-222222222222',
   'late-hash', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')$q$, 'a late request cannot overwrite a completed newer reset');
@@ -156,8 +192,31 @@ select reset_test.ok((select encrypted_password = 'newest-hash' from auth.users 
 
 select public.username_reset_issue('88888888-2222-4222-8222-222222222222',
   '88888888-1111-4111-8111-111111111111', repeat('a',64), now()-interval '1 second');
-select reset_test.ok(public.username_reset_claim('reset_player', repeat('a',64), gen_random_uuid()) is null,
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('a',64), gen_random_uuid()) = '{"status":"wrong"}',
   'an expired code cannot be claimed');
+select reset_test.ok(public.username_reset_release('88888888-2222-4222-8222-222222222222', gen_random_uuid(), repeat('a',64))
+  = 'replaced', 'an expired code counts as run out');
+
+-- If Auth ever saved the marker in its own transaction, after the password,
+-- the password write goes ahead and the service's finishing step uses up the
+-- code and removes the marker.
+select public.username_reset_issue('88888888-2222-4222-8222-222222222222',
+  '88888888-1111-4111-8111-111111111111', repeat('9',64), now()+interval '1 day');
+select public.username_reset_claim('reset_player', repeat('9',64), '99999999-9999-4999-8999-999999999999');
+select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'separate-hash');
+update auth.users set raw_app_meta_data = raw_app_meta_data || '{"jt_username_reset_claim":"99999999-9999-4999-8999-999999999999"}'
+where email = 'player@reset.test';
+set constraints all immediate;
+set constraints all deferred;
+select public.username_reset_finish('88888888-2222-4222-8222-222222222222', '99999999-9999-4999-8999-999999999999');
+select reset_test.ok((select encrypted_password = 'separate-hash' from auth.users where email = 'player@reset.test'),
+  'a reset still works if Auth saves the marker separately');
+select reset_test.ok((select reset_hash is null and reset_claim_id is null from public.username_accounts where username = 'reset_player'),
+  'finishing uses up the code');
+select reset_test.ok((select raw_app_meta_data = '{"providers":["email"],"other":"kept"}'::jsonb from auth.users where email = 'player@reset.test'),
+  'finishing removes only the marker');
+select reset_test.ok(public.username_reset_claim('reset_player', repeat('9',64), gen_random_uuid()) = '{"status":"wrong"}',
+  'the finished code cannot be claimed again');
 select reset_test.write_password('88888888-2222-4222-8222-222222222222', 'ordinary-new-hash');
 select reset_test.write_password('88888888-3333-4333-8333-333333333333', 'google-new-hash');
 select reset_test.ok((select encrypted_password = 'ordinary-new-hash' from auth.users where email = 'player@reset.test'),

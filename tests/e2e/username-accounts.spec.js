@@ -139,6 +139,8 @@ test('a captain gets a brief retry message while a password reset is finishing',
     const jordan = db.users.find((u) => u.username === 'jordan');
     Object.assign(jordan, { reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString() });
     localStorage.setItem(key, JSON.stringify(db));
+    // A new revision, as another tab's save writes, so this tab notices.
+    localStorage.setItem('jt_demo_rev', crypto.randomUUID());
   });
   await options.getByRole('button', { name: "Reset Jordan's password" }).click();
   await expect(page.getByText('A reset is finishing—try again in a moment.', { exact: true })).toBeVisible();
@@ -149,6 +151,7 @@ test('a captain gets a brief retry message while a password reset is finishing',
     const db = JSON.parse(localStorage.getItem(key));
     Object.assign(db.users.find((u) => u.username === 'jordan'), { reset_claim_id: null, reset_claimed_at: null });
     localStorage.setItem(key, JSON.stringify(db));
+    localStorage.setItem('jt_demo_rev', crypto.randomUUID());
   });
   await options.getByRole('button', { name: "Reset Jordan's password" }).click();
   await expect(options.getByTestId('reset-code')).toBeVisible();

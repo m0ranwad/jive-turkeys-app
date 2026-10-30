@@ -1,6 +1,7 @@
 // Dependency-injected so the same handler is tested without a live account.
 import {
-  INTERNAL_EMAIL_DOMAIN, RESET_IN_PROGRESS, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, sha256Hex, usernameProblem,
+  INTERNAL_EMAIL_DOMAIN, RESET_CODE_USED, RESET_IN_PROGRESS, WRONG_RESET_CODE,
+  isResetCode, makeResetCode, normalizeUsername, resetCodeHash, sha256Hex, usernameProblem,
 } from './username.js';
 
 const cors = {
@@ -14,7 +15,8 @@ const reply = (status, body) => new Response(JSON.stringify(body), {
 const invalid = () => reply(400, { error: 'Invalid username or password.' });
 const tooMany = () => reply(429, { error: 'Too many tries. Please try again in 15 minutes.' });
 const wrongTeamCode = () => reply(400, { error: 'That team code is not right. Ask a captain for the code.' });
-const wrongResetCode = () => reply(400, { error: "That code isn't right, or it has run out. Ask a captain for a new one." });
+const wrongResetCode = () => reply(400, { error: WRONG_RESET_CODE });
+const resetBusy = () => reply(409, { error: RESET_IN_PROGRESS });
 const signInFirst = () => reply(401, { error: 'Sign in to your existing account first.' });
 const sessionTokens = (session) => ({ access_token: session.access_token, refresh_token: session.refresh_token });
 const passwordProblem = (password) => typeof password !== 'string' || password.length < 6 || password.length > 256
@@ -24,14 +26,16 @@ const passwordProblem = (password) => typeof password !== 'string' || password.l
 const RECENT_SIGN_IN_SECONDS = 10 * 60;
 // How long a captain's reset code works: long enough to reach a player who's at work.
 const RESET_CODE_HOURS = 24;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The caller's address. Cloudflare, in front of Supabase, sets cf-connecting-ip
-// itself. Otherwise the first X-Forwarded-For entry is the original client;
-// later entries are proxies the request passed through.
+// itself. Otherwise the first X-Forwarded-For entry is the original client
+// (later entries are proxies the request passed through), then X-Real-IP.
+// A caller can fake those two, so sign-in, resets and signup also have limits
+// that don't depend on the address.
 export function clientIp(req) {
-  const cloudflare = (req.headers.get('cf-connecting-ip') || '').trim();
-  const forwarded = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim();
-  return cloudflare || forwarded || null;
+  const header = (name) => (req.headers.get(name) || '').trim();
+  return header('cf-connecting-ip') || header('x-forwarded-for').split(',')[0].trim() || header('x-real-ip') || null;
 }
 
 // Supabase Auth turning down an email/password pair, as opposed to being down or busy.
@@ -91,6 +95,19 @@ async function signInAlone({ admin, createAuthClient }, email, password) {
 async function removeAccount(admin, id) {
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) console.error('username-auth: could not remove a half-made account', id, error.message);
+}
+
+// Calls a database function whose failure is only logged: the outcome the
+// player sees doesn't depend on it. Returns its result, or null if it failed.
+async function tryRpc(admin, name, params, problem) {
+  try {
+    const { data, error } = await admin.rpc(name, params);
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error(`username-auth: ${problem}`, error?.message);
+    return null;
+  }
 }
 
 // What the player sees when something throws. Supabase Auth's password rules are
@@ -158,25 +175,20 @@ export async function handleUsernameAuth(req, deps) {
       const me = await caller(req, admin);
       if (!me) return signInFirst();
       if (!await allow(30, 'issue-reset', me.user.id)) return tooMany();
-      const { data: captain, error: captainError } = await admin.from('users').select('role, removed_at').eq('id', me.user.id).single();
-      if (captainError) throw captainError;
-      if (captain.role !== 'admin' || captain.removed_at) return reply(403, { error: 'Only captains can reset passwords.' });
-      const playerId = String(body.userId || '');
-      const { data: alias, error: aliasError } = await admin.from('username_accounts').select('username').eq('user_id', playerId).maybeSingle();
-      if (aliasError) throw aliasError;
-      if (!alias) return reply(404, { error: "This player doesn't sign in with a username." });
+      const playerId = UUID.test(String(body.userId)) ? body.userId : null;
       const code = makeResetCode();
       const expiresAt = new Date(Date.now() + RESET_CODE_HOURS * 60 * 60 * 1000).toISOString();
-      // Replacing a code and claiming it for a reset share the database lock.
+      // The database checks the captain and the player's username, and shares
+      // its lock with claiming a code, so a reset in progress isn't replaced.
       const { data: issued, error } = await admin.rpc('username_reset_issue', {
         p_user: playerId, p_captain: me.user.id, p_hash: await resetCodeHash(code), p_expires_at: expiresAt,
       });
       if (error) throw error;
-      if (issued === 'busy') return reply(409, { error: RESET_IN_PROGRESS });
-      if (issued === 'forbidden') return reply(403, { error: 'Only captains can reset passwords.' });
-      if (issued === 'missing') return reply(404, { error: "This player doesn't sign in with a username." });
-      if (issued !== 'issued') throw new Error('Reset code was not issued');
-      return reply(200, { code, username: alias.username, expiresAt });
+      if (issued?.status === 'busy') return resetBusy();
+      if (issued?.status === 'forbidden') return reply(403, { error: 'Only captains can reset passwords.' });
+      if (issued?.status === 'missing') return reply(404, { error: "This player doesn't sign in with a username." });
+      if (issued?.status !== 'issued') throw new Error('Reset code was not issued');
+      return reply(200, { code, username: issued.username, expiresAt });
     }
 
     if (action === 'reset') {
@@ -185,11 +197,14 @@ export async function handleUsernameAuth(req, deps) {
       if (usernameProblem(username) || !isResetCode(body.code)) return wrongResetCode();
       const hash = await resetCodeHash(body.code);
       const claim = crypto.randomUUID();
-      const { data: userId, error: claimError } = await admin.rpc('username_reset_claim', {
+      const { data: claimed, error: claimError } = await admin.rpc('username_reset_claim', {
         p_username: username, p_hash: hash, p_claim: claim,
       });
       if (claimError) throw claimError;
-      if (!userId) return wrongResetCode();
+      // A right code another reset is using works again in a moment.
+      if (claimed?.status === 'busy') return resetBusy();
+      if (claimed?.status !== 'claimed') return wrongResetCode();
+      const userId = claimed.user_id;
       let updated;
       try {
         const { data, error } = await admin.auth.admin.updateUserById(userId, {
@@ -202,15 +217,18 @@ export async function handleUsernameAuth(req, deps) {
         // change. There is no separate cleanup write that could leave it usable.
       } catch (error) {
         // A refused password keeps its code. If Auth committed but its reply
-        // was lost, the claim is already gone, so this cannot restore that code.
-        try {
-          const { error: releaseError } = await admin.rpc('username_reset_release', { p_user: userId, p_claim: claim });
-          if (releaseError) throw releaseError;
-        } catch (releaseError) {
-          console.error('username-auth: could not release a failed reset; its claim will expire', releaseError?.message);
-        }
+        // was lost, the code is already used, and releasing cannot restore it.
+        // The player hears what became of the code, not "try again", when a
+        // retry can't work.
+        const outcome = await tryRpc(admin, 'username_reset_release', { p_user: userId, p_claim: claim, p_hash: hash },
+          'could not release a failed reset; its claim will expire');
+        if (outcome === 'used') return reply(400, { error: RESET_CODE_USED });
+        if (outcome === 'replaced') return wrongResetCode();
+        if (outcome === 'busy') return resetBusy();
         throw error;
       }
+      // Normally a no-op: covers an Auth version that saves the claim marker separately.
+      await tryRpc(admin, 'username_reset_finish', { p_user: userId, p_claim: claim }, 'could not finish a reset');
       return reply(200, { session: await signInAlone(deps, updated.user.email, password) });
     }
 
@@ -248,8 +266,10 @@ export async function handleUsernameAuth(req, deps) {
       return reply(200, { username, session: await signInAlone(deps, me.user.email, password) });
     }
 
-    // Signup.
-    if (!await allow(5, 'signup', username) || !await allow(40, 'signup-ip', from)) return tooMany();
+    // Signup. The team-wide ceiling holds even if the address is faked, so the
+    // team code can't be guessed by trying new usernames from new addresses.
+    if (!await allow(5, 'signup', username) || !await allow(40, 'signup-ip', from)
+      || !await allow(100, 'signup-team')) return tooMany();
     const teamCode = String(body.teamCode || '');
     const { data: codeMatches, error: codeError } = await admin.rpc('team_code_matches', { p_code: teamCode });
     if (codeError) throw codeError;

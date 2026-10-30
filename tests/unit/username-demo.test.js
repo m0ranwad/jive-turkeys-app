@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDemoBackend, DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_USERNAME_LOGIN } from '@/api/demo';
 import { RESET_CLAIM_TIMEOUT_MS, RESET_IN_PROGRESS } from '@/lib/username';
 
 beforeEach(() => localStorage.clear());
+
+// Acts out another tab saving: the data, and a new revision so open tabs notice.
+function saveAsAnotherTab(change) {
+  const saved = JSON.parse(localStorage.getItem('jt_demo_db_v33'));
+  change(saved);
+  localStorage.setItem('jt_demo_db_v33', JSON.stringify(saved));
+  localStorage.setItem('jt_demo_rev', crypto.randomUUID());
+}
 
 describe('email-free accounts in previews', () => {
   it('requires the code, signs the player in, and accepts mixed-case login', async () => {
@@ -91,13 +99,16 @@ describe('email-free accounts in previews', () => {
     const api = createDemoBackend({ autoSignIn: true });
     const [jordan] = Object.keys(await api.users.usernames());
     const first = await api.users.issueResetCode(jordan);
-    const saved = JSON.parse(localStorage.getItem('jt_demo_db_v33'));
-    const user = saved.users.find((u) => u.id === jordan);
-    Object.assign(user, { reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString() });
-    localStorage.setItem('jt_demo_db_v33', JSON.stringify(saved));
+    const jordanIn = (saved) => saved.users.find((u) => u.id === jordan);
+    saveAsAnotherTab((saved) => Object.assign(jordanIn(saved), {
+      reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString(),
+    }));
     await expect(api.users.issueResetCode(jordan)).rejects.toThrow(RESET_IN_PROGRESS);
-    user.reset_claimed_at = new Date(Date.now() - RESET_CLAIM_TIMEOUT_MS - 1000).toISOString();
-    localStorage.setItem('jt_demo_db_v33', JSON.stringify(saved));
+    // The player trying the same code is asked to wait too, not told it's wrong.
+    await expect(api.auth.resetWithCode('jordan', first.code, 'too-soon-password')).rejects.toThrow(RESET_IN_PROGRESS);
+    saveAsAnotherTab((saved) => {
+      jordanIn(saved).reset_claimed_at = new Date(Date.now() - RESET_CLAIM_TIMEOUT_MS - 1000).toISOString();
+    });
     const second = await api.users.issueResetCode(jordan);
     await expect(api.auth.resetWithCode('jordan', first.code, 'old-code-password')).rejects.toThrow('Ask a captain');
     await api.auth.resetWithCode('jordan', second.code, 'replacement-password');
@@ -113,6 +124,49 @@ describe('email-free accounts in previews', () => {
       olderTab.auth.resetWithCode('jordan', code, 'second-password'),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find((r) => r.status === 'rejected').reason.message).toBe(RESET_IN_PROGRESS);
     await expect(api.auth.resetWithCode('jordan', code, 'third-password')).rejects.toThrow('Ask a captain');
+  });
+
+  it("lets a player's own password change go ahead while a captain's code is in use", async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('jordan', DEMO_PLAYER_LOGIN.password);
+    const me = await api.auth.me();
+    saveAsAnotherTab((saved) => Object.assign(saved.users.find((u) => u.id === me.id), {
+      reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString(),
+    }));
+    await api.auth.updatePassword('own-new-password');
+    await api.auth.signIn('jordan', 'own-new-password');
+  });
+
+  it("doesn't read all the saved data unless another tab saved", async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const reads = vi.spyOn(localStorage, 'getItem');
+    await api.entities.Game.list();
+    await api.auth.me();
+    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v33')).toHaveLength(0);
+    saveAsAnotherTab(() => {});
+    reads.mockClear();
+    await api.auth.me();
+    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v33')).toHaveLength(1);
+    reads.mockRestore();
+  });
+
+  it("keeps a row an operation is holding when another tab's save comes in", async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const before = (await api.users.usernames());
+    const [jordan] = Object.keys(before);
+    // Another tab saves while this tab is in the middle of using Jordan's code.
+    const { code } = await api.users.issueResetCode(jordan);
+    const resetting = api.auth.resetWithCode('jordan', code, 'held-row-password');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    saveAsAnotherTab((saved) => {
+      saved.player_profiles.find((p) => p.user_id === jordan).phone = '5550001111';
+    });
+    await resetting;
+    const other = createDemoBackend();
+    await other.auth.signIn('jordan', 'held-row-password');
+    const [profile] = await other.entities.PlayerProfile.filter({ user_id: jordan });
+    expect(profile.phone).toBe('5550001111');
   });
 });

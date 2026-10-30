@@ -23,6 +23,10 @@ export const INTERNAL_EMAIL_DOMAIN = 'players.jiveturkeys.invalid';
 export const isInternalEmail = (email) => String(email || '').toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`);
 
 export const RESET_IN_PROGRESS = 'A reset is finishing—try again in a moment.';
+export const WRONG_RESET_CODE = "That code isn't right, or it has run out. Ask a captain for a new one.";
+export const RESET_CODE_USED = 'That code has already been used. Log in with the new password, or ask a captain for a new code.';
+// How long one reset holds a code. The database's username_reset_claim_live()
+// decides on the live site; tests check the two agree.
 export const RESET_CLAIM_TIMEOUT_MS = 2 * 60 * 1000;
 
 // A captain's one-time reset code: 8 letters and numbers, easy to read out or

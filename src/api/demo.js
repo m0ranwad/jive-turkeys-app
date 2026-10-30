@@ -7,10 +7,16 @@ import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
-import { RESET_CLAIM_TIMEOUT_MS, RESET_IN_PROGRESS, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem } from '@/lib/username';
+import {
+  RESET_CLAIM_TIMEOUT_MS, RESET_CODE_USED, RESET_IN_PROGRESS, WRONG_RESET_CODE,
+  isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem,
+} from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v33';
+// A new value on every save, so a tab notices another tab's save without
+// reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
+const REV_KEY = 'jt_demo_rev';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -534,11 +540,46 @@ function load() {
   return db;
 }
 
+// Returns the new revision, or null if nothing was saved.
 function save(db) {
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
+    const rev = uid();
+    localStorage.setItem(REV_KEY, rev);
+    return rev;
   } catch {
     // Storage full or blocked: keep working in memory.
+    return null;
+  }
+}
+
+const savedRev = () => {
+  try {
+    return localStorage.getItem(REV_KEY);
+  } catch {
+    return null;
+  }
+};
+
+// Brings another tab's saved data into this tab's copy in place: rows and
+// lists an operation holds across an await stay the ones that get saved.
+function refreshInPlace(db, latest) {
+  for (const table of Object.values(TABLES)) latest[table] = latest[table] || [];
+  for (const [key, rows] of Object.entries(latest)) {
+    const current = db[key];
+    if (!Array.isArray(rows) || !Array.isArray(current)) {
+      db[key] = rows;
+      continue;
+    }
+    const held = new Map(current.filter((row) => row?.id).map((row) => [row.id, row]));
+    const merged = rows.map((row) => {
+      const kept = row?.id && held.get(row.id);
+      if (!kept) return row;
+      Object.keys(kept).forEach((field) => { if (!(field in row)) delete kept[field]; });
+      return Object.assign(kept, row);
+    });
+    current.length = 0;
+    merged.forEach((row) => current.push(row));
   }
 }
 
@@ -550,29 +591,23 @@ const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(struc
  */
 export function createDemoBackend({ autoSignIn = false } = {}) {
   let db = load();
-  const savedSnapshot = () => {
-    try { return localStorage.getItem(DB_KEY); } catch { return null; }
-  };
-  let snapshot = savedSnapshot();
+  let rev = savedRev();
   // Another tab may have changed a password or replaced a reset code. Refresh
   // before reading or changing data, so an older tab cannot save its old copy.
   const refreshDb = () => {
-    const saved = savedSnapshot();
-    if (!saved || saved === snapshot) return;
+    const latest = savedRev();
+    if (!latest || latest === rev) return;
+    rev = latest;
     try {
-      const latest = JSON.parse(saved);
-      for (const table of Object.values(TABLES)) latest[table] = latest[table] || [];
-      db = latest;
-      snapshot = saved;
+      const saved = JSON.parse(localStorage.getItem(DB_KEY));
+      if (saved) refreshInPlace(db, saved);
     } catch {
       // Keep the working copy if storage is unavailable or not valid JSON.
     }
   };
   const persist = () => {
-    save(db);
-    // If saving failed, keep working in memory until another tab changes the
-    // saved copy. Do not replace unsaved work with the same old snapshot.
-    snapshot = savedSnapshot();
+    // If saving failed, keep working in memory until another tab saves.
+    rev = save(db) || rev;
   };
   const listeners = {};
   const authListeners = new Set();
@@ -1092,7 +1127,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     async resetWithCode(value, code, password) {
       failIfOffline();
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
-      const wrong = "That code isn't right, or it has run out. Ask a captain for a new one.";
+      const wrong = WRONG_RESET_CODE;
       if (!isResetCode(code)) throw new Error(wrong);
       const hash = await resetCodeHash(code);
       // Claim against the latest saved code. The later password save succeeds
@@ -1102,7 +1137,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const user = db.users.find((u) => u.username === normalizeUsername(value));
       if (!user?.reset_hash || user.reset_hash !== hash) throw new Error(wrong);
       if (!(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
-      if (resetActive(user)) throw new Error(wrong);
+      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
       const claim = uid();
       Object.assign(user, { reset_claim_id: claim, reset_claimed_at: now() });
       persist();
@@ -1112,20 +1147,22 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         await delay(null);
         refreshDb();
         failIfOffline();
-        const current = db.users.find((u) => u.id === user.id);
-        if (!current || current.reset_claim_id !== claim || !resetActive(current)
-          || current.reset_hash !== hash || !(new Date(current.reset_expires_at) > new Date())) throw new Error(wrong);
-        Object.assign(current, { password, reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null });
+        if (!db.users.includes(user) || user.reset_claim_id !== claim || !resetActive(user)
+          || user.reset_hash !== hash || !(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
+        Object.assign(user, { password, reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null });
         persist();
-        setSession(current.id);
+        setSession(user.id);
         return { session: true };
       } catch (error) {
+        // Like username_reset_release(): free the code and say what became of it.
         refreshDb();
-        const current = db.users.find((u) => u.id === user.id && u.reset_claim_id === claim);
-        if (current) {
-          Object.assign(current, { reset_claim_id: null, reset_claimed_at: null });
+        if (user.reset_claim_id === claim) {
+          Object.assign(user, { reset_claim_id: null, reset_claimed_at: null });
           persist();
         }
+        if (!user.reset_hash) throw new Error(RESET_CODE_USED);
+        if (user.reset_hash !== hash || !(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
+        if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
         throw error;
       }
     },
@@ -1139,7 +1176,6 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       refreshDb();
       const user = currentUser();
       if (!user) throw new Error('This reset link is no longer valid.');
-      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
       user.password = password;
       persist();
     },

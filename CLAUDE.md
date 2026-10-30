@@ -41,7 +41,8 @@ README.md has the service inventory and the current setup status.
 - **Chat notifications** (Web Push, no email) are turned on with the bell at the top of the chat's room list. On an iPhone
   they need the Home Screen app. The database decides who gets each one and calls the `notify-chat`
   Supabase function, which `.github/workflows/functions.yml` deploys when `supabase/functions/` changes
-  on `main`, using the `SUPABASE_ACCESS_TOKEN` secret. The workflow made the sending keys (`VAPID_*`
+  on `main`, using the `SUPABASE_ACCESS_TOKEN` secret, once the live database has that commit's database
+  updates (it waits up to 30 minutes for the Database update workflow). The workflow made the sending keys (`VAPID_*`
   function secrets) once. Never replace them: everyone's notifications would stop until they turn them on
   again. Previews only show a sample notification. Rules: section 7 of `docs/chat.md`.
 - `public/_headers` sets the site's security headers. Its Content-Security-Policy (report-only until it's
