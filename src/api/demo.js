@@ -9,7 +9,7 @@ import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v29';
+const DB_KEY = 'jt_demo_db_v30';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -475,7 +475,7 @@ function seed() {
         rules_footer: 'Final decisions regarding all rules and interpretations are made by the owners of North Coast Premier Soccer Complex.',
         // The team's real Venmo and PayPal, so the preview's pay buttons can be tried.
         pay_venmo: 'B-Kircher',
-        pay_paypal: 'https://www.paypal.com/qrcodes/p2pqrc/WWQM2FMVLDVBQ',
+        pay_paypal: 'kircherbrian',
         pay_cashapp: null,
         pay_zelle: null,
         pay_note: 'Cash at the field works too.',

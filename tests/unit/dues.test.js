@@ -1,5 +1,5 @@
 // Dues math and pay links (src/lib/dues.js). supabase/tests/dues.test.sql uses
-// the same numbers for what the database records.
+// the same numbers for what the database records. Expected behavior: docs/dues.md.
 import { describe, expect, it } from 'vitest';
 import {
   DUES_DEFAULTS,
@@ -479,6 +479,17 @@ describe('couples who pay together', () => {
     ]);
     const oneMarked = teamDues(400, profiles, [{ user_id: 'riley', paid: true }]);
     expect(oneMarked.stillToPay.map((p) => p.name)).toEqual(['Alex', 'Casey', 'Morgan']);
+  });
+
+  it("keep each partner's own share when one has a custom amount", () => {
+    const team = teamDues(400, profiles, [{ user_id: 'alex', override_amount: 40 }]);
+    expect(team.shareOf('alex').amount).toBe(40);
+    expect(team.shareOf('riley').amount).toBe(120);
+    expect(team.owingTogether('alex')).toEqual([
+      { user_id: 'alex', due: 40 },
+      { user_id: 'riley', due: 120 },
+    ]);
+    expect(partPayment(team, 'alex', 80)).toEqual({ userIds: ['alex', 'riley'], amounts: [20, 60] });
   });
 
   it('count only when each pays with the other', () => {
