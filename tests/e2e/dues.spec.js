@@ -165,7 +165,13 @@ test('anyone can mark teammates paid in one tap, but undoing one takes two taps 
   await page.getByRole('tab', { name: 'Team dues' }).click();
 
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
-  await expect(page.getByText('$595 league + 7 × $18 refs = $721. Rounding up adds $11.')).toBeVisible();
+  const fees = page.locator('details', { has: page.getByText('Fee details', { exact: true }) });
+  await expect(fees.getByText('Above session fee')).toBeHidden();
+  await openSection(page, 'Fee details');
+  await expect(fees).toContainText('League fee$595');
+  await expect(fees).toContainText('Referees · 7 games × $18$126');
+  await expect(fees).toContainText('Total player shares$732');
+  await expect(fees).toContainText('Above session fee$11');
   await expect(page.getByRole('button', { name: 'Edit fee' })).toHaveCount(0);
   await expect(page.getByText('Payment links')).toHaveCount(0);
   await expect(page.getByLabel('Amount for Kelly Moss')).toHaveText('$61');
@@ -307,7 +313,9 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await dialog.getByLabel('Ref fee / game').fill('20');
   await expect(dialog).toContainText('$735');
   await dialog.getByRole('button', { name: 'Save fee' }).click();
-  await expect(page.getByText('$595 league + 7 × $20 refs = $735. Rounding up adds $9.')).toBeVisible();
+  const fees = await openSection(page, 'Fee details');
+  await expect(fees).toContainText('Referees · 7 games × $20$140');
+  await expect(fees).toContainText('Above session fee$9');
   await expect(page.getByText('$62 each')).toBeVisible();
   // Everyone can see the fee changed, by whom, and from what.
   await expect((await openSection(page, 'Recent changes'))).toContainText('You changed the session fee: $721 → $735 (refs $18 → $20)');
@@ -330,7 +338,10 @@ test('captains save league and referee fees with cents while games stay whole', 
   await dialog.getByLabel('Games').fill('7');
   await dialog.getByRole('button', { name: 'Save fee' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByText('$595.50 league + 7 × $18.25 refs = $723.25. Rounding up adds $8.75.')).toBeVisible();
+  const fees = await openSection(page, 'Fee details');
+  await expect(fees).toContainText('League fee$595.50');
+  await expect(fees).toContainText('Referees · 7 games × $18.25$127.75');
+  await expect(fees).toContainText('Above session fee$8.75');
 
   // Reload and reopen the form: both decimal amounts were actually saved.
   await page.reload();
@@ -353,7 +364,7 @@ test('players keep what they paid when the fee changes, and the difference can b
   await expect(paid).toContainText('share went up');
   await expect(page.getByRole('button', { name: 'Mark $11 paid for Sam Okafor' })).toBeVisible();
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
-  await expect(page.getByText('1 owes a top-up')).toBeVisible();
+  await expect(page.getByText('1 paid player owes more')).toBeVisible();
   // Morgan gave the captain $30 of her $61: a part payment, still to pay.
   await expect(owing).toContainText('Morgan Lee');
   await expect(owing).toContainText('$30 paid of $61');
@@ -361,7 +372,11 @@ test('players keep what they paid when the fee changes, and the difference can b
   await expect(page.getByLabel('Amount for Morgan Lee')).toHaveText('$31left');
   await expect(summary).toContainText('$385Collected');
   await expect(summary).toContainText('$408Still to collect');
-  await expect(summary).toContainText('$595 league + 7 × $18 refs = $721. Rounding up adds $11. Collected includes $61 from players not playing.');
+  await expect(summary).toContainText('Session fee$721');
+  await expect(summary.getByText('Includes $61 from teammates not playing.')).toBeVisible();
+  await expect(summary.getByText('Above session fee')).toBeHidden();
+  const fees = await openSection(page, 'Fee details');
+  await expect(fees).toContainText('Above session fee$11');
 
   // Jamie paid, then decided to sit this session out: she's listed, and owes nothing.
   const notPlaying = page.getByTestId('dues-not-playing');
@@ -382,7 +397,7 @@ test('players keep what they paid when the fee changes, and the difference can b
   await expect(page.getByRole('button', { name: 'Mark $12 paid for Sam Okafor' })).toBeVisible();
   await expect(page.getByLabel('Amount for Morgan Lee')).toHaveText('$32left');
   await expect(paidHeading(page, '5 of 12 paid')).toBeVisible();
-  await expect(page.getByText('5 owe a top-up')).toBeVisible();
+  await expect(page.getByText('5 paid players owe more')).toBeVisible();
   // Collected stays what was paid; still to collect gains the differences ($1 each for four, Morgan's $32 and Sam's $12).
   await expect(summary).toContainText('$385Collected');
   await expect(summary).toContainText('$420Still to collect');
@@ -548,7 +563,7 @@ test("the fee box won't save a blank or negative fee, and asks before $0 or a fe
   await expect(dialog).toContainText('Set the session fee to $0? Nobody will owe anything.');
   await dialog.getByRole('button', { name: 'Set to $0' }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByText('$0 session fee')).toBeVisible();
+  await expect(page.getByText('Session fee', { exact: true }).locator('..')).toHaveText('Session fee$0');
   await expect(page.getByText('$0 each')).toBeVisible();
 
   // Back to the real fee: from $0 there's nothing to double, so it saves straight away.
@@ -591,6 +606,7 @@ test('a captain gives one player a custom amount, and the rest split what is lef
   await page.keyboard.press('Escape');
   // $721 - $40 = $681 across the other 11: $61.91, rounded up.
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$62');
+  await expect(page.getByText('$62 standard share')).toBeVisible();
 
   await page.getByRole('button', { name: 'Details for Kelly Moss' }).click();
   await duesOption(sheet, 'Change custom amount');
@@ -600,6 +616,7 @@ test('a captain gives one player a custom amount, and the rest split what is lef
   await expect(sheet).toContainText('You put Kelly M. back on the even split');
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Amount for Casey Captain')).toHaveText('$61');
+  await expect(page.getByText('$61 each')).toBeVisible();
 });
 
 test('stepping between sessions, and setting a new session fee from the last one', async ({ page }) => {
@@ -628,7 +645,7 @@ test('roster players who have not joined count in the split, and anyone can mark
   await page.getByRole('tab', { name: 'Team dues' }).click();
 
   // Captains add players on the Team page; players don't get the link.
-  await expect(page.getByRole('link', { name: /Add players to the roster on the Team page/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add players on Team' })).toHaveCount(0);
   await expect(page.getByTestId('dues-unpaid')).toContainText('Mike Russonot joined yet');
   await expect(page.getByTestId('dues-paid')).toContainText('Dana Wellsnot joined yet');
 
@@ -650,7 +667,7 @@ test('roster players who have not joined count in the split, and anyone can mark
 test('the Dues page sends captains to the Team page to add players', async ({ page }) => {
   await signIn(page);
   await openDues(page);
-  await page.getByRole('link', { name: /Add players to the roster on the Team page/ }).click();
+  await page.getByRole('link', { name: 'Add players on Team' }).click();
   await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
 
   await openDues(page);

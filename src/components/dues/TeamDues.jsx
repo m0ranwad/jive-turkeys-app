@@ -7,13 +7,13 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { CARD, EYEBROW } from '@/lib/constants';
-import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues, topUps } from '@/lib/dues';
+import { DUES_DEFAULTS, cleanPayHandle, dollars, duesEvents, feeParts, feeTotal, notPlayingLabel, reminderText, stepSession, teamDues } from '@/lib/dues';
 import { shortName, today } from '@/lib/format';
 import { isEarlier } from '@/lib/roster';
 import { cn } from '@/lib/utils';
 import { FeeDialog, PaySettingsDialog, PlayerSheet } from './DuesDialogs';
 import { SessionRosterDialog } from './SessionRosterDialog';
-import { Avatar, HEADING, HistoryList, StatusChip, feeLine } from './DuesParts';
+import { Avatar, HEADING, HistoryList, StatusChip } from './DuesParts';
 
 const DARK_BUTTON =
   'inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-white/20 disabled:opacity-40';
@@ -21,13 +21,29 @@ const DARK_BUTTON =
 /** Dark summary card: how many have paid, money in and still to come, the fee. */
 function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
   const pct = team.active.length ? (team.paidCount / team.active.length) * 100 : 0;
+  const parts = feeParts(row);
+  const refs = feeTotal(parts) - parts.league_fee;
+  const evenShares = team.players.filter((player) => !player.custom);
+  const hasCustom = evenShares.length !== team.players.length;
+  const feeItem = (label, amount) => (
+    <div className="flex justify-between gap-4">
+      <dt>{label}</dt>
+      <dd className="shrink-0 tabular-nums">{dollars(amount)}</dd>
+    </div>
+  );
   return (
     <section className="rounded-3xl bg-zinc-950 p-5 text-white">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">
           {team.paidCount} of {team.active.length} paid
         </h2>
-        <span className="text-sm font-bold text-lime-400">{dollars(team.perPlayer)} each</span>
+        {team.active.length > 0 && (
+          <span className="text-right text-sm font-bold text-lime-400">
+            {evenShares.length
+              ? `${dollars(team.perPlayer)} ${hasCustom ? 'standard share' : 'each'}`
+              : 'Custom shares'}
+          </span>
+        )}
       </div>
       <div
         className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10"
@@ -39,24 +55,43 @@ function Summary({ row, team, total, isCaptain, onCopyReminder, onEditFee }) {
       >
         <div className="h-full rounded-full bg-lime-400 transition-all" style={{ width: `${pct}%` }} />
       </div>
-      {team.topUpCount > 0 && <p className="mt-2 text-xs font-semibold text-amber-300">{topUps(team.topUpCount)}</p>}
+      {team.topUpCount > 0 && (
+        <p className="mt-2 text-xs font-semibold text-amber-300">
+          {team.topUpCount} paid {team.topUpCount === 1 ? 'player owes' : 'players owe'} more
+        </p>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
           <div className="font-display text-2xl font-extrabold leading-none text-lime-400">{dollars(team.collected)}</div>
           <div className={cn(EYEBROW, 'mt-1 text-white/50')}>Collected</div>
+          {team.notPlayingPaid > 0 && (
+            <p className="mt-1 text-xs text-white/70">Includes {dollars(team.notPlayingPaid)} from teammates not playing.</p>
+          )}
         </div>
         <div className="text-right">
           <div className="font-display text-2xl font-extrabold leading-none">{dollars(team.stillOwed)}</div>
           <div className={cn(EYEBROW, 'mt-1 text-white/50')}>Still to collect</div>
         </div>
       </div>
-      <p className="mt-4 border-t border-white/10 pt-3 text-xs font-medium text-white/50">
-        {feeLine(row)}
-        {team.extra > 0 && `. Rounding up adds ${dollars(team.extra)}.`}
-        {team.extra < 0 && `. Custom amounts leave ${dollars(-team.extra)} of the ${dollars(total)} uncovered.`}
-        {team.notPlayingPaid > 0 &&
-          `${team.extra ? ' ' : '. '}Collected includes ${dollars(team.notPlayingPaid)} from players not playing.`}
-      </p>
+      <div className="mt-4 border-t border-white/10 pt-3 text-sm">
+        <div className="flex justify-between gap-4 font-semibold">
+          <span>Session fee</span>
+          <span className="tabular-nums">{dollars(total)}</span>
+        </div>
+        <details className="mt-1">
+          <summary className="min-h-11 cursor-pointer py-3 font-semibold text-white/80">Fee details</summary>
+          <dl className="space-y-2 text-white/70">
+            {row.league_fee != null && feeItem('League fee', parts.league_fee)}
+            {refs > 0 && feeItem(`Referees · ${parts.game_count} games × ${dollars(parts.ref_fee)}`, refs)}
+            {feeItem('Total player shares', team.owed)}
+            {team.extra > 0 && feeItem('Above session fee', team.extra)}
+            {team.extra < 0 && feeItem('Not covered by shares', -team.extra)}
+          </dl>
+          {evenShares.length > 0 && (
+            <p className="mt-3 text-xs text-white/70">Even shares are rounded up to whole dollars.</p>
+          )}
+        </details>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {team.stillToPay.length > 0 && (
           <button type="button" onClick={onCopyReminder} className={DARK_BUTTON}>
@@ -93,9 +128,8 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
   // Over: an earlier session, or the current one once its games are all played and nothing else is on the
   // schedule (`over`). Status changes don't reach them, so captains correct them here.
   const past = !!current && (isEarlier(period, current) || (over && !isEarlier(current, period)));
-  // A later session hasn't started. It has a list already only if captains asked who's playing it ahead.
+  // A later session's shares are still estimates while players confirm.
   const notStarted = !!current && isEarlier(current, period);
-  const askedAhead = notStarted && started;
   // Between sessions: this is the session that just ended, and couples linked now count from the next one.
   const between = past && !isEarlier(period, current);
   // The session a couple linked now counts from: the one being played, else the next one.
@@ -287,7 +321,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         </Button>
       </div>
       <p className="mt-2 text-sm text-zinc-500">
-        {payLinks.length ? payLinks.join(' · ') : 'Add your Venmo or PayPal so players get a pay button.'}
+        {payLinks.length ? payLinks.join(' · ') : 'Add a payment method so teammates can pay.'}
       </p>
     </section>
   );
@@ -329,10 +363,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
 
   const startsLater = notStarted && (
     <p className="mb-3 rounded-2xl bg-zinc-50 px-3.5 py-2.5 text-xs font-medium text-zinc-500" data-testid="dues-not-started">
-      Session {period.session} hasn't started, so this uses today's roster.{' '}
-      {askedAhead
-        ? `Answers so far to "Playing session ${period.session}?" count too.`
-        : "When it starts, everyone's status is kept for it and players can say if they're playing."}
+      Estimated shares. Amounts may change as players confirm.
     </p>
   );
 
@@ -344,7 +375,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           {isCaptain ? (
             <>
               <p className="mt-1 text-sm text-zinc-500">
-                Set this session's fee and everyone sees their share. Last fee: {feeLine(feeStart)}.
+                Set the session fee to work out each player's share.
               </p>
               <Button onClick={() => setFeeOpen(true)} className="mt-4 h-11 rounded-xl bg-lime-400 px-6 font-bold text-black hover:bg-lime-300">
                 Set the fee
@@ -390,13 +421,12 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
             <h3 className={cn(EYEBROW, 'text-zinc-500')}>Paid, not playing · {team.notPlaying.length}</h3>
             <ul className="divide-y divide-zinc-100">{team.notPlaying.map(notPlayingRow)}</ul>
             <p className="text-[11px] font-medium text-zinc-500">
-              They paid for this session but aren't on its roster, so they don't owe anything. What they paid counts in
-              Collected.
+              Their payments count toward Collected. They owe nothing for this session.
             </p>
           </div>
         )}
         {team.active.length === 0 && (
-          <p className="py-3 text-sm text-zinc-500">Nobody is down as Playing yet. Set who's playing on the Team page.</p>
+          <p className="py-3 text-sm text-zinc-500">No one is marked as playing this session.</p>
         )}
         {isCaptain && !past && (
           <Link
@@ -404,7 +434,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-3 text-xs font-bold uppercase tracking-[0.1em] text-zinc-500 transition hover:border-zinc-900 hover:text-black"
           >
             <UserPlus className="h-4 w-4" />
-            Add players to the roster on the Team page
+            Add players on Team
           </Link>
         )}
         {isCaptain && started && past && (
@@ -418,9 +448,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
           </button>
         )}
         <p className="mt-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
-          {past && !between && !isCaptain
-            ? 'Tap a player to see their history or fix a mistake.'
-            : 'Tap a player to see their history, link a couple who pay together, or fix a mistake.'}
+          Tap a player for payment details.
         </p>
       </section>
 
@@ -439,7 +467,7 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
         open={reminding}
         onOpenChange={setReminding}
         title="Remind who owes"
-        intro="Everyone still to pay is named, so their phone buzzes."
+        intro="Names everyone who still owes."
         message={reminder}
         about={team.owingPeople.flat()}
       />
