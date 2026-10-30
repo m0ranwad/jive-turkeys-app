@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDemoBackend, DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_USERNAME_LOGIN } from '@/api/demo';
+import { RESET_CLAIM_TIMEOUT_MS, RESET_IN_PROGRESS } from '@/lib/username';
 
 beforeEach(() => localStorage.clear());
 
@@ -84,5 +85,34 @@ describe('email-free accounts in previews', () => {
     await expect(stale.auth.signIn('jordan', DEMO_PLAYER_LOGIN.password)).rejects.toThrow('Invalid');
     await stale.auth.signIn('jordan', 'fresh-password');
     await expect(stale.auth.resetWithCode('jordan', second.code, 'another-password')).rejects.toThrow('Ask a captain');
+  });
+
+  it('asks the captain to retry during a reset and can replace an abandoned claim', async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const [jordan] = Object.keys(await api.users.usernames());
+    const first = await api.users.issueResetCode(jordan);
+    const saved = JSON.parse(localStorage.getItem('jt_demo_db_v33'));
+    const user = saved.users.find((u) => u.id === jordan);
+    Object.assign(user, { reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString() });
+    localStorage.setItem('jt_demo_db_v33', JSON.stringify(saved));
+    await expect(api.users.issueResetCode(jordan)).rejects.toThrow(RESET_IN_PROGRESS);
+    user.reset_claimed_at = new Date(Date.now() - RESET_CLAIM_TIMEOUT_MS - 1000).toISOString();
+    localStorage.setItem('jt_demo_db_v33', JSON.stringify(saved));
+    const second = await api.users.issueResetCode(jordan);
+    await expect(api.auth.resetWithCode('jordan', first.code, 'old-code-password')).rejects.toThrow('Ask a captain');
+    await api.auth.resetWithCode('jordan', second.code, 'replacement-password');
+  });
+
+  it('only one concurrent preview reset can use the code', async () => {
+    const api = createDemoBackend({ autoSignIn: true });
+    const [jordan] = Object.keys(await api.users.usernames());
+    const { code } = await api.users.issueResetCode(jordan);
+    const olderTab = createDemoBackend();
+    const results = await Promise.allSettled([
+      api.auth.resetWithCode('jordan', code, 'first-password'),
+      olderTab.auth.resetWithCode('jordan', code, 'second-password'),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    await expect(api.auth.resetWithCode('jordan', code, 'third-password')).rejects.toThrow('Ask a captain');
   });
 });

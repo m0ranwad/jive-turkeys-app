@@ -7,7 +7,7 @@ import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
-import { isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem } from '@/lib/username';
+import { RESET_CLAIM_TIMEOUT_MS, RESET_IN_PROGRESS, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v33';
@@ -602,6 +602,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     authListeners.forEach((cb) => setTimeout(() => cb(id ? 'SIGNED_IN' : 'SIGNED_OUT'), 0));
   };
   const currentUser = () => db.users.find((u) => u.id === sessionUserId()) || null;
+  const resetActive = (user) => user.reset_claim_id
+    && new Date(user.reset_claimed_at).getTime() > Date.now() - RESET_CLAIM_TIMEOUT_MS;
   const signedOutOnPurpose = () => {
     try {
       return localStorage.getItem(SIGNED_OUT_KEY) === '1';
@@ -1093,17 +1095,39 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const wrong = "That code isn't right, or it has run out. Ask a captain for a new one.";
       if (!isResetCode(code)) throw new Error(wrong);
       const hash = await resetCodeHash(code);
-      // Nothing asynchronous between reading the latest code and saving its
-      // consumption. A second attempt in this tab sees it already used.
+      // Claim against the latest saved code. The later password save succeeds
+      // only while this request still owns that claim.
       refreshDb();
       failIfOffline();
       const user = db.users.find((u) => u.username === normalizeUsername(value));
       if (!user?.reset_hash || user.reset_hash !== hash) throw new Error(wrong);
       if (!(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
-      Object.assign(user, { password, reset_hash: null, reset_expires_at: null });
+      if (resetActive(user)) throw new Error(wrong);
+      const claim = uid();
+      Object.assign(user, { reset_claim_id: claim, reset_claimed_at: now() });
       persist();
-      setSession(user.id);
-      return { session: true };
+      try {
+        // Act out Auth saving the password, while a captain in another tab can
+        // try to issue a code. Its commit rechecks the current claim, like SQL.
+        await delay(null);
+        refreshDb();
+        failIfOffline();
+        const current = db.users.find((u) => u.id === user.id);
+        if (!current || current.reset_claim_id !== claim || !resetActive(current)
+          || current.reset_hash !== hash || !(new Date(current.reset_expires_at) > new Date())) throw new Error(wrong);
+        Object.assign(current, { password, reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null });
+        persist();
+        setSession(current.id);
+        return { session: true };
+      } catch (error) {
+        refreshDb();
+        const current = db.users.find((u) => u.id === user.id && u.reset_claim_id === claim);
+        if (current) {
+          Object.assign(current, { reset_claim_id: null, reset_claimed_at: null });
+          persist();
+        }
+        throw error;
+      }
     },
     async verifySignup() {},
     async resendSignup() {},
@@ -1115,6 +1139,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       refreshDb();
       const user = currentUser();
       if (!user) throw new Error('This reset link is no longer valid.');
+      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
       user.password = password;
       persist();
     },
@@ -1365,8 +1390,10 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (currentUser().role !== 'admin') throw new Error('Only captains can reset passwords.');
       const user = db.users.find((u) => u.id === userId);
       if (!user?.username) throw new Error("This player doesn't sign in with a username.");
+      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      Object.assign(user, { reset_hash: hash, reset_expires_at: expiresAt, reset_by: currentUser().id });
+      Object.assign(user, { reset_hash: hash, reset_expires_at: expiresAt, reset_by: currentUser().id,
+        reset_claim_id: null, reset_claimed_at: null });
       persist();
       return { code, username: user.username, expiresAt };
     },

@@ -29,6 +29,10 @@ That signs them in. Changing the password ends every session on the account, so 
 the old password is signed out (Supabase does this; the service also ends any other session as a
 safeguard). The code is used up only once the new password is in, so if Supabase turns down the
 password, the player picks another with the same code.
+While a password reset is finishing, a captain requesting a replacement sees **A reset is
+finishing—try again in a moment.** No replacement is made until they retry after it finishes.
+An interrupted reset releases its claim, or the claim times out after two minutes; a delayed old
+request cannot overwrite a password after its claim has expired or been replaced.
 
 Email players reset by email as before. Only username accounts get captain codes.
 
@@ -57,6 +61,15 @@ unverified email.
   (`api.users.usernames()` reads it). Players can select their own user ID and username; captains
   can select everyone's. Nobody can select reset codes (stored only as SHA-256 hashes, with
   `reset_expires_at` and `reset_by`) or write rows. The service alone can read/write them.
+- Reset claims (`reset_claim_id`, `reset_claimed_at`) are also private. Service-only
+  `username_reset_claim`, `username_reset_issue` and `username_reset_release` coordinate resets
+  and replacement codes atomically. A claim expires after two minutes to recover from a stopped
+  worker. The service passes it as the transient `jt_username_reset_claim` app-metadata field
+  with the password update. A deferred constraint trigger on `auth.users.encrypted_password`
+  checks the final metadata and consumes the code in Auth's own transaction, even when Auth
+  writes the password before metadata. Both changes commit or both roll back. The trigger
+  rejects stale claims and removes the transient marker; a lost HTTP reply cannot restore a
+  consumed code. Supabase still validates the password and manages sessions.
 - `username_auth_limits` is also service-only. Atomic counters, per 15 minutes: 300 requests per
   connecting address (a whole team on the gym's Wi-Fi shares one); sign-in and reset codes 10 per
   username from one address and 50 per username overall, so guesses from elsewhere can't lock a

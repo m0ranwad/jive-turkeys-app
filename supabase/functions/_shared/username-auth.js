@@ -1,6 +1,6 @@
 // Dependency-injected so the same handler is tested without a live account.
 import {
-  INTERNAL_EMAIL_DOMAIN, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, sha256Hex, usernameProblem,
+  INTERNAL_EMAIL_DOMAIN, RESET_IN_PROGRESS, isResetCode, makeResetCode, normalizeUsername, resetCodeHash, sha256Hex, usernameProblem,
 } from './username.js';
 
 const cors = {
@@ -167,11 +167,15 @@ export async function handleUsernameAuth(req, deps) {
       if (!alias) return reply(404, { error: "This player doesn't sign in with a username." });
       const code = makeResetCode();
       const expiresAt = new Date(Date.now() + RESET_CODE_HOURS * 60 * 60 * 1000).toISOString();
-      // A new code replaces any earlier one.
-      const { error } = await admin.from('username_accounts')
-        .update({ reset_hash: await resetCodeHash(code), reset_expires_at: expiresAt, reset_by: me.user.id })
-        .eq('user_id', playerId);
+      // Replacing a code and claiming it for a reset share the database lock.
+      const { data: issued, error } = await admin.rpc('username_reset_issue', {
+        p_user: playerId, p_captain: me.user.id, p_hash: await resetCodeHash(code), p_expires_at: expiresAt,
+      });
       if (error) throw error;
+      if (issued === 'busy') return reply(409, { error: RESET_IN_PROGRESS });
+      if (issued === 'forbidden') return reply(403, { error: 'Only captains can reset passwords.' });
+      if (issued === 'missing') return reply(404, { error: "This player doesn't sign in with a username." });
+      if (issued !== 'issued') throw new Error('Reset code was not issued');
       return reply(200, { code, username: alias.username, expiresAt });
     }
 
@@ -179,19 +183,34 @@ export async function handleUsernameAuth(req, deps) {
       if (!await allow(10, 'reset', username, from) || !await allow(50, 'reset', username)) return tooMany();
       if (passwordProblem(password)) return reply(400, { error: passwordProblem(password) });
       if (usernameProblem(username) || !isResetCode(body.code)) return wrongResetCode();
-      const { data: alias, error: aliasError } = await admin.from('username_accounts')
-        .select('user_id, reset_hash, reset_expires_at').eq('username', username).maybeSingle();
-      if (aliasError) throw aliasError;
       const hash = await resetCodeHash(body.code);
-      if (!alias?.reset_hash || alias.reset_hash !== hash || !(new Date(alias.reset_expires_at) > new Date())) return wrongResetCode();
-      // The code is used up only once the new password is in, so a password
-      // Supabase turns down can be changed and tried again with the same code.
-      const { data: updated, error: updateError } = await admin.auth.admin.updateUserById(alias.user_id, { password });
-      if (updateError) throw updateError;
-      // Only this code: one a captain made a moment ago still works.
-      const { error: usedError } = await admin.from('username_accounts').update({ reset_hash: null, reset_expires_at: null })
-        .eq('user_id', alias.user_id).eq('reset_hash', hash);
-      if (usedError) console.error('username-auth: a used reset code is still stored until it runs out', usedError.message);
+      const claim = crypto.randomUUID();
+      const { data: userId, error: claimError } = await admin.rpc('username_reset_claim', {
+        p_username: username, p_hash: hash, p_claim: claim,
+      });
+      if (claimError) throw claimError;
+      if (!userId) return wrongResetCode();
+      let updated;
+      try {
+        const { data, error } = await admin.auth.admin.updateUserById(userId, {
+          password, app_metadata: { jt_username_reset_claim: claim },
+        });
+        if (error) throw error;
+        if (!data?.user) throw new Error('Password update returned no account');
+        updated = data;
+        // The Auth transaction consumes the code together with its password
+        // change. There is no separate cleanup write that could leave it usable.
+      } catch (error) {
+        // A refused password keeps its code. If Auth committed but its reply
+        // was lost, the claim is already gone, so this cannot restore that code.
+        try {
+          const { error: releaseError } = await admin.rpc('username_reset_release', { p_user: userId, p_claim: claim });
+          if (releaseError) throw releaseError;
+        } catch (releaseError) {
+          console.error('username-auth: could not release a failed reset; its claim will expire', releaseError?.message);
+        }
+        throw error;
+      }
       return reply(200, { session: await signInAlone(deps, updated.user.email, password) });
     }
 

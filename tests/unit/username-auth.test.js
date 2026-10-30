@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clientIp, handleUsernameAuth } from '../../supabase/functions/_shared/username-auth.js';
-import { resetCodeHash } from '@/lib/username';
+import { RESET_CLAIM_TIMEOUT_MS, RESET_IN_PROGRESS, resetCodeHash } from '@/lib/username';
 
 // A session token whose latest sign-in was `secondsAgo` (only its claims are read).
 const token = (secondsAgo) => `h.${btoa(JSON.stringify({ amr: [{ method: 'oauth', timestamp: Math.floor(Date.now() / 1000) - secondsAgo }] }))}.s`;
@@ -18,6 +18,7 @@ function setup() {
   const aliases = [];
   const limits = new Map();
   const team = { code: 'TURKEY' };
+  const activeClaim = (a) => a.reset_claim_id && new Date(a.reset_claimed_at).getTime() > Date.now() - RESET_CLAIM_TIMEOUT_MS;
   const sameCode = (code) => String(code).trim().toLowerCase() === team.code.toLowerCase();
   const admin = {
     rpc: vi.fn(async (name, p) => {
@@ -31,6 +32,28 @@ function setup() {
         if (!sameCode(p.p_code)) return { data: 'wrong' };
         users.find((u) => u.id === p.p_user).joined_team_at = '2026-10-30';
         return { data: 'joined' };
+      }
+      if (name === 'username_reset_claim') {
+        const a = aliases.find((row) => row.username === p.p_username && row.reset_hash === p.p_hash
+          && new Date(row.reset_expires_at) > new Date() && !activeClaim(row));
+        if (!a) return { data: null };
+        Object.assign(a, { reset_claim_id: p.p_claim, reset_claimed_at: new Date().toISOString() });
+        return { data: a.user_id };
+      }
+      if (name === 'username_reset_release') {
+        const a = aliases.find((row) => row.user_id === p.p_user && row.reset_claim_id === p.p_claim);
+        if (a) Object.assign(a, { reset_claim_id: null, reset_claimed_at: null });
+        return { data: null };
+      }
+      if (name === 'username_reset_issue') {
+        const captain = users.find((u) => u.id === p.p_captain);
+        if (captain?.role !== 'admin' || captain.removed_at) return { data: 'forbidden' };
+        const a = aliases.find((row) => row.user_id === p.p_user);
+        if (!a) return { data: 'missing' };
+        if (activeClaim(a)) return { data: 'busy' };
+        Object.assign(a, { reset_hash: p.p_hash, reset_expires_at: p.p_expires_at, reset_by: p.p_captain,
+          reset_claim_id: null, reset_claimed_at: null });
+        return { data: 'issued' };
       }
       throw new Error(`unexpected rpc ${name}`);
     }),
@@ -51,7 +74,7 @@ function setup() {
           const matches = rows.filter((r) => filters.every(([k, v]) => r[k] === v));
           if (op === 'insert') {
             if (rows.some((a) => a.username === values.username || a.user_id === values.user_id)) return { error: { code: '23505' } };
-            rows.push({ reset_hash: null, reset_expires_at: null, ...values });
+            rows.push({ reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null, ...values });
           }
           if (op === 'update') matches.forEach((r) => Object.assign(r, values));
           if (op === 'delete') matches.forEach((r) => rows.splice(rows.indexOf(r), 1));
@@ -71,7 +94,18 @@ function setup() {
         getUserById: vi.fn(async (id) => ({ data: { user: users.find((u) => u.id === id) } })),
         updateUserById: vi.fn(async (id, values) => {
           const user = users.find((u) => u.id === id);
-          Object.assign(user, values);
+          const claim = values.app_metadata?.jt_username_reset_claim;
+          if (claim) {
+            // Stand-in for the deferred Auth trigger; real transaction behavior
+            // and Auth's password-before-metadata order are checked in SQL.
+            const a = aliases.find((row) => row.user_id === id && row.reset_claim_id === claim
+              && activeClaim(row) && new Date(row.reset_expires_at) > new Date());
+            if (!a) return { error: { status: 409, message: 'This reset is no longer current.' } };
+            Object.assign(a, { reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null });
+          }
+          const metadata = { ...user.app_metadata, ...values.app_metadata };
+          delete metadata.jt_username_reset_claim;
+          Object.assign(user, values, { app_metadata: metadata });
           return { data: { user } };
         }),
         deleteUser: vi.fn(async (id) => { users.splice(users.findIndex((u) => u.id === id), 1); return {}; }),
@@ -294,6 +328,134 @@ describe('a captain resetting a password', () => {
     await s.issue(s.newPlayer().id);
     for (let i = 0; i < 10; i++) await s.reset({ code: 'ABCD-EFGH' });
     expect((await s.reset({ code: 'ABCD-EFGH' })).status).toBe(429);
+  });
+
+  // Hold the Auth call after claiming the code, as a slow network request would.
+  const pauseAuth = (s) => {
+    let resume, arrived;
+    const gate = new Promise((resolve) => { resume = resolve; });
+    const entered = new Promise((resolve) => { arrived = resolve; });
+    const update = s.admin.auth.admin.updateUserById.getMockImplementation();
+    s.admin.auth.admin.updateUserById.mockImplementationOnce(async (...args) => {
+      arrived();
+      await gate;
+      return update(...args);
+    });
+    return { resume, entered };
+  };
+
+  it('allows only one concurrent reset to change the password', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const paused = pauseAuth(s);
+    const first = s.reset({ code, password: 'first-password' });
+    await paused.entered;
+    const second = await s.reset({ code, password: 'second-password' });
+    paused.resume();
+    expect((await first).status).toBe(200);
+    expect(second.status).toBe(400);
+    expect(s.admin.auth.admin.updateUserById).toHaveBeenCalledTimes(1);
+    expect(s.newPlayer().password).toBe('first-password');
+    expect(s.newPlayer().app_metadata.providers).toEqual(['email']);
+    expect(s.newPlayer().app_metadata.jt_username_reset_claim).toBeUndefined();
+  });
+
+  it('asks the captain to retry while a reset is finishing, then allows a new code', async () => {
+    const s = setup();
+    await s.signup();
+    const id = s.newPlayer().id;
+    const { code } = (await s.issue(id)).body;
+    const paused = pauseAuth(s);
+    const resetting = s.reset({ code });
+    await paused.entered;
+    const busy = await s.issue(id);
+    const stored = s.aliases[0].reset_hash;
+    paused.resume();
+    expect((await resetting).status).toBe(200);
+    expect(busy).toMatchObject({ status: 409, body: { error: RESET_IN_PROGRESS } });
+    expect(stored).toBe(await resetCodeHash(code));
+    expect((await s.issue(id)).status).toBe(200);
+  });
+
+  it('fences an old stalled Auth request after its claim expires and a newer reset finishes', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const paused = pauseAuth(s);
+    const old = s.reset({ code, password: 'stale-password' });
+    await paused.entered;
+    s.aliases[0].reset_claimed_at = new Date(Date.now() - RESET_CLAIM_TIMEOUT_MS - 1000).toISOString();
+    const replacement = (await s.issue(s.newPlayer().id)).body.code;
+    const fresh = await s.reset({ code: replacement, password: 'newer-password' });
+    paused.resume();
+    const stale = await old;
+    expect(fresh.status).toBe(200);
+    expect(stale.status).not.toBe(200);
+    expect(s.newPlayer().password).toBe('newer-password');
+    expect((await s.reset({ code: replacement })).status).toBe(400);
+  });
+
+  it('keeps a completed reset one-time even when the Auth reply is lost', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const update = s.admin.auth.admin.updateUserById.getMockImplementation();
+    s.admin.auth.admin.updateUserById.mockImplementationOnce(async (...args) => {
+      await update(...args);
+      throw new TypeError('Failed to fetch');
+    });
+    expect((await s.reset({ code })).status).toBe(503);
+    expect(s.newPlayer().password).toBe('fresh-password');
+    expect((await s.reset({ code, password: 'another-password' })).status).toBe(400);
+    expect(s.aliases[0].reset_hash).toBeNull();
+  });
+
+  it('does not rely on a later cleanup write to make the code one-time', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const from = s.admin.from;
+    s.admin.from = (table) => {
+      const q = from(table);
+      const update = q.update;
+      q.update = (values) => {
+        if (table !== 'username_accounts' || values.reset_hash !== null) return update(values);
+        const failed = { eq: () => failed, then: (resolve) => Promise.resolve({ error: { message: 'write unavailable' } }).then(resolve) };
+        return failed;
+      };
+      return q;
+    };
+    expect((await s.reset({ code })).status).toBe(200);
+    expect((await s.reset({ code, password: 'another-password' })).status).toBe(400);
+    expect(s.newPlayer().password).toBe('fresh-password');
+  });
+
+  it('can retry a refused password after a failed claim release times out', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const rpc = s.admin.rpc.getMockImplementation();
+    s.admin.rpc.mockImplementation((name, params) => name === 'username_reset_release'
+      ? Promise.resolve({ error: { message: 'database unavailable' } }) : rpc(name, params));
+    s.admin.auth.admin.updateUserById.mockResolvedValueOnce({ error: { status: 422, code: 'weak_password', message: 'Choose a stronger password.' } });
+    expect((await s.reset({ code })).body.error).toBe('Choose a stronger password.');
+    expect(s.aliases[0].reset_hash).toBe(await resetCodeHash(code));
+    s.aliases[0].reset_claimed_at = new Date(Date.now() - RESET_CLAIM_TIMEOUT_MS - 1000).toISOString();
+    s.admin.rpc.mockImplementation(rpc);
+    expect((await s.reset({ code, password: 'stronger-password' })).status).toBe(200);
+  });
+
+  it('does not update a password if claiming the code is unavailable', async () => {
+    const s = setup();
+    await s.signup();
+    const { code } = (await s.issue(s.newPlayer().id)).body;
+    const rpc = s.admin.rpc.getMockImplementation();
+    s.admin.rpc.mockImplementation((name, params) => name === 'username_reset_claim'
+      ? Promise.resolve({ error: { message: 'database unavailable' } }) : rpc(name, params));
+    expect((await s.reset({ code })).status).toBe(503);
+    expect(s.admin.auth.admin.updateUserById).not.toHaveBeenCalled();
+    expect(s.newPlayer().password).toBe('password123');
   });
 });
 

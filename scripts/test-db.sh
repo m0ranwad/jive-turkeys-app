@@ -36,6 +36,8 @@ done
 if [ "$status" -ne 0 ]; then
   echo "Database tests FAILED"
 else
+  echo 'test   concurrent username resets'
+  bash scripts/test-username-reset-race.sh "$db"
   bash scripts/test-couples-upgrade.sh
   echo "Database tests passed"
 fi

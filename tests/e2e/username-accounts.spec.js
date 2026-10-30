@@ -129,6 +129,31 @@ test('a captain sees a failed save without signal and can retry', async ({ page 
   await expect(options.getByTestId('reset-code')).toBeVisible();
 });
 
+test('a captain gets a brief retry message while a password reset is finishing', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/team');
+  const options = await playerOptions(page, 'Jordan Rivera');
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const jordan = db.users.find((u) => u.username === 'jordan');
+    Object.assign(jordan, { reset_claim_id: crypto.randomUUID(), reset_claimed_at: new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await options.getByRole('button', { name: "Reset Jordan's password" }).click();
+  await expect(page.getByText('A reset is finishing—try again in a moment.', { exact: true })).toBeVisible();
+  await expect(options.getByTestId('reset-code')).toHaveCount(0);
+  await expect(options.getByRole('button', { name: "Reset Jordan's password" })).toBeEnabled();
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    Object.assign(db.users.find((u) => u.username === 'jordan'), { reset_claim_id: null, reset_claimed_at: null });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await options.getByRole('button', { name: "Reset Jordan's password" }).click();
+  await expect(options.getByTestId('reset-code')).toBeVisible();
+});
+
 test('a code replaced in a second tab cannot reset the password in the older tab', async ({ page }) => {
   await signIn(page);
   await page.goto('/team');

@@ -22,6 +22,9 @@ export function usernameProblem(value) {
 export const INTERNAL_EMAIL_DOMAIN = 'players.jiveturkeys.invalid';
 export const isInternalEmail = (email) => String(email || '').toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`);
 
+export const RESET_IN_PROGRESS = 'A reset is finishing—try again in a moment.';
+export const RESET_CLAIM_TIMEOUT_MS = 2 * 60 * 1000;
+
 // A captain's one-time reset code: 8 letters and numbers, easy to read out or
 // text. There's no 0, O, 1, I or L, so none can be mistaken for another.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
