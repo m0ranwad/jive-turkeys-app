@@ -145,6 +145,9 @@ test("the captain's screens", async ({ page }) => {
 
   await visit(page, '/profile', 'Casey Captain');
   await expectAccessible(page, 'My Profile');
+  await page.getByRole('button', { name: 'Add a username', exact: true }).click();
+  await expect(page.getByLabel('Current password')).toBeVisible();
+  await expectAccessible(page, 'Add a username');
 
   await visit(page, '/settings', 'Team settings');
   await expectAccessible(page, 'Team settings');

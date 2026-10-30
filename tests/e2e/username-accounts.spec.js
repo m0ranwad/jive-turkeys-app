@@ -44,7 +44,13 @@ test('an existing Google/email player can add a username without a second profil
   await signIn(page);
   await page.goto('/profile');
   await page.getByRole('button', { name: 'Add a username', exact: true }).click();
+  await page.getByLabel('Current password').fill('wrong-password');
   await page.getByLabel('Username', { exact: true }).fill('casey_cap');
+  await page.locator('#username-password').fill(PASSWORD);
+  await page.locator('#username-confirm').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Add username', exact: true }).click();
+  await expect(page.getByText('Your current password is not right.')).toBeVisible();
+  await page.getByLabel('Current password').fill('demo1234');
   await page.locator('#username-password').fill(PASSWORD);
   await page.locator('#username-confirm').fill(PASSWORD);
   await page.getByRole('button', { name: 'Add username', exact: true }).click();
@@ -71,8 +77,11 @@ test('a recovery code resets the password once and replaces the saved code', asy
   await page.locator('#password').fill('replacement123');
   await page.locator('#confirm').fill('replacement123');
   await page.getByRole('button', { name: 'Reset password', exact: true }).click();
-  const replacement = await saveCode(page, 'Back to log in');
+  // Signed in with the new password; the new code comes first.
+  const replacement = await saveCode(page);
   expect(replacement).not.toBe(code);
+  await expect(page.getByRole('heading', { name: 'Join the team' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByLabel('Email or username').fill('recover_player');
   await page.locator('#password').fill('replacement123');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
@@ -85,4 +94,33 @@ test('a recovery code resets the password once and replaces the saved code', asy
   await page.locator('#confirm').fill('another-password');
   await page.getByRole('button', { name: 'Reset password', exact: true }).click();
   await expect(page.getByText('Invalid username or recovery code.', { exact: true })).toBeVisible();
+});
+
+test("a reload or another tab can't lose a new recovery code", async ({ page }) => {
+  await startSignup(page, 'reload_player');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  const code = await page.getByLabel('Your recovery code').inputValue();
+  // Safari often reloads a tab after switching to Notes and back.
+  await page.reload();
+  await expect(page.getByLabel('Your recovery code')).toHaveValue(code);
+  await page.goto('/team');
+  await expect(page.getByLabel('Your recovery code')).toHaveValue(code);
+  expect(await saveCode(page)).toBe(code);
+  await page.reload();
+  await expect(page.getByLabel('Your recovery code')).toHaveCount(0);
+});
+
+test('the sample player Jordan signs in with a username', async ({ page }) => {
+  await page.goto('/profile');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const login = page.getByLabel('Email or username');
+  await expect(login).toHaveAttribute('autocapitalize', 'none');
+  await expect(login).toHaveAttribute('autocorrect', 'off');
+  await expect(login).toHaveAttribute('inputmode', 'email');
+  await login.fill('jordan');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await page.goto('/profile');
+  await expect(page.getByText('Your username is')).toContainText('jordan');
+  await expect(page.getByRole('button', { name: 'Replace recovery code' })).toBeVisible();
 });
