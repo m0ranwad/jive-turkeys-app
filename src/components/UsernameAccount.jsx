@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Lock, UserRound } from 'lucide-react';
 import { api } from '@/api';
-import { FormError } from '@/components/AuthShell';
+import { AuthShell, FormError } from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { IconInput } from '@/pages/auth/LoginPage';
-import { usernameProblem } from '@/lib/username';
+import { forgetRecoveryCode, rememberRecoveryCode, unsavedRecoveryCode, usernameProblem } from '@/lib/username';
 import { CARD } from '@/lib/constants';
 import { copyText } from '@/lib/clipboard';
 
@@ -13,7 +13,7 @@ export function UsernameField({ value, onChange }) {
   return (
     <div className="space-y-2">
       <Label htmlFor="username">Username</Label>
-      <IconInput icon={UserRound} id="username" autoComplete="username" autoCapitalize="none" spellCheck={false}
+      <IconInput icon={UserRound} id="username" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false}
         minLength={3} maxLength={24} value={value} onChange={(e) => onChange(e.target.value)} aria-describedby="username-help" />
       <p id="username-help" className="text-xs text-zinc-600">3–24 letters, numbers, or underscores. This is separate from your name on the team.</p>
     </div>
@@ -44,11 +44,28 @@ export function RecoveryCodeCard({ code, onContinue, continueLabel = 'Continue' 
   );
 }
 
+/**
+ * Until the player ticks that they saved their newest recovery code, it comes
+ * before everything else, even after a reload or a tap on another tab.
+ */
+export function RecoveryCodeGate({ user, children }) {
+  const [, setSaved] = useState(0);
+  const code = unsavedRecoveryCode(user?.username);
+  if (!code) return children;
+  return (
+    <AuthShell title="Save your recovery code" subtitle={`Your username is ${user.username}.`}>
+      <RecoveryCodeCard code={code} continueLabel="Continue to the team"
+        onContinue={() => { forgetRecoveryCode(); setSaved((n) => n + 1); }} />
+    </AuthShell>
+  );
+}
+
 export function UsernameAccount({ user, onSaved }) {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [current, setCurrent] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -60,10 +77,12 @@ export function UsernameAccount({ user, onSaved }) {
     if (password.length < 6) return setError('Use at least 6 characters for your password');
     setBusy(true);
     try {
-      const data = await api.auth.linkUsername(username, password);
+      const data = await api.auth.linkUsername(username, password, user.hasPassword ? current : undefined);
+      rememberRecoveryCode(data.username, data.recoveryCode);
       setCode(data.recoveryCode);
       setPassword('');
       setConfirm('');
+      setCurrent('');
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -73,6 +92,7 @@ export function UsernameAccount({ user, onSaved }) {
     setBusy(true);
     try {
       const data = await api.auth.rotateRecoveryCode(user.username, password);
+      rememberRecoveryCode(user.username, data.recoveryCode);
       setCode(data.recoveryCode);
       setPassword('');
     } catch (err) { setError(err.message); }
@@ -84,7 +104,7 @@ export function UsernameAccount({ user, onSaved }) {
       {code ? (
         <div className="mt-4">
           <p className="mb-3 text-sm font-bold">Save your recovery code</p>
-          <RecoveryCodeCard code={code} continueLabel="Done" onContinue={async () => { await onSaved(); setCode(''); setOpen(false); }} />
+          <RecoveryCodeCard code={code} continueLabel="Done" onContinue={async () => { forgetRecoveryCode(); await onSaved(); setCode(''); setOpen(false); }} />
         </div>
       ) : user?.username ? (
         <div className="mt-3 space-y-3">
@@ -104,9 +124,17 @@ export function UsernameAccount({ user, onSaved }) {
         <form className="mt-4 space-y-4" onSubmit={submit}>
           <p className="text-sm text-zinc-600">Add another way to sign in to this same account. Your Google and email options still work. This password also becomes your email sign-in password.</p>
           <FormError>{error}</FormError>
+          {user?.hasPassword ? (
+            <div className="space-y-2">
+              <Label htmlFor="username-current">Current password</Label>
+              <IconInput icon={Lock} id="username-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-600">For your security, this works within 10 minutes of signing in with Google.</p>
+          )}
           <UsernameField value={username} onChange={setUsername} />
           <div className="space-y-2">
-            <Label htmlFor="username-password">Password</Label>
+            <Label htmlFor="username-password">New password</Label>
             <IconInput icon={Lock} id="username-password" type="password" autoComplete="new-password" minLength={6} maxLength={256} value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
           <div className="space-y-2">
@@ -114,7 +142,7 @@ export function UsernameAccount({ user, onSaved }) {
             <IconInput icon={Lock} id="username-confirm" type="password" autoComplete="new-password" minLength={6} maxLength={256} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </div>
           <Button className="h-12 w-full" disabled={busy}>{busy ? 'Adding username…' : 'Add username'}</Button>
-          <button type="button" className="text-sm text-zinc-600 underline" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+          <button type="button" className="text-sm text-zinc-600 underline" disabled={busy} onClick={() => { setOpen(false); setCurrent(''); setError(''); }}>Cancel</button>
         </form>
       ) : (
         <>

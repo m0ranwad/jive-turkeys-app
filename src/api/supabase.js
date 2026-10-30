@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { JOIN_ERRORS } from '@/lib/team-code';
+import { isInternalEmail } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const PAGE_SIZE = 1000;
@@ -119,7 +120,8 @@ export function createSupabaseBackend(url, key) {
     if (data?.session) {
       const { error: sessionError } = await supabase.auth.setSession(data.session);
       if (sessionError) {
-        if (action === 'signup') return { ...data, session: null };
+        // The account or password already changed, so the new recovery code must still reach the player.
+        if (action === 'signup' || action === 'recover') return { ...data, session: null };
         throw new Error('Please try logging in again.');
       }
     }
@@ -128,19 +130,24 @@ export function createSupabaseBackend(url, key) {
 
   const auth = {
     /**
-     * The signed-in user ({ id, email, full_name, role, joined }) or null. `joined`: on the
-     * team (entered the team code, or a captain). Before the database has team codes, everyone is.
+     * The signed-in user ({ id, email, username, hasPassword, full_name, role, joined }) or null.
+     * `joined`: on the team (entered the team code, or a captain). Before the database has team
+     * codes, everyone is. `hasPassword`: not Google-only, so adding a username asks for it.
      */
     async me() {
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user;
       if (!sessionUser) return null;
-      const { data: row } = await supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle();
-      const { data: alias } = await supabase.from('username_accounts').select('username').eq('user_id', sessionUser.id).maybeSingle();
+      const [{ data: row }, { data: alias }] = await Promise.all([
+        supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle(),
+        supabase.from('username_accounts').select('username').eq('user_id', sessionUser.id).maybeSingle(),
+      ]);
       return {
         id: sessionUser.id,
-        email: sessionUser.email?.endsWith('@players.jiveturkeys.invalid') ? null : sessionUser.email,
+        email: isInternalEmail(sessionUser.email) ? null : sessionUser.email,
         username: alias?.username || null,
+        hasPassword: (sessionUser.app_metadata?.providers || []).includes('email')
+          || (sessionUser.identities || []).some((identity) => identity.provider === 'email'),
         full_name: row?.full_name || sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || '',
         role: row?.role || 'user',
         joined: row ? row.joined_team_at !== null || row.role === 'admin' : true,
@@ -181,7 +188,7 @@ export function createSupabaseBackend(url, key) {
     },
 
     signUpUsername: (username, password, teamCode) => usernameAccount('signup', { username, password, teamCode }),
-    linkUsername: (username, password) => usernameAccount('link', { username, password }),
+    linkUsername: (username, password, currentPassword) => usernameAccount('link', { username, password, currentPassword }),
     recoverUsername: (username, recoveryCode, password) => usernameAccount('recover', { username, recoveryCode, password }),
     rotateRecoveryCode: (username, password) => usernameAccount('rotate', { username, password }),
 

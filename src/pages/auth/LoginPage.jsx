@@ -75,7 +75,11 @@ export function LoginPage() {
             icon={Mail}
             id="email"
             type="text"
+            inputMode="email"
             autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
             placeholder="Your email or username"
             value={email}

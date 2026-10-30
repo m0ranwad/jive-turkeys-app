@@ -10,7 +10,7 @@ import { JOIN_ERRORS } from '@/lib/team-code';
 import { makeRecoveryCode, normalizeRecoveryCode, normalizeUsername, recoveryHash, usernameProblem } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v30';
+const DB_KEY = 'jt_demo_db_v31';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -19,6 +19,10 @@ const SIGNED_OUT_KEY = 'jt_demo_signed_out';
 export const DEMO_LOGIN = { email: 'captain@demo.test', password: 'demo1234' };
 // Jordan Rivera, a regular player in the sample data.
 export const DEMO_PLAYER_LOGIN = { email: 'jordan@demo.test', password: 'demo1234' };
+// Jordan also added a username, so the preview can sign in with one and show
+// it on My Profile. This recovery code resets Jordan's password there.
+export const DEMO_USERNAME_LOGIN = { username: 'jordan', recoveryCode: 'aaaa-bbbb-cccc-dddd-eeee-ffff-0000-1111' };
+const DEMO_RECOVERY_HASH = '836a65a7efd82a7e9b922c1b73a8e6ed87a501667b0216c1c2906f2264eb6738';
 
 const uid = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -47,6 +51,7 @@ function seed() {
     // Casey and Priya are the captains.
     role: i === 0 || i === 3 ? 'admin' : 'user',
     joined_team_at: now(),
+    ...(i === 1 && { username: DEMO_USERNAME_LOGIN.username, recovery_hash: DEMO_RECOVERY_HASH }),
   }));
   // Signed up but hasn't entered the team code, so the preview can show that step.
   users.push({ id: uid(), email: 'nia@demo.test', password: 'demo1234', full_name: 'Nia Newcomer', role: 'user', joined_team_at: null });
@@ -991,7 +996,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const user = currentUser();
       if (!user) return null;
       const joined = !!user.joined_team_at || user.role === 'admin';
-      return delay({ id: user.id, email: user.email, username: user.username || null, full_name: user.full_name, role: user.role, joined });
+      return delay({ id: user.id, email: user.email, username: user.username || null, hasPassword: !!user.password, full_name: user.full_name, role: user.role, joined });
     },
     onChange(callback) {
       authListeners.add(callback);
@@ -1031,10 +1036,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       setSession(user.id);
       return { recoveryCode, username, session: true };
     },
-    async linkUsername(value, password) {
+    async linkUsername(value, password, currentPassword) {
       const user = currentUser();
       if (!user) throw new Error('Sign in to your existing account first.');
       if (!user.joined_team_at && user.role !== 'admin') throw new Error('Join the team first.');
+      if (user.password && currentPassword !== user.password) throw new Error('Your current password is not right.');
       const username = normalizeUsername(value);
       if (usernameProblem(username)) throw new Error(usernameProblem(username));
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
@@ -1054,7 +1060,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       user.password = password;
       user.recovery_hash = await recoveryHash(recoveryCode);
       save(db);
-      return { recoveryCode };
+      // Like the account service: signed in with the new password, other sessions ended.
+      setSession(user.id);
+      return { recoveryCode, session: true };
     },
     async rotateRecoveryCode(username, password) {
       const user = currentUser();

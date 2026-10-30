@@ -9,7 +9,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { useToast } from '@/components/ui/toast';
 import { GoogleButton, IconInput } from './LoginPage';
 import { RecoveryCodeCard, UsernameField } from '@/components/UsernameAccount';
-import { usernameProblem } from '@/lib/username';
+import { forgetRecoveryCode, rememberRecoveryCode, usernameProblem } from '@/lib/username';
 
 function VerifyEmail({ email }) {
   const { toast } = useToast();
@@ -95,7 +95,14 @@ export function RegisterPage() {
     setBusy(true);
     try {
       if (method === 'username') {
-        setCreated(await api.auth.signUpUsername(username, password, teamCode));
+        const data = await api.auth.signUpUsername(username, password, teamCode);
+        rememberRecoveryCode(data.username, data.recoveryCode);
+        // Signed in: the site shows the code before anything else (RecoveryCodeGate), even after a reload.
+        if (data.session) {
+          window.location.href = returnTo;
+          return;
+        }
+        setCreated(data);
         setPassword('');
         setConfirm('');
         return;
@@ -113,8 +120,8 @@ export function RegisterPage() {
   if (verifying) return <VerifyEmail email={email} />;
   if (created) return (
     <AuthShell title="Save your recovery code" subtitle={`Your username is ${created.username}.`}>
-      <RecoveryCodeCard code={created.recoveryCode} continueLabel={created.session ? 'Continue to the team' : 'Log in'}
-        onContinue={() => { window.location.href = created.session ? returnTo : '/login'; }} />
+      <RecoveryCodeCard code={created.recoveryCode} continueLabel="Log in"
+        onContinue={() => { forgetRecoveryCode(); window.location.href = '/login'; }} />
     </AuthShell>
   );
 
@@ -151,7 +158,7 @@ export function RegisterPage() {
             <UsernameField value={username} onChange={setUsername} />
             <div className="space-y-2">
               <Label htmlFor="team-code">Team code</Label>
-              <IconInput icon={KeyRound} id="team-code" autoComplete="off" maxLength={40} value={teamCode} onChange={(e) => setTeamCode(e.target.value)} />
+              <IconInput icon={KeyRound} id="team-code" autoComplete="off" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={40} value={teamCode} onChange={(e) => setTeamCode(e.target.value)} />
             </div>
           </>
         ) : (

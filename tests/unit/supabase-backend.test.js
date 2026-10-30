@@ -8,6 +8,7 @@ let result = { data: [], error: null };
 // The signed-in session the stand-in client reports (auth.getSession).
 let session = null;
 let functionResult = { data: {}, error: null };
+let setSessionError = null;
 
 // A chainable stand-in for supabase.from(...): records each call, resolves to `result`.
 function query(table) {
@@ -44,7 +45,7 @@ vi.mock('@supabase/supabase-js', () => ({
       getSession: async () => ({ data: { session } }),
       signInWithPassword: async (values) => { calls.push(['auth', 'password', values]); return { error: null }; },
       signInWithOAuth: async (values) => { calls.push(['auth', 'oauth', values]); return { error: null }; },
-      setSession: async (values) => { calls.push(['auth', 'setSession', values]); return { error: null }; },
+      setSession: async (values) => { calls.push(['auth', 'setSession', values]); return { error: setSessionError }; },
     },
     functions: { invoke: async (name, options) => { calls.push(['function', name, options]); return functionResult; } },
     from: (table) => query(table),
@@ -79,6 +80,7 @@ beforeEach(() => {
   result = { data: [], error: null };
   session = null;
   functionResult = { data: {}, error: null };
+  setSessionError = null;
 });
 
 describe('username and existing sign-in methods', () => {
@@ -100,9 +102,36 @@ describe('username and existing sign-in methods', () => {
     expect(calls.some((c) => c[1] === 'setSession')).toBe(false);
   });
   it('hides internal identifiers for email-free accounts', async () => {
-    session = { user: { id: 'p1', email: 'random@players.jiveturkeys.invalid' } };
+    session = { user: { id: 'p1', email: 'random@players.jiveturkeys.invalid', app_metadata: { providers: ['email'] } } };
     result = { data: { username: 'player_name', role: 'user', joined_team_at: '2026-10-01' } };
-    expect(await api.auth.me()).toMatchObject({ id: 'p1', email: null, username: 'player_name', joined: true });
+    expect(await api.auth.me()).toMatchObject({ id: 'p1', email: null, username: 'player_name', joined: true, hasPassword: true });
+  });
+  it('knows a Google-only account has no password to confirm', async () => {
+    session = { user: { id: 'p2', email: 'player@example.test', app_metadata: { providers: ['google'] } } };
+    result = { data: { role: 'user', joined_team_at: '2026-10-01' } };
+    expect(await api.auth.me()).toMatchObject({ email: 'player@example.test', hasPassword: false });
+  });
+  it('asks for the account and its username at the same time', async () => {
+    session = { user: { id: 'p1', email: 'player@example.test' } };
+    let answer;
+    result = new Promise((resolve) => { answer = resolve; });
+    const me = api.auth.me();
+    // Both are asked before either answers.
+    await vi.waitFor(() => expect(calls.filter((c) => c[1] === 'select').map((c) => c[0])).toEqual(['users', 'username_accounts']));
+    answer({ data: { role: 'user', joined_team_at: '2026-10-01' }, error: null });
+    expect(await me).toMatchObject({ id: 'p1', joined: true });
+  });
+  it('keeps a new recovery code when the session after a reset cannot be installed', async () => {
+    functionResult = { data: { recoveryCode: 'code', session: { access_token: 'a', refresh_token: 'r' } }, error: null };
+    setSessionError = { message: 'expired' };
+    expect(await api.auth.recoverUsername('player', 'old-code', 'password')).toMatchObject({ recoveryCode: 'code', session: null });
+  });
+  it('sends the current password when adding a username', async () => {
+    functionResult = { data: { recoveryCode: 'code', username: 'player' }, error: null };
+    await api.auth.linkUsername('player', 'new-password', 'old-password');
+    expect(calls).toContainEqual(['function', 'username-auth', {
+      body: { action: 'link', username: 'player', password: 'new-password', currentPassword: 'old-password' },
+    }]);
   });
 });
 

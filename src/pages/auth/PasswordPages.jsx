@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/input';
 import { IconInput } from './LoginPage';
 import { RecoveryCodeCard, UsernameField } from '@/components/UsernameAccount';
+import { forgetRecoveryCode, normalizeUsername, rememberRecoveryCode } from '@/lib/username';
 
 export function ForgotPasswordPage() {
   const [useCode, setUseCode] = useState(false);
@@ -30,6 +31,12 @@ export function ForgotPasswordPage() {
     try {
       if (useCode) {
         const data = await api.auth.recoverUsername(username, code, password);
+        rememberRecoveryCode(normalizeUsername(username), data.recoveryCode);
+        // Signed in with the new password: the site shows the new code first (RecoveryCodeGate).
+        if (data.session) {
+          window.location.href = '/';
+          return;
+        }
         setReplacement(data.recoveryCode);
         setPassword('');
         setConfirm('');
@@ -48,7 +55,7 @@ export function ForgotPasswordPage() {
 
   if (replacement) return (
     <AuthShell title="Password reset" subtitle="Save your new recovery code. Your old code no longer works.">
-      <RecoveryCodeCard code={replacement} continueLabel="Back to log in" onContinue={() => { window.location.href = '/login'; }} />
+      <RecoveryCodeCard code={replacement} continueLabel="Back to log in" onContinue={() => { forgetRecoveryCode(); window.location.href = '/login'; }} />
     </AuthShell>
   );
 
@@ -75,7 +82,7 @@ export function ForgotPasswordPage() {
               <UsernameField value={username} onChange={setUsername} />
               <div className="space-y-2">
                 <Label htmlFor="saved-recovery-code">Recovery code</Label>
-                <IconInput icon={Lock} id="saved-recovery-code" autoComplete="off" autoCapitalize="none" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value)} />
+                <IconInput icon={Lock} id="saved-recovery-code" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">New password</Label>

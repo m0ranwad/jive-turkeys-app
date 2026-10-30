@@ -1,7 +1,9 @@
 name: Supabase functions
 
 # Puts the account service and chat notification sender on Supabase when they
-# change on main, creating notification signing keys the first time.
+# change on main, creating notification signing keys the first time. Once the
+# account service's folder is gone (an undo), it takes it off Supabase, since
+# it's public and holds the project's secret key.
 # On pull requests it only checks that the SUPABASE_ACCESS_TOKEN secret can see
 # the project's functions and secrets; nothing is changed until publish.
 #
@@ -74,5 +76,12 @@ jobs:
           fi
       - name: Deploy the notification sender
         run: supabase functions deploy notify-chat --project-ref "$PROJECT_REF" --use-api
-      - name: Deploy username sign-in
-        run: supabase functions deploy username-auth --project-ref "$PROJECT_REF" --use-api
+      - name: Deploy username sign-in, or remove it once its code is gone
+        run: |
+          if [ -d supabase/functions/username-auth ]; then
+            supabase functions deploy username-auth --project-ref "$PROJECT_REF" --use-api
+          elif supabase functions list --project-ref "$PROJECT_REF" | grep -qw username-auth; then
+            supabase functions delete username-auth --project-ref "$PROJECT_REF"
+          else
+            echo "Username sign-in isn't on Supabase."
+          fi

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { Layout } from '@/components/Layout';
+import { RecoveryCodeGate } from '@/components/UsernameAccount';
 import { ToastProvider } from '@/components/ui/toast';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { SchedulePage } from '@/pages/SchedulePage';
@@ -67,8 +68,11 @@ function RequireAuth() {
     return <Navigate to={here === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(here)}`} replace />;
   }
   // Signed in but not on the team yet: the team code comes first.
-  if (!user.joined) return <JoinTeamPage />;
-  return <Outlet />;
+  return (
+    <RecoveryCodeGate key={user.id} user={user}>
+      {user.joined ? <Outlet /> : <JoinTeamPage />}
+    </RecoveryCodeGate>
+  );
 }
 
 export default function App() {

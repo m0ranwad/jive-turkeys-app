@@ -5,6 +5,10 @@ export function usernameProblem(value) {
     ? ''
     : 'Use 3–24 letters, numbers, or underscores for your username.';
 }
+// Email-free accounts get a random address here so Supabase can manage their
+// password. It's never shown, and never stored in public.users.
+export const INTERNAL_EMAIL_DOMAIN = 'players.jiveturkeys.invalid';
+export const isInternalEmail = (email) => String(email || '').toLowerCase().endsWith(`@${INTERNAL_EMAIL_DOMAIN}`);
 export const normalizeRecoveryCode = (value) => String(value || '').replace(/[\s-]/g, '').toLowerCase();
 export function makeRecoveryCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));

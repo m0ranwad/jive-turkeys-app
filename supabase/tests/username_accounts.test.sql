@@ -18,7 +18,12 @@ grant execute on all functions in schema username_test to authenticated, anon, s
 
 insert into auth.users(id, email) values
   ('99999999-1111-4111-8111-111111111111', 'one@username.test'),
-  ('99999999-2222-4222-8222-222222222222', 'two@username.test');
+  ('99999999-2222-4222-8222-222222222222', 'two@username.test'),
+  ('99999999-3333-4333-8333-333333333333', '1f0c2d9e@players.jiveturkeys.invalid');
+select username_test.ok((select email is null from public.users where id = '99999999-3333-4333-8333-333333333333'),
+  'an email-free account''s internal address stays out of public.users');
+select username_test.ok((select email = 'one@username.test' from public.users where id = '99999999-1111-4111-8111-111111111111'),
+  'real addresses are still copied');
 update public.users set joined_team_at = now() where email like '%@username.test';
 insert into public.username_accounts(user_id, username, recovery_hash) values
   ('99999999-1111-4111-8111-111111111111', 'player_one', repeat('a', 64)),
@@ -28,6 +33,8 @@ set local role anon;
 select username_test.refused('select username from public.username_accounts', 'signed-out visitors cannot list usernames');
 select username_test.refused('select public.username_auth_attempt(''key'', 10)', 'visitors cannot bypass or reset limits');
 select username_test.refused('select public.claim_username_recovery(''player_one'', repeat(''a'',64), repeat(''c'',64))', 'visitors cannot claim recovery directly');
+select username_test.refused('select public.team_code_matches(''TURKEY'')', 'visitors cannot test team codes directly');
+select username_test.refused('select public.join_team_as(''99999999-3333-4333-8333-333333333333'', ''TURKEY'')', 'visitors cannot join an account to the team');
 reset role;
 select set_config('request.jwt.claim.sub', '99999999-1111-4111-8111-111111111111', true);
 set local role authenticated;
@@ -38,6 +45,8 @@ select username_test.refused('update public.username_accounts set username = ''s
 select username_test.refused('select * from public.username_auth_limits', 'players cannot read rate limit records');
 select username_test.refused('select public.username_auth_attempt(''key'', 10)', 'players cannot call the service-only counter');
 select username_test.refused('select public.claim_username_recovery(''player_one'', repeat(''a'',64), repeat(''c'',64))', 'players cannot bypass account service recovery');
+select username_test.refused('select public.team_code_matches(''TURKEY'')', 'players cannot test team codes without the join_team() limit');
+select username_test.refused('select public.join_team_as(''99999999-3333-4333-8333-333333333333'', ''TURKEY'')', 'players cannot join someone else to the team');
 reset role;
 
 set local role service_role;
@@ -47,10 +56,27 @@ select username_test.ok(not public.username_auth_attempt('test-key', 2), 'the th
 update public.username_auth_limits set window_start = now() - interval '16 minutes' where key = 'test-key';
 select username_test.ok(public.username_auth_attempt('test-key', 2), 'an expired window starts over');
 select username_test.ok((select attempts = 1 from public.username_auth_limits where key = 'test-key'), 'the expired count resets');
+update public.username_auth_limits set window_start = now() - interval '16 minutes' where key = 'test-key';
+create temp table limit_rows on commit drop as select count(*) as n from public.username_auth_limits;
+select username_test.ok(public.username_auth_attempt('brand-new-key', 2), 'a new key is counted');
+select username_test.ok((select count(*) from public.username_auth_limits) = (select n from limit_rows),
+  'a new key takes over a finished window instead of adding a row');
+select username_test.ok((select attempts = 1 from public.username_auth_limits where key = 'brand-new-key'), 'and starts its own count');
+select username_test.ok(public.username_auth_attempt('brand-new-key', 2), 'its second try is allowed');
+select username_test.ok(not public.username_auth_attempt('brand-new-key', 2), 'its third try is blocked');
+select username_test.ok(public.username_auth_attempt('another-key', 2), 'with no finished window, a new key adds a row');
+select username_test.ok((select count(*) from public.username_auth_limits) = (select n from limit_rows) + 1, 'one more row');
 select username_test.ok(public.claim_username_recovery('player_one', repeat('b',64), repeat('c',64)) is null, 'a wrong recovery hash cannot claim an account');
 select username_test.ok(public.claim_username_recovery('player_one', repeat('a',64), repeat('c',64)) = '99999999-1111-4111-8111-111111111111'::uuid, 'a matching claim returns the same identity');
 select username_test.ok(public.claim_username_recovery('player_one', repeat('a',64), repeat('d',64)) is null, 'a used code cannot win a second claim');
 select username_test.ok(public.claim_username_recovery('player_one', repeat('c',64), repeat('d',64)) is not null, 'the replacement recovery code works');
+select username_test.ok(public.team_code_matches(' ' || lower((select code from public.team_join_code)) || ' '), 'the team code matches in any case, spaces ignored');
+select username_test.ok(not public.team_code_matches('not-the-code'), 'another code does not');
+select username_test.ok(public.join_team_as('99999999-3333-4333-8333-333333333333', 'not-the-code') = 'wrong', 'joining with a wrong code is turned away');
+select username_test.ok((select joined_team_at is null and join_tries = 1 from public.users where id = '99999999-3333-4333-8333-333333333333'),
+  'and counts toward the same ten-try block as join_team()');
+select username_test.ok(public.join_team_as('99999999-3333-4333-8333-333333333333', (select code from public.team_join_code)) = 'joined', 'the right code joins the account');
+select username_test.ok((select joined_team_at is not null and join_tries = 0 from public.users where id = '99999999-3333-4333-8333-333333333333'), 'it is on the team');
 reset role;
 
 select username_test.refused($q$insert into public.username_accounts(user_id, username, recovery_hash)
