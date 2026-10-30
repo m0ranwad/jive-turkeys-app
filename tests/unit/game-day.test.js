@@ -15,6 +15,7 @@ import {
   record,
   recordVsOpponents,
   resultOf,
+  shortageText,
   suspendedIds,
 } from '@/lib/team-logic';
 
@@ -95,6 +96,69 @@ describe('the headcount', () => {
     const count = headcount({ game: { id: 'g' }, rsvps: [rsvp('gone', 'in')], profiles: [...team, gone], settings });
     expect(count.totalIn).toBe(0);
     expect(count.groups.none.map((e) => e.profile.user_id)).not.toContain('gone');
+  });
+});
+
+describe('the spots on the field', () => {
+  // A team of 7 girls and 10 guys; `who` says who's IN: [girls, guys, guys playing GK, girls playing GK].
+  const girls = Array.from({ length: 7 }, (_, i) => player(`g${i}`, 'F'));
+  const guys = Array.from({ length: 10 }, (_, i) => player(`m${i}`, 'M'));
+  const count = (nGirls, nGuys, gkGuys = 0, gkGirls = 0) =>
+    headcount({
+      game: { id: 'g' },
+      rsvps: [
+        ...girls.slice(0, nGirls).map((p, i) => rsvp(p.user_id, 'in', i < gkGirls)),
+        ...guys.slice(0, nGuys).map((p, i) => rsvp(p.user_id, 'in', i < gkGuys)),
+      ],
+      profiles: [...girls, ...guys],
+      settings: { min_players: 8, min_women: 3 },
+    });
+
+  // The table in docs/games.md, section 1.
+  it.each([
+    ['nobody', [0, 0], { goalFilled: 0, girlsFilled: 0, openFilled: 0, bench: 0, volunteer: false }, 'Need 8, including 3 girls'],
+    ['2 girls, 4 guys, 1 says GK', [2, 4, 1], { goalFilled: 1, girlsFilled: 2, openFilled: 3, bench: 0, volunteer: true }, 'Need 2 more, including a girl'],
+    ['1 girl, 5 guys, 1 says GK', [1, 5, 1], { goalFilled: 1, girlsFilled: 1, openFilled: 4, bench: 0 }, 'Need 2 more girls'],
+    ['3 girls, 3 guys, 1 says GK', [3, 3, 1], { goalFilled: 1, girlsFilled: 3, openFilled: 2, bench: 0 }, 'Need 2 more'],
+    ['1 girl, 7 guys, nobody says GK', [1, 7], { goalFilled: 1, girlsFilled: 1, openFilled: 4, bench: 2, volunteer: false }, 'Need 2 more girls'],
+    ['3 girls, 5 guys, 2 say GK', [3, 5, 2], { goalFilled: 1, girlsFilled: 3, openFilled: 4, bench: 0, volunteer: true }, null],
+    ['4 girls, 7 guys, 1 says GK', [4, 7, 1], { goalFilled: 1, girlsFilled: 3, openFilled: 4, bench: 3 }, null],
+  ])('%s', (_, who, spots, text) => {
+    const c = count(...who);
+    expect(c.spots).toMatchObject({ goal: 1, girls: 3, open: 4, ...spots });
+    expect(shortageText(c)).toBe(text);
+  });
+
+  it('lets any number say they play GK, and a second volunteer is never extra', () => {
+    const c = count(3, 5, 2);
+    expect(c.keepers.map((e) => e.profile.user_id)).toEqual(['m0', 'm1']);
+    expect(c.spots.bench).toBe(0);
+  });
+
+  it('puts a guy in goal before a girl, and a girl marked GK fills an open spot, not a girls spot', () => {
+    const c = count(3, 4, 1, 1);
+    expect(c.spots).toMatchObject({ goalFilled: 1, girlsFilled: 2, openFilled: 4, bench: 0 });
+    expect(shortageText(c)).toBe('Need 1 more girl');
+  });
+
+  it('leaves exactly as many spots empty as the shortage it reports, for every mix of players', () => {
+    for (let g = 0; g <= 7; g += 1)
+      for (let m = 0; m <= 10; m += 1)
+        for (let gkM = 0; gkM <= Math.min(2, m); gkM += 1)
+          for (let gkG = 0; gkG <= Math.min(1, g); gkG += 1) {
+            const c = count(g, m, gkM, gkG);
+            const { goalFilled, girlsFilled, openFilled, bench } = c.spots;
+            expect(8 - goalFilled - girlsFilled - openFilled).toBe(Math.max(c.needTotal, c.needWomen));
+            expect(3 - girlsFilled).toBe(c.needWomen);
+            expect(bench).toBeGreaterThanOrEqual(0);
+          }
+  });
+
+  it('words a shortage from the counts alone', () => {
+    expect(shortageText({ needTotal: 3, needWomen: 2 })).toBe('Need 3 more, including 2 girls');
+    expect(shortageText({ needTotal: 0, needWomen: 1 })).toBe('Need 1 more girl');
+    expect(shortageText({ needTotal: 1, needWomen: 0 })).toBe('Need 1 more');
+    expect(shortageText({ needTotal: 0, needWomen: 0 })).toBeNull();
   });
 });
 

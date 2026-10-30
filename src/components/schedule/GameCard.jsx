@@ -1,19 +1,17 @@
 import { Link } from 'react-router';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
-import { resultOf } from '@/lib/team-logic';
+import { resultOf, shortageText } from '@/lib/team-logic';
 import { shortageIsUrgent } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
 /**
- * How many more players (and women) a game needs. Red ("Short · …") when it's
- * `urgent`; otherwise a calm chip in the `calm` colours, so a game days away
- * doesn't look like an emergency.
+ * How many more players (and girls) a game needs, in the game page's words
+ * (shortageText()). Red ("Short · …") when it's `urgent`; otherwise a calm chip
+ * in the `calm` colours, so a game days away doesn't look like an emergency.
  */
-export function ShortBanner({ needTotal = 0, needWomen = 0, urgent = true, calm = 'bg-zinc-100 text-zinc-600', className }) {
-  if (!needTotal && !needWomen) return null;
-  const parts = [];
-  if (needTotal) parts.push(`Need ${needTotal} more`);
-  if (needWomen) parts.push(`${needTotal ? '' : urgent ? '' : 'Need '}${needWomen} more ${needWomen === 1 ? 'woman' : 'women'}`);
+export function ShortBanner({ headcount, urgent = true, calm = 'bg-zinc-100 text-zinc-600', className }) {
+  const text = shortageText(headcount);
+  if (!text) return null;
   return (
     <span
       className={cn(
@@ -23,7 +21,7 @@ export function ShortBanner({ needTotal = 0, needWomen = 0, urgent = true, calm 
       )}
     >
       {urgent && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-      {urgent ? `Short · ${parts.join(' · ')}` : parts.join(' · ')}
+      {urgent ? `Short · ${text}` : text}
     </span>
   );
 }
@@ -82,7 +80,7 @@ export function LaterGameCard({ game, headcount, settings, children }) {
           </span>
         </div>
         {headcount && shortageIsUrgent(game) && (
-          <ShortBanner className="mt-3" needTotal={headcount.needTotal} needWomen={headcount.needWomen} />
+          <ShortBanner className="mt-3" headcount={headcount} />
         )}
       </Link>
       {children && <div className="px-3 pb-3">{children}</div>}

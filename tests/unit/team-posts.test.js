@@ -35,7 +35,7 @@ describe('the game reminder', () => {
     };
     const text = gameReminder({ game, headcount, settings, link, nameOf: chatNamer(profiles) });
     expect(text).toContain('Still to RSVP: @Casey C., @Jordan R., Mike Russo');
-    expect(text).toContain('Need 2 more / 1 more woman. Subs, tap IN if you can play.');
+    expect(text).toContain('Need 2 more, including a girl. Subs, tap IN if you can play.');
     const people = mentionPeople(profiles.filter((p) => !p.guest));
     expect(findMentions(text, people, { me: 'cc' }).mentions).toEqual(['jr']);
   });
@@ -61,8 +61,22 @@ describe('the call for subs', () => {
     const headcount = computeHeadcount({ game, rsvps, profiles, settings });
     const text = subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf: chatNamer(profiles) });
     expect(text).toContain('Available to sub: @Drew P., Mike Russo');
-    expect(text).toContain('Need 7 more / 3 more women. Tap IN if you can play.');
+    expect(text).toContain('Need 7 more, including 3 girls. Tap IN if you can play.');
     expect(text).toContain(`RSVP: ${link}`);
+  });
+
+  it('asks only girls when only girls are needed, because a guy would sit on the bench', () => {
+    // One girl and seven guys are IN: the open spots are full.
+    const team = [
+      ...Array.from({ length: 8 }, (_, i) => ({ user_id: `p${i}`, display_name: `Player ${i}`, status: 'active', gender: i < 1 ? 'F' : 'M' })),
+      ...profiles,
+    ];
+    const ins = team.slice(0, 8).map((p) => ({ game_id: 'g1', user_id: p.user_id, status: 'in' }));
+    const headcount = computeHeadcount({ game, rsvps: ins, profiles: team, settings });
+    expect(subsToAsk({ game, profiles: team, rsvps: ins, headcount }).map((p) => p.user_id)).toEqual(['kn']);
+    const text = subsCall({ game, headcount, settings, profiles: team, rsvps: ins, link });
+    expect(text).toContain('Available to sub: Kim Nguyen');
+    expect(text).toContain('Need 2 more girls. Tap IN if you can play.');
   });
 
   it("counts the shortage the way the game screen does, so an IN from someone off the roster doesn't hide it", () => {

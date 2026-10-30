@@ -6,7 +6,7 @@
 // Sample data: the next game is vs Goal Diggers. Mike Russo (IN) and Dana Wells
 // (MAYBE) haven't joined; Casey, Chris and Kelly haven't answered; Jamie is on
 // break and hasn't either.
-import { enterTeamCode, expect, signIn, test } from './helpers';
+import { enterTeamCode, expect, openResult, signIn, test, whoTab } from './helpers';
 
 async function openNextGame(page) {
   // Not the "Vote for Player of the Match" card, once there's a result.
@@ -22,11 +22,14 @@ test('captains RSVP for teammates who have not joined, and the headcount counts 
   await signIn(page);
   await openNextGame(page);
 
-  await expect(chip(page, 'IN', 'Mike Russo')).toHaveClass(/border-dashed/);
-  await expect(chip(page, 'MAYBE', 'Dana Wells')).toBeVisible();
-  await expect(group(page, 'IN')).toContainText('IN · 6');
-  await expect(group(page, 'No reply')).toContainText('No reply · 3');
+  await expect(chip(page, 'IN', 'Mike Russo')).toHaveAttribute('data-not-joined', '');
+  await expect(chip(page, 'IN', 'Mike Russo')).toHaveAccessibleName('RSVP for Mike Russo, not joined yet');
+  await expect(whoTab(page, 'In')).toHaveText('In 6');
+  await whoTab(page, 'Out').click();
   await expect(group(page, 'Unavailable')).toContainText('Jamie Fox');
+  await whoTab(page, 'Not in yet').click();
+  await expect(chip(page, 'MAYBE', 'Dana Wells')).toBeVisible();
+  await expect(group(page, 'No reply')).toContainText('No reply · 3');
   await expect(group(page, 'No reply')).not.toContainText('Jamie Fox');
 
   // The reminder only nags Playing teammates.
@@ -43,20 +46,24 @@ test('captains RSVP for teammates who have not joined, and the headcount counts 
   await dialog.getByRole('button', { name: /Playing GK/ }).click();
   await expect(dialog.getByRole('button', { name: /Playing GK/ })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(whoTab(page, 'In')).toHaveText('In 7');
+  await whoTab(page, 'In').click();
   await expect(chip(page, 'IN', 'Dana Wells')).toContainText('GK');
-  await expect(group(page, 'IN')).toContainText('IN · 7');
 
   // A player on the site who texted the captain instead.
+  await whoTab(page, 'Not in yet').click();
   await page.getByRole('button', { name: 'RSVP for Kelly Moss' }).click();
   await page.getByRole('dialog', { name: 'Kelly Moss' }).getByRole('button', { name: 'OUT', exact: true }).click();
   await page.getByRole('dialog', { name: 'Kelly Moss' }).getByRole('button', { name: 'Done' }).click();
-  await expect(chip(page, 'OUT', 'Kelly Moss')).toBeVisible();
   await expect(group(page, 'No reply')).toContainText('No reply · 2');
+  await whoTab(page, 'Out').click();
+  await expect(chip(page, 'OUT', 'Kelly Moss')).toBeVisible();
 
   // And clearing an answer.
   await page.getByRole('button', { name: 'RSVP for Kelly Moss' }).click();
   await page.getByRole('dialog', { name: 'Kelly Moss' }).getByRole('button', { name: 'Clear (no reply)' }).click();
   await page.getByRole('dialog', { name: 'Kelly Moss' }).getByRole('button', { name: 'Done' }).click();
+  await whoTab(page, 'Not in yet').click();
   await expect(chip(page, 'No reply', 'Kelly Moss')).toBeVisible();
 });
 
@@ -70,7 +77,7 @@ test('players see teammates who have not joined, but cannot set anyone else\'s R
 test('a teammate who has not joined gets a stat line, shows in the stats, and can win Player of the Match', async ({ page }) => {
   await signIn(page);
   await openNextGame(page);
-  await page.getByRole('button', { name: 'Enter result' }).click();
+  await openResult(page);
   const result = page.getByRole('dialog', { name: 'Game result' });
   await expect(result.locator('[data-player="Mike Russo"]')).toContainText('M · Not joined');
   await result.getByRole('button', { name: 'Add a goal for Mike Russo' }).click();
@@ -110,7 +117,7 @@ test('when they join and pick their name, their RSVP and stats come with them', 
 
   await openNextGame(page);
   await expect(page.getByRole('button', { name: 'IN', exact: true })).toHaveClass(/bg-lime-400/);
-  await expect(chip(page, 'IN', 'Mike Russo')).not.toHaveClass(/border-dashed/);
+  await expect(chip(page, 'IN', 'Mike Russo')).not.toHaveAttribute('data-not-joined');
 
   await page.locator('a[href="/stats"]:visible').first().click();
   await page.getByRole('tab', { name: 'Players' }).click();

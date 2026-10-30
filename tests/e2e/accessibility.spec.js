@@ -2,7 +2,7 @@
 // accessibility basics (WCAG 2.1 A and AA): text contrast, names on buttons and
 // fields, and so on. A new screen or dialog should get a line here.
 import AxeBuilder from '@axe-core/playwright';
-import { duesOption, expect, openSection, PLAYER, signIn, test } from './helpers';
+import { duesOption, expect, openResult, openSection, PLAYER, signIn, test, whoTab } from './helpers';
 
 async function expectAccessible(page, screen) {
   // Check what's on screen once it has settled (not halfway through fading in).
@@ -126,8 +126,14 @@ test('a game, its result, the menu and the walkthrough', async ({ page }) => {
   await page.getByRole('link', { name: /vs Goal Diggers/ }).click();
   await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
   await expectAccessible(page, 'a game');
+  // The captain's More options, and the other tabs of Who's coming.
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await whoTab(page, 'Not in yet').click();
+  await expectAccessible(page, 'a game, More and Not in yet');
+  await whoTab(page, 'Out').click();
+  await expectAccessible(page, 'a game, Out');
 
-  await page.getByRole('button', { name: /^(Enter|Edit) result$/ }).click();
+  await openResult(page);
   await expect(page.getByRole('dialog', { name: 'Game result' })).toBeVisible();
   await expectAccessible(page, 'Game result');
   await page.keyboard.press('Escape');
@@ -264,7 +270,8 @@ test('with reduce motion turned on, the menu, dialogs and game cards stay still'
   await page.keyboard.press('Escape');
 
   await card.click();
-  await page.getByRole('button', { name: /^(Enter|Edit) result$/ }).click();
+  await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
+  await openResult(page);
   expect(await animation(page.getByRole('dialog', { name: 'Game result' }))).toBe('none');
 });
 

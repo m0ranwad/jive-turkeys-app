@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, ChevronDown, Pencil, Target, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Clock, MapPin, MoreHorizontal, Navigation, Pencil, Shirt, Target, Trash2 } from 'lucide-react';
 import { api } from '@/api';
 import { HeadcountPanel } from '@/components/game/HeadcountPanel';
 import { PotmVoting } from '@/components/game/PotmVoting';
@@ -17,12 +17,15 @@ import { useRsvp } from '@/hooks/useRsvp';
 import { useSeasonData } from '@/hooks/useSeasonData';
 import { saveFailedToast } from '@/lib/errors';
 import { hasKickedOff, kickoff } from '@/lib/calendar';
-import { fmtDateLong, fmtTime, jerseyText, seasonLabel, today } from '@/lib/format';
+import { fmtDateLong, fmtTime, jerseyText, mapsUrl, seasonLabel, today } from '@/lib/format';
 import { membersForSession } from '@/lib/roster';
 import { headcount as computeHeadcount, isRosterStatus, playerKey, resultOf, suspendedIds } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
-const pill = 'inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] transition';
+const pill = 'inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold transition';
+const ghost = 'bg-white/10 text-white hover:bg-white/20';
+const detail = 'flex items-center gap-2.5 text-sm font-semibold text-white/80';
+const icon = 'h-[18px] w-[18px] shrink-0 text-lime-400';
 
 export function GameDetailPage() {
   const { id } = useParams();
@@ -33,6 +36,7 @@ export function GameDetailPage() {
   const { toast } = useToast();
   const [resultOpen, setResultOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // Captains: the player whose RSVP they're setting (someone who texted, or hasn't joined the site).
   const [rsvpFor, setRsvpFor] = useState(null);
@@ -171,48 +175,65 @@ export function GameDetailPage() {
     });
 
   // Before kickoff the main job is getting enough players: Call for subs leads (lime when we're short), and
-  // Enter result waits at the end (still there in case the game's time is wrong). Once it's started, it leads.
+  // Enter result waits under More (still there in case the game's time is wrong). Once it's started, it leads.
+  // Edit and Delete live under More, so Delete never sits next to an everyday button.
   const started = game.has_result || hasKickedOff(game);
   const resultButton = (
     <button
       onClick={() => setResultOpen(true)}
-      className={cn(pill, started ? 'bg-lime-400 text-black hover:bg-lime-300' : 'bg-white/5 text-white hover:bg-white/10')}
+      className={cn(pill, started ? 'bg-lime-400 text-black hover:bg-lime-300' : ghost)}
     >
-      <Target className="h-3.5 w-3.5" />
+      <Target className="h-4 w-4" />
       {game.has_result ? 'Edit result' : 'Enter result'}
     </button>
   );
   const captainTools = (
-    <div className="flex flex-wrap gap-2">
-      {started && resultButton}
-      {!game.has_result && (
-        <CallForSubsButton
-          game={game}
-          headcount={counts}
-          settings={data.settings}
-          profiles={sessionProfiles}
-          rsvps={data.rsvps}
-          primary={!started && counts.isShort}
-        />
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {started && resultButton}
+        {!game.has_result && (
+          <CallForSubsButton
+            game={game}
+            headcount={counts}
+            settings={data.settings}
+            profiles={sessionProfiles}
+            rsvps={data.rsvps}
+            primary={!started && counts.isShort}
+          />
+        )}
+        {!game.has_result && <RemindTeamButton game={game} headcount={counts} settings={data.settings} />}
+        <button
+          aria-label="More"
+          aria-expanded={moreOpen}
+          aria-controls="game-more"
+          onClick={() => setMoreOpen((open) => !open)}
+          className={cn(pill, ghost, 'w-11 justify-center px-0', moreOpen && 'bg-white/20')}
+        >
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
+      </div>
+      {moreOpen && (
+        <div id="game-more" className="flex flex-wrap gap-2">
+          {!started && resultButton}
+          <button onClick={() => setEditOpen(true)} className={cn(pill, ghost)}>
+            <Pencil className="h-4 w-4" /> Edit game
+          </button>
+          <button onClick={deleteGame} className={cn(pill, 'bg-white/10 text-white/80 hover:bg-red-600 hover:text-white')}>
+            <Trash2 className="h-4 w-4" /> Delete game
+          </button>
+        </div>
       )}
-      {!game.has_result && <RemindTeamButton game={game} headcount={counts} settings={data.settings} />}
-      <button onClick={() => setEditOpen(true)} className={cn(pill, 'bg-white/5 text-white hover:bg-white/10')}>
-        <Pencil className="h-3.5 w-3.5" /> Edit
-      </button>
-      <button onClick={deleteGame} className={cn(pill, 'bg-white/5 text-white/70 hover:bg-red-500 hover:text-white')}>
-        <Trash2 className="h-3.5 w-3.5" /> Delete
-      </button>
-      {!started && resultButton}
     </div>
   );
+  const otherJersey = game.jersey === 'backup' ? 'primary' : 'backup';
 
   return (
     <div className="space-y-4">
       <button
         onClick={() => navigate('/')}
-        className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-900"
+        className="inline-flex min-h-8 items-center gap-1.5 text-[13px] font-semibold text-zinc-600 transition hover:text-zinc-900"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Schedule
+        <ArrowLeft className="h-4 w-4" /> Schedule
       </button>
 
       <section className="overflow-hidden rounded-3xl bg-zinc-950 text-white">
@@ -221,9 +242,46 @@ export function GameDetailPage() {
             {seasonLabel(game.season_year, game.session)}
           </div>
           <h1 className="mt-1.5 font-display text-3xl font-extrabold uppercase leading-none tracking-tight">vs {game.opponent}</h1>
-          <p className="mt-2 text-sm font-medium text-white/60">
-            {fmtDateLong(game.date)} · {fmtTime(game.time)} · Field {game.field_number || 'TBD'}
-          </p>
+          {/* Everyone knows the venue: the field number is enough, and Directions opens the address. */}
+          <ul className="mt-4 space-y-2.5">
+            <li className={cn(detail, 'text-[15px] font-bold text-white')}>
+              <Clock className={icon} aria-hidden="true" />
+              {fmtDateLong(game.date)} · {fmtTime(game.time)}
+            </li>
+            <li className={detail}>
+              <MapPin className={icon} aria-hidden="true" />
+              Field {game.field_number || 'TBD'}
+            </li>
+            {!game.has_result && (
+              <li className={detail}>
+                <Shirt className={icon} aria-hidden="true" />
+                {jerseyText(game.jersey, data.settings)} jersey
+                {data.isCaptain && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setJersey(otherJersey)}
+                    aria-label={`Change to the ${jerseyText(otherJersey, data.settings)} jersey`}
+                    className="ml-auto min-h-8 text-[13px] font-semibold text-white/60 underline underline-offset-2 hover:text-white"
+                  >
+                    Change
+                  </button>
+                )}
+              </li>
+            )}
+          </ul>
+          {!game.has_result && (game.location || game.date >= today()) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {game.location && (
+                <a href={mapsUrl(game.location)} target="_blank" rel="noreferrer" className={cn(pill, ghost, 'font-semibold')}>
+                  <Navigation className="h-4 w-4" aria-hidden="true" /> Directions
+                </a>
+              )}
+              {game.date >= today() && (
+                <AddToCalendar game={game} settings={data.settings} className={cn(pill, ghost, 'font-semibold normal-case tracking-normal')} />
+              )}
+            </div>
+          )}
           {game.has_result && (
             <div className="mt-4 flex items-baseline gap-3" data-testid="final-score">
               <span className="font-display text-4xl font-extrabold leading-none">{game.score_us ?? 0}</span>
@@ -241,56 +299,26 @@ export function GameDetailPage() {
               </span>
             </div>
           )}
-          {!game.has_result && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 rounded-full bg-white/5 p-1">
-                {['primary', 'backup'].map((jersey) => (
-                  <button
-                    key={jersey}
-                    aria-pressed={game.jersey === jersey}
-                    disabled={!data.isCaptain || busy}
-                    onClick={() => setJersey(jersey)}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] transition',
-                      game.jersey === jersey ? 'bg-white text-black' : 'text-white/50',
-                      !data.isCaptain && 'opacity-70',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'h-2.5 w-2.5 rounded-full',
-                        jersey === 'backup' ? 'bg-zinc-900 ring-1 ring-white/30' : 'bg-lime-400',
-                      )}
-                    />
-                    {jerseyText(jersey, data.settings)}
-                  </button>
-                ))}
-              </div>
-              {game.date >= today() && <AddToCalendar game={game} settings={data.settings} />}
-            </div>
-          )}
           {game.notes && <p className="mt-3 rounded-2xl bg-white/5 px-3.5 py-2.5 text-xs text-white/70">{game.notes}</p>}
+
+          {!game.has_result && onRoster && (
+            <RsvpCard
+              rsvp={myRsvp}
+              onSet={setRsvp}
+              onToggleGk={toggleGk}
+              suspended={suspended.includes(data.user.id)}
+              busy={busy || rsvp.isBusy(game)}
+            />
+          )}
+
+          {/* Before a game, a captain answers for themselves first, like everyone else; their tools come next. */}
+          {data.isCaptain && (
+            <section aria-label="Captain tools" className="mt-4 border-t border-white/10 pt-4">
+              {captainTools}
+            </section>
+          )}
         </div>
-
-        {data.isCaptain && game.has_result && <div className="border-t border-white/10 px-5 py-3.5">{captainTools}</div>}
       </section>
-
-      {!game.has_result && onRoster && (
-        <RsvpCard
-          rsvp={myRsvp}
-          onSet={setRsvp}
-          onToggleGk={toggleGk}
-          suspended={suspended.includes(data.user.id)}
-          busy={busy || rsvp.isBusy(game)}
-        />
-      )}
-
-      {/* Before a game, a captain answers for themselves first, like everyone else; their tools come next. */}
-      {data.isCaptain && !game.has_result && (
-        <section aria-label="Captain tools" className="rounded-3xl bg-zinc-950 px-5 py-3.5 text-white">
-          {captainTools}
-        </section>
-      )}
 
       {/* A played game leads with what happened: the score, then the vote, then who said they were in, folded. */}
       {game.has_result && (
@@ -313,7 +341,7 @@ export function GameDetailPage() {
           game={game}
           headcount={counts}
           suspendedIds={suspended}
-          settings={data.settings}
+          me={data.user.id}
           onPick={data.isCaptain ? setRsvpFor : null}
         />
       )}
@@ -327,7 +355,7 @@ export function GameDetailPage() {
             </span>
           </summary>
           <div className="-mt-2">
-            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} settings={data.settings} bare />
+            <HeadcountPanel game={game} headcount={counts} suspendedIds={suspended} me={data.user.id} bare />
           </div>
         </details>
       )}

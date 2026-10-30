@@ -29,8 +29,8 @@ export const playerKey = (player) =>
   player.guest ? { user_id: null, guest_id: player.user_id } : { user_id: player.user_id, guest_id: null };
 
 /**
- * RSVP headcount for one game. Women playing GK don't count toward the
- * women-on-the-field minimum. Active players who haven't answered are "No
+ * RSVP headcount for one game. Girls playing GK don't count toward the
+ * girls-on-the-field minimum. Active players who haven't answered are "No
  * reply"; available subs who haven't are "Subs". Unavailable players without
  * an answer have their own group. `profiles` can include roster names, and `rsvps` must be
  * keyed with keyedRow().
@@ -57,6 +57,20 @@ export function headcount({ game, rsvps, profiles, settings }) {
   const needTotal = Math.max(0, minPlayers - totalIn);
   const needWomen = Math.max(0, minWomen - womenFieldIn);
 
+  // The field as spots: one goal, `minWomen` outfield spots only girls fill, and the rest open to
+  // anyone (so at most 4 guys plus a guy in goal). Any number can say they'll play GK (two often
+  // share goal): the first takes the goal, a guy first, and the rest count like anyone else, so
+  // volunteering never puts someone on the bench. With no volunteer, someone left over plays goal.
+  const keepers = groups.in.filter((e) => e.playing_gk);
+  const keeper = keepers.find((e) => e.profile.gender !== 'F') || keepers[0];
+  const goal = minPlayers > 0 ? 1 : 0;
+  const girls = Math.max(0, Math.min(minWomen, minPlayers - goal));
+  const open = Math.max(0, minPlayers - goal - girls);
+  const girlsFilled = Math.min(girls, womenFieldIn);
+  const others = totalIn - girlsFilled - (keeper ? 1 : 0);
+  const openFilled = Math.min(open, others);
+  const goalFilled = keeper ? goal : Math.min(goal, others - openFilled);
+
   return {
     groups,
     totalIn,
@@ -67,7 +81,26 @@ export function headcount({ game, rsvps, profiles, settings }) {
     needTotal,
     needWomen,
     isShort: needTotal > 0 || needWomen > 0,
+    keepers,
+    spots: { goal, girls, open, goalFilled, girlsFilled, openFilled, volunteer: !!keeper, bench: totalIn - goalFilled - girlsFilled - openFilled },
   };
+}
+
+const girlsWord = (n) => (n === 1 ? 'girl' : 'girls');
+
+/**
+ * A shortage in one line, the same on the game page, Schedule and chat posts: "Need 2 more,
+ * including a girl", "Need 2 more girls", "Need 8, including 3 girls" when nobody's in. Null
+ * when the team is full. The number still needed is the larger of `needTotal` and `needWomen`,
+ * which is what the spots in headcount() leave empty.
+ */
+export function shortageText({ needTotal = 0, needWomen = 0, totalIn }) {
+  const need = Math.max(needTotal, needWomen);
+  if (!need) return null;
+  const count = totalIn === 0 ? `Need ${need}` : `Need ${need} more`;
+  if (!needWomen) return count;
+  if (needWomen === need) return `${count} ${girlsWord(need)}`;
+  return `${count}, including ${needWomen === 1 ? 'a girl' : `${needWomen} girls`}`;
 }
 
 /** Anyone who got a red card in the previous played game sits this one out. */

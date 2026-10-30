@@ -3,7 +3,7 @@
 // again. A result saves whole or not at all (save_game_result; checked in
 // supabase/tests/games.test.sql). The demo backend acts out a dropped
 // connection when jt_demo_offline is set.
-import { expect, signIn, test } from './helpers';
+import { expect, openResult, signIn, test } from './helpers';
 
 const goOffline = (page) => page.evaluate(() => localStorage.setItem('jt_demo_offline', '1'));
 const goOnline = (page) => page.evaluate(() => localStorage.removeItem('jt_demo_offline'));
@@ -16,7 +16,7 @@ async function openNextGame(page) {
 test('a result that fails to save says so, keeps what was entered, and saves on the next try', async ({ page }) => {
   await signIn(page);
   await openNextGame(page);
-  await page.getByRole('button', { name: 'Enter result' }).click();
+  await openResult(page);
   const result = page.getByRole('dialog', { name: 'Game result' });
   await result.getByRole('button', { name: 'Add a goal for Alex Chen' }).click();
 
@@ -38,7 +38,8 @@ test('a result that fails to save says so, keeps what was entered, and saves on 
 test('editing a game that fails to save says so and stays open', async ({ page }) => {
   await signIn(page);
   await openNextGame(page);
-  await page.getByRole('button', { name: /^Edit game$|^Edit$/ }).first().click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit game' }).click();
   const form = page.getByRole('dialog');
   await goOffline(page);
   await form.getByRole('button', { name: /Save/ }).click();

@@ -4,8 +4,7 @@
 // names for a copy (plainName).
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
 import { mentionPeople } from '@/lib/mentions';
-
-const women = (n) => (n === 1 ? 'woman' : 'women');
+import { shortageText } from '@/lib/team-logic';
 
 export const plainName = (player) => player.display_name;
 
@@ -28,22 +27,25 @@ export function gameReminder({ game, headcount, settings, link, nameOf = plainNa
     `Jersey: ${jerseyText(game.jersey, settings)}`,
     `Still to RSVP: ${pending.length ? pending.join(', ') : "everyone's in"}`,
   ];
-  if (headcount.needTotal || headcount.needWomen) {
-    const needs = [];
-    if (headcount.needTotal) needs.push(`Need ${headcount.needTotal} more`);
-    if (headcount.needWomen) needs.push(`${headcount.needWomen} more ${women(headcount.needWomen)}`);
-    lines.push(`${needs.join(' / ')}. Subs, tap IN if you can play.`);
-  }
+  const short = shortageText(headcount);
+  if (short) lines.push(`${short}. Subs, tap IN if you can play.`);
   lines.push(`RSVP: ${link}`);
   return lines.join('\n');
 }
 
-/** Teammates available to sub who haven't said IN or OUT for the game. */
-export function subsToAsk({ game, profiles, rsvps }) {
+/**
+ * Teammates available to sub who haven't said IN or OUT for the game. With the game's
+ * `headcount`, only girls when only girls are needed: the open spots are full, so a guy
+ * would only sit on the bench (the database's sub call asks the same people).
+ */
+export function subsToAsk({ game, profiles, rsvps, headcount }) {
   const answered = new Set(
     (rsvps || []).filter((r) => r.game_id === game.id && ['in', 'out'].includes(r.status)).map((r) => r.user_id),
   );
-  return (profiles || []).filter((p) => p.status === 'sub_pool' && !answered.has(p.user_id));
+  const girlsOnly = !!headcount && headcount.needWomen > 0 && headcount.needTotal <= headcount.needWomen;
+  return (profiles || []).filter(
+    (p) => p.status === 'sub_pool' && !answered.has(p.user_id) && (!girlsOnly || p.gender === 'F'),
+  );
 }
 
 /**
@@ -52,7 +54,7 @@ export function subsToAsk({ game, profiles, rsvps }) {
  * shortage the game screen and Schedule show.
  */
 export function subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf = plainName }) {
-  const subs = subsToAsk({ game, profiles, rsvps }).map(nameOf);
+  const subs = subsToAsk({ game, profiles, rsvps, headcount }).map(nameOf);
   const lines = [
     `🦃 Jive Turkeys — subs needed for ${fmtDateShort(game.date)} · ${fmtTime(game.time)}`,
     `vs ${game.opponent} · Field ${game.field_number || 'TBD'} · Jersey: ${jerseyText(game.jersey, settings)}`,
@@ -60,10 +62,8 @@ export function subsCall({ game, headcount, settings, profiles, rsvps, link, nam
   if (subs.length) lines.push(`Available to sub: ${subs.join(', ')}`);
   else lines.push('No available subs left to ask.');
 
-  const needs = [];
-  if (headcount.needTotal) needs.push(`${headcount.needTotal} more`);
-  if (headcount.needWomen) needs.push(`${headcount.needWomen} more ${women(headcount.needWomen)}`);
-  if (needs.length) lines.push(`Need ${needs.join(' / ')}. Tap IN if you can play.`);
+  const short = shortageText(headcount);
+  if (short) lines.push(`${short}. Tap IN if you can play.`);
   lines.push(`RSVP: ${link}`);
   return lines.join('\n');
 }

@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { ChevronRight } from 'lucide-react';
 import { AnswerButtons, SuspendedBadge, answerLabel } from '@/components/game/AnswerButtons';
+import { NoGoalie, Spots } from '@/components/game/HeadcountPanel';
 import { ShortBanner, JerseyDot } from '@/components/schedule/GameCard';
 import { fmtDateShort, fmtTime, jerseyText } from '@/lib/format';
 import { shortageIsUrgent } from '@/lib/calendar';
@@ -35,19 +36,17 @@ export function NextGameCard({ game, headcount, settings, rsvp, onRoster, suspen
         </span>
       </Link>
 
+      {/* The game page's spots, smaller, so both count the same way. */}
       {headcount && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.08em]">
-          <span className="rounded-full bg-lime-400 px-2.5 py-1 text-black">{headcount.totalIn} in</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">
-            {headcount.womenFieldIn} of {headcount.minWomen} women
-          </span>
-          <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/80">{headcount.groups.none.length} no reply</span>
-          <ShortBanner
-            needTotal={headcount.needTotal}
-            needWomen={headcount.needWomen}
-            urgent={shortageIsUrgent(game)}
-            calm="bg-white/10 text-white/80"
-          />
+        <div className="mt-3.5">
+          <Spots headcount={headcount} dark />
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <ShortBanner headcount={headcount} urgent={shortageIsUrgent(game)} calm="bg-white/10 text-white/80" />
+            {!headcount.isShort && (
+              <span className="rounded-full bg-lime-400 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-black">Full team</span>
+            )}
+            {!headcount.spots.volunteer && headcount.totalIn > 0 && <NoGoalie dark />}
+          </div>
         </div>
       )}
 

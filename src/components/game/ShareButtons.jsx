@@ -1,13 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Megaphone, UserPlus } from 'lucide-react';
 import { PostToChatDialog } from '@/components/PostToChatDialog';
 import { gameReminder, subsCall, subsToAsk } from '@/lib/team-posts';
 import { cn } from '@/lib/utils';
 
 export const gameLink = (game) => `${window.location.origin}/games/${game.id}`;
 
-const BUTTON =
-  'inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-white/20';
+const BUTTON = 'inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/10 px-4 text-[13px] font-bold text-white transition hover:bg-white/20';
 const PRIMARY = 'bg-lime-400 text-black hover:bg-lime-300';
 
 /** "Are you in?" for Team Chat, @mentioning whoever hasn't answered (or to copy). */
@@ -21,7 +19,6 @@ export function RemindTeamButton({ game, headcount, settings }) {
   return (
     <>
       <button onClick={() => setOpen(true)} className={BUTTON}>
-        <Megaphone className="h-3.5 w-3.5" />
         Remind team
       </button>
       <PostToChatDialog
@@ -51,7 +48,6 @@ export function CallForSubsButton({ game, headcount, settings, profiles, rsvps, 
   return (
     <>
       <button onClick={() => setOpen(true)} className={cn(BUTTON, primary && PRIMARY)}>
-        <UserPlus className="h-3.5 w-3.5" />
         Call for subs
       </button>
       <PostToChatDialog
@@ -60,7 +56,7 @@ export function CallForSubsButton({ game, headcount, settings, profiles, rsvps, 
         title="Call for subs"
         intro="Teammates available to sub who haven't answered are named, so their phones buzz."
         message={message}
-        about={subsToAsk({ game, profiles, rsvps })}
+        about={subsToAsk({ game, profiles, rsvps, headcount })}
       />
     </>
   );
