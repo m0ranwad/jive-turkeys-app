@@ -233,7 +233,21 @@ export function PaySettingsDialog({ open, onOpenChange, settings, onSaved }) {
  * one of the options (`away` says why). Picking someone who pays with somebody
  * else (`partnerOf`) asks first, since that somebody then pays on their own.
  */
-function PartnerPicker({ id, label, hint, player, current, away, options, partnerOf, busy, onPick }) {
+function PartnerPicker({
+  id,
+  label,
+  labelClassName = FIELD_LABEL,
+  nobody = 'Nobody (pays on their own)',
+  className = SECTION,
+  hint,
+  player,
+  current,
+  away,
+  options,
+  partnerOf,
+  busy,
+  onPick,
+}) {
   const [asking, setAsking] = useState(null);
 
   useEffect(() => setAsking(null), [player.user_id, current?.user_id]);
@@ -250,8 +264,8 @@ function PartnerPicker({ id, label, hint, player, current, away, options, partne
   const first = (p) => p.display_name.split(' ')[0];
 
   return (
-    <div className={SECTION}>
-      <Label htmlFor={id} className={FIELD_LABEL}>
+    <div className={className}>
+      <Label htmlFor={id} className={labelClassName}>
         {label}
       </Label>
       <select
@@ -261,7 +275,7 @@ function PartnerPicker({ id, label, hint, player, current, away, options, partne
         disabled={busy || !!asking}
         className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:border-zinc-900"
       >
-        <option value="">Nobody (pays on their own)</option>
+        <option value="">{nobody}</option>
         {current && !options.some((p) => p.user_id === current.user_id) && (
           <option value={current.user_id} disabled>
             {current.display_name} ({away})
@@ -292,13 +306,13 @@ function PartnerPicker({ id, label, hint, player, current, away, options, partne
           </div>
         </div>
       )}
-      <p className="text-[11px] font-medium text-zinc-500">{hint}</p>
+      {hint && <p className="text-[11px] font-medium text-zinc-500">{hint}</p>}
     </div>
   );
 }
 
 /** A player's usual pairing, without payment history or captain-only corrections. */
-export function PayTogetherDialog({ open, onOpenChange, player, profiles, options, from, between, onChanged }) {
+export function PayTogetherDialog({ open, onOpenChange, player, profiles, options, between, onChanged }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const partnerOf = (id) => profiles.find((p) => p.user_id === profiles.find((p) => p.user_id === id)?.pays_with) || null;
@@ -327,13 +341,16 @@ export function PayTogetherDialog({ open, onOpenChange, player, profiles, option
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>Pay together</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-zinc-500">Choose a teammate. One payment covers both shares, and either of you can mark it paid.</p>
+        <p className="text-sm text-zinc-600">
+          One payment for two of you? Pick your teammate. You'll get one total, and either of you can mark it paid.
+        </p>
         <PartnerPicker
           id="my-pays-with"
-          label="Pays together with"
-          hint={between
-            ? 'From next session on. The session that just ended keeps who paid together then.'
-            : `From session ${from.session} on. Earlier sessions keep who paid together then.`}
+          label="Who do you pay with?"
+          labelClassName="text-sm font-bold text-zinc-900"
+          nobody="No one, just me"
+          className="space-y-2 pt-1"
+          hint={between ? 'Starts next session.' : null}
           player={player}
           current={partnerOf(player.user_id)}
           away={between ? 'not playing next session' : 'not playing this session'}

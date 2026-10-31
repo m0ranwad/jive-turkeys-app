@@ -210,7 +210,6 @@ export function MyDues({ data, period, current, over = false, user, settings, on
         player={me}
         profiles={data.profiles}
         options={pairingPlayers.filter((p) => p.status === 'active' && !p.removed)}
-        from={current}
         between={over}
         onChanged={onChanged}
       />
