@@ -217,7 +217,7 @@ manages the GitHub, Cloudflare and Supabase accounts.
   are behind **More options → Edit who paid together** in the player's sheet. The default sheet shows the amount,
   payment status and payment action. More options offers partial payments, pairing and captain-only custom amounts,
   one form at a time. History is shown on request only when there are events; roster-name explanations aren't
-  part of the payment sheet. My dues keeps Pay together as a small secondary link below the payment actions. The couples migration also fills `moved_partners`
+  part of the payment sheet. My dues asks a player who pays alone and hasn't paid **Paying for two?** with a Pay together button at the top of the Pay card; otherwise Pay together is a small secondary link below the payment actions. The couples migration also fills `moved_partners`
   for existing roster-name picks, so undo restores past couples (`scripts/test-couples-upgrade.sh`).
   Only captains set fees, custom amounts and payment links. Neither can be below $0 (database checks,
   and `feeProblem()` in the fee box); the fee box asks before saving $0 or more than double the fee before it
