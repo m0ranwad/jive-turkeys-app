@@ -42,7 +42,7 @@ export function PasswordInput({ id, ...props }) {
         aria-pressed={shown}
         aria-controls={id}
         aria-label="Show password"
-        className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-zinc-600 transition ${shown ? 'bg-zinc-200' : 'hover:bg-zinc-100'}`}
+        className={`absolute right-0.5 top-1/2 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg px-2.5 text-xs font-bold uppercase tracking-[0.08em] text-zinc-600 transition ${shown ? 'bg-zinc-200' : 'hover:bg-zinc-100'}`}
       >
         Show
       </button>

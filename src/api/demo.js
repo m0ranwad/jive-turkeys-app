@@ -7,10 +7,16 @@ import { currentSession, openSession } from '@/lib/dues';
 import { isEarlier } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
-import { isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem } from '@/lib/username';
+import {
+  RESET_CLAIM_TIMEOUT_MS, RESET_CODE_USED, RESET_IN_PROGRESS, WRONG_RESET_CODE,
+  isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem,
+} from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v33';
+// A new value on every save, so a tab notices another tab's save without
+// reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
+const REV_KEY = 'jt_demo_rev';
 // The team code new accounts enter in the preview.
 export const DEMO_TEAM_CODE = 'TURKEY';
 const SESSION_KEY = 'jt_demo_session';
@@ -534,11 +540,46 @@ function load() {
   return db;
 }
 
+// Returns the new revision, or null if nothing was saved.
 function save(db) {
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
+    const rev = uid();
+    localStorage.setItem(REV_KEY, rev);
+    return rev;
   } catch {
     // Storage full or blocked: keep working in memory.
+    return null;
+  }
+}
+
+const savedRev = () => {
+  try {
+    return localStorage.getItem(REV_KEY);
+  } catch {
+    return null;
+  }
+};
+
+// Brings another tab's saved data into this tab's copy in place: rows and
+// lists an operation holds across an await stay the ones that get saved.
+function refreshInPlace(db, latest) {
+  for (const table of Object.values(TABLES)) latest[table] = latest[table] || [];
+  for (const [key, rows] of Object.entries(latest)) {
+    const current = db[key];
+    if (!Array.isArray(rows) || !Array.isArray(current)) {
+      db[key] = rows;
+      continue;
+    }
+    const held = new Map(current.filter((row) => row?.id).map((row) => [row.id, row]));
+    const merged = rows.map((row) => {
+      const kept = row?.id && held.get(row.id);
+      if (!kept) return row;
+      Object.keys(kept).forEach((field) => { if (!(field in row)) delete kept[field]; });
+      return Object.assign(kept, row);
+    });
+    current.length = 0;
+    merged.forEach((row) => current.push(row));
   }
 }
 
@@ -550,6 +591,24 @@ const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(struc
  */
 export function createDemoBackend({ autoSignIn = false } = {}) {
   let db = load();
+  let rev = savedRev();
+  // Another tab may have changed a password or replaced a reset code. Refresh
+  // before reading or changing data, so an older tab cannot save its old copy.
+  const refreshDb = () => {
+    const latest = savedRev();
+    if (!latest || latest === rev) return;
+    rev = latest;
+    try {
+      const saved = JSON.parse(localStorage.getItem(DB_KEY));
+      if (saved) refreshInPlace(db, saved);
+    } catch {
+      // Keep the working copy if storage is unavailable or not valid JSON.
+    }
+  };
+  const persist = () => {
+    // If saving failed, keep working in memory until another tab saves.
+    rev = save(db) || rev;
+  };
   const listeners = {};
   const authListeners = new Set();
 
@@ -578,6 +637,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     authListeners.forEach((cb) => setTimeout(() => cb(id ? 'SIGNED_IN' : 'SIGNED_OUT'), 0));
   };
   const currentUser = () => db.users.find((u) => u.id === sessionUserId()) || null;
+  const resetActive = (user) => user.reset_claim_id
+    && new Date(user.reset_claimed_at).getTime() > Date.now() - RESET_CLAIM_TIMEOUT_MS;
   const signedOutOnPurpose = () => {
     try {
       return localStorage.getItem(SIGNED_OUT_KEY) === '1';
@@ -590,6 +651,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (captain) storeSession(captain.id);
   }
   const requireUser = () => {
+    refreshDb();
     if (!currentUser()) throw new Error('Not signed in');
   };
   // Tests turn this on to act out a dropped connection: every save fails the way
@@ -882,7 +944,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   };
 
   function entity(table) {
-    const write = () => save(db);
+    const write = () => persist();
     return {
       async list(sort, limit) {
         requireUser();
@@ -1000,6 +1062,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
 
   const auth = {
     async me() {
+      refreshDb();
       const user = currentUser();
       if (!user) return null;
       const joined = !!user.joined_team_at || user.role === 'admin';
@@ -1010,25 +1073,29 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       return () => authListeners.delete(callback);
     },
     async hasSession() {
+      refreshDb();
       return !!currentUser();
     },
     async signIn(email, password) {
+      refreshDb();
       const login = email.trim().toLowerCase();
       const user = db.users.find((u) => login.includes('@') ? u.email?.toLowerCase() === login : u.username === login);
       if (!user || user.password !== password) throw new Error('Invalid email, username, or password');
       setSession(user.id);
     },
     async signUp(email, password) {
+      refreshDb();
       if (db.users.some((u) => u.email?.toLowerCase() === email.trim().toLowerCase())) {
         throw new Error('An account with this email already exists. Try logging in.');
       }
       const user = { id: uid(), email: email.trim(), password, full_name: '', role: 'user', joined_team_at: null };
       db.users.push(user);
-      save(db);
+      persist();
       setSession(user.id);
       return { needsVerification: false };
     },
     async signUpUsername(value, password, teamCode) {
+      refreshDb();
       const username = normalizeUsername(value);
       if (usernameProblem(username)) throw new Error(usernameProblem(username));
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
@@ -1038,12 +1105,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (db.users.some((u) => u.username === username)) throw new Error('That username is taken. Choose another or log in.');
       const user = { id: uid(), email: null, username, password, full_name: '', role: 'user', joined_team_at: now() };
       db.users.push(user);
-      save(db);
+      persist();
       setSession(user.id);
       return { username, session: true };
     },
     // Like the account service: email players keep the password they have; others choose one.
     async linkUsername(value, password) {
+      refreshDb();
       const user = currentUser();
       if (!user) throw new Error('Sign in to your existing account first.');
       if (!user.joined_team_at && user.role !== 'admin') throw new Error('Join the team first.');
@@ -1053,19 +1121,50 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (user.password && password !== user.password) throw new Error("That isn't your password.");
       if (user.username || db.users.some((u) => u.username === username)) throw new Error('That username is taken, or your account already has one.');
       Object.assign(user, { username, password });
-      save(db);
+      persist();
       return { username };
     },
     async resetWithCode(value, code, password) {
-      const user = db.users.find((u) => u.username === normalizeUsername(value));
+      failIfOffline();
       if (password.length < 6 || password.length > 256) throw new Error('Use a password between 6 and 256 characters.');
-      const wrong = "That code isn't right, or it has run out. Ask a captain for a new one.";
-      if (!user?.reset_hash || !isResetCode(code) || user.reset_hash !== await resetCodeHash(code)) throw new Error(wrong);
+      const wrong = WRONG_RESET_CODE;
+      if (!isResetCode(code)) throw new Error(wrong);
+      const hash = await resetCodeHash(code);
+      // Claim against the latest saved code. The later password save succeeds
+      // only while this request still owns that claim.
+      refreshDb();
+      failIfOffline();
+      const user = db.users.find((u) => u.username === normalizeUsername(value));
+      if (!user?.reset_hash || user.reset_hash !== hash) throw new Error(wrong);
       if (!(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
-      Object.assign(user, { password, reset_hash: null, reset_expires_at: null });
-      save(db);
-      setSession(user.id);
-      return { session: true };
+      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
+      const claim = uid();
+      Object.assign(user, { reset_claim_id: claim, reset_claimed_at: now() });
+      persist();
+      try {
+        // Act out Auth saving the password, while a captain in another tab can
+        // try to issue a code. Its commit rechecks the current claim, like SQL.
+        await delay(null);
+        refreshDb();
+        failIfOffline();
+        if (!db.users.includes(user) || user.reset_claim_id !== claim || !resetActive(user)
+          || user.reset_hash !== hash || !(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
+        Object.assign(user, { password, reset_hash: null, reset_expires_at: null, reset_claim_id: null, reset_claimed_at: null });
+        persist();
+        setSession(user.id);
+        return { session: true };
+      } catch (error) {
+        // Like username_reset_release(): free the code and say what became of it.
+        refreshDb();
+        if (user.reset_claim_id === claim) {
+          Object.assign(user, { reset_claim_id: null, reset_claimed_at: null });
+          persist();
+        }
+        if (!user.reset_hash) throw new Error(RESET_CODE_USED);
+        if (user.reset_hash !== hash || !(new Date(user.reset_expires_at) > new Date())) throw new Error(wrong);
+        if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
+        throw error;
+      }
     },
     async verifySignup() {},
     async resendSignup() {},
@@ -1074,10 +1173,11 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     },
     async requestPasswordReset() {},
     async updatePassword(password) {
+      refreshDb();
       const user = currentUser();
       if (!user) throw new Error('This reset link is no longer valid.');
       user.password = password;
-      save(db);
+      persist();
     },
     async signOut() {
       setSession(null);
@@ -1178,7 +1278,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (partner) Object.assign(link, { guest_partner: partner, user_partner: profile ? partnerOf(userId) : null });
     Object.assign(guest, { linked_user_id: userId, pays_with_user: null, pays_with_guest: null, updated_date: now() });
     db.team_guest_links.push(link);
-    save(db);
+    persist();
     if (partner) await dues.setPartner(userId, partner);
   };
 
@@ -1193,13 +1293,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const right = (db.team_join_code[0]?.code || '').trim().toLowerCase();
       if (right && String(code).trim().toLowerCase() === right) {
         Object.assign(user, { joined_team_at: now(), join_tries: 0, join_blocked_until: null });
-        save(db);
+        persist();
         return delay(null);
       }
       const tries = (user.join_blocked_until ? 0 : user.join_tries || 0) + 1;
       const blocked = tries >= 10;
       Object.assign(user, { join_tries: blocked ? 0 : tries, join_blocked_until: blocked ? dayjs().add(1, 'hour').toISOString() : null });
-      save(db);
+      persist();
       throw new Error(blocked ? JOIN_ERRORS.blocked : JOIN_ERRORS.wrong);
     },
     // Same as the database's move_team_guest(), claim_team_guest() and link_team_guest().
@@ -1217,7 +1317,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       db.team_guest_links
         .filter((l) => l.guest_id === guestId && l.user_id === currentUser().id && !l.unlinked_at)
         .forEach((l) => Object.assign(l, { status_after: guest.status }));
-      save(db);
+      persist();
       return delay(null);
     },
     async linkGuest(guestId, userId) {
@@ -1304,7 +1404,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (profile) followAhead({ user_id: userId }, profile.removed ? 'off' : profile.status);
 
       Object.assign(link, { unlinked_at: now(), unlinked_by: currentUser().id });
-      save(db);
+      persist();
       return delay(null);
     },
     // Like username_accounts' policies: captains see everyone's, players their own.
@@ -1316,13 +1416,21 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     // Like the account service's issue-reset.
     async issueResetCode(userId) {
       requireUser();
+      failIfOffline();
+      const code = makeResetCode();
+      const hash = await resetCodeHash(code);
+      // Hashing yields to other tabs. Recheck the latest account and reset
+      // data before issuing a replacement, with no await before the save.
+      requireUser();
+      failIfOffline();
       if (currentUser().role !== 'admin') throw new Error('Only captains can reset passwords.');
       const user = db.users.find((u) => u.id === userId);
       if (!user?.username) throw new Error("This player doesn't sign in with a username.");
-      const code = makeResetCode();
+      if (resetActive(user)) throw new Error(RESET_IN_PROGRESS);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      Object.assign(user, { reset_hash: await resetCodeHash(code), reset_expires_at: expiresAt, reset_by: currentUser().id });
-      save(db);
+      Object.assign(user, { reset_hash: hash, reset_expires_at: expiresAt, reset_by: currentUser().id,
+        reset_claim_id: null, reset_claimed_at: null });
+      persist();
       return { code, username: user.username, expiresAt };
     },
     // Same as the database's set_team_member_removed().
@@ -1343,7 +1451,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           Object.assign(p, removed ? { removed: true, is_captain: false } : { removed: false, status: 'active' });
           followStatus('player_profiles', p);
         });
-      save(db);
+      persist();
       return delay(null);
     },
     async setRole(userId, role) {
@@ -1351,7 +1459,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const user = db.users.find((u) => u.id === userId);
       if (user) user.role = role;
       db.player_profiles.filter((p) => p.user_id === userId).forEach((p) => (p.is_captain = role === 'admin'));
-      save(db);
+      persist();
     },
     async invite() {
       requireUser();
@@ -1446,7 +1554,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       for (const id of [me.id, ...people]) {
         db.chat_thread_members.push({ id: uid(), thread_id: thread.id, user_id: id, added_by: me.id, created_date: now(), updated_date: now() });
       }
-      save(db);
+      persist();
       notify('chat_threads', 'onInsert', thread);
       return delay(thread);
     },
@@ -1462,7 +1570,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (!row) refuse();
       checkChatWrite('chat_thread_members', 'delete', row);
       db.chat_thread_members = db.chat_thread_members.filter((m) => m.id !== row.id);
-      save(db);
+      persist();
       notify('chat_thread_members', 'onDelete', { id: row.id });
       return delay(null);
     },
@@ -1480,7 +1588,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         db.chat_thread_members.push(row);
         notify('chat_thread_members', 'onInsert', row);
       }
-      save(db);
+      persist();
       return delay(null);
     },
     async markRead(threadId, readAt) {
@@ -1489,7 +1597,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const read = db.chat_reads.find((r) => r.user_id === me.id && (r.thread_id ?? null) === threadId);
       if (!read) db.chat_reads.push({ id: uid(), user_id: me.id, thread_id: threadId, last_read_at: readAt, created_date: now(), updated_date: now() });
       else if (readAt > read.last_read_at) Object.assign(read, { last_read_at: readAt, updated_date: now() });
-      save(db);
+      persist();
     },
     async viewing() {
       requireUser();
@@ -1514,7 +1622,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const read = db.announcement_reads.find((r) => r.user_id === me.id);
       if (!read) db.announcement_reads.push({ id: uid(), user_id: me.id, last_read_at: at, created_date: now(), updated_date: now() });
       else if (at > read.last_read_at) Object.assign(read, { last_read_at: at, updated_date: now() });
-      save(db);
+      persist();
       return delay(null);
     },
   };
@@ -1546,7 +1654,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           id: uid(), ...where, ...key, paid, paid_date: patch.paid_date, paid_amount: amount, changed_by: me, created_date: now(),
         });
       });
-      save(db);
+      persist();
       return delay(null);
     },
     async setPartner(userId, partnerId) {
@@ -1578,7 +1686,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         point(partnerId, userId);
       }
       changed.forEach(followCouple);
-      save(db);
+      persist();
       return delay(null);
     },
     // Same as the database's set_session_partner(): captains fix who paid together in a
@@ -1606,7 +1714,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         point(userId, partnerId);
         point(partnerId, userId);
       }
-      save(db);
+      persist();
       return delay(null);
     },
   };
@@ -1650,7 +1758,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
           else db.game_fill_ins.push({ id: uid(), game_id: gameId, ...fields, created_date: now(), updated_date: now() });
         }
       }
-      save(db);
+      persist();
       return delay(null);
     },
   };
@@ -1712,7 +1820,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const ahead = { year: ask.season_year, session: ask.session };
         if (db.session_roster.some((r) => sessionOf(r) === `${ahead.year}-${ahead.session}`)) refreshAsked(ahead);
       }
-      save(db);
+      persist();
       return delay({ season_year: Number(period.year), session: Number(period.session), over: !open() });
     },
     // Captains ask "Playing session N?" about a session that hasn't started, with its
@@ -1738,7 +1846,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         startSession(period);
         refreshAsked(period);
       }
-      save(db);
+      persist();
       return delay(null);
     },
     // Your answer to "Playing session N?": for the current session it's your status (the
@@ -1762,7 +1870,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         startSession(period);
         setEntry(period, { user_id: me.id }, status);
       }
-      save(db);
+      persist();
       return delay(null);
     },
   };
@@ -1793,7 +1901,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     push,
     resetDemo() {
       db = seed();
-      save(db);
+      persist();
     },
   };
 }

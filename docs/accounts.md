@@ -5,6 +5,7 @@ ignores capital letters and stray spaces in either. Email signup still verifies 
 existing code/link flow. Every password box has a **Show** button instead of a second "confirm"
 box. A failed log in adds a hint: for a username, that it isn't your name on the team and that a
 captain can help; for an email, to try Continue with Google or Forgot password.
+The Show button has a touch area at least 44px high on every password form.
 
 **Username (no email)** is the first and preselected choice on Create account: a unique username,
 a password and the team code. Usernames are case-insensitive, 3–24 characters, letters and numbers
@@ -28,6 +29,15 @@ That signs them in. Changing the password ends every session on the account, so 
 the old password is signed out (Supabase does this; the service also ends any other session as a
 safeguard). The code is used up only once the new password is in, so if Supabase turns down the
 password, the player picks another with the same code.
+While a password reset is finishing, a captain requesting a replacement, or a player trying the
+same code again, sees **A reset is finishing—try again in a moment.** No replacement is made until
+they retry after it finishes. An interrupted reset releases its claim, or the claim times out after
+two minutes; a delayed old request cannot overwrite a password after its claim has expired or been
+replaced. If a reset can't finish, the player hears what became of the code: still usable (try
+again), replaced or run out (**That code isn't right, or it has run out…**), or already used (when
+the reply was lost after the password changed: **That code has already been used. Log in with the
+new password, or ask a captain for a new code.**). A player's own password change (an email reset
+link) always goes ahead, even while a captain's code is being used; the last one to finish wins.
 
 Email players reset by email as before. Only username accounts get captain codes.
 
@@ -56,13 +66,31 @@ unverified email.
   (`api.users.usernames()` reads it). Players can select their own user ID and username; captains
   can select everyone's. Nobody can select reset codes (stored only as SHA-256 hashes, with
   `reset_expires_at` and `reset_by`) or write rows. The service alone can read/write them.
+- Reset claims (`reset_claim_id`, `reset_claimed_at`) are also private. Service-only
+  `username_reset_claim` (claimed, busy or wrong), `username_reset_issue` (which also checks the
+  captain and returns the username) and `username_reset_release` (released, used, replaced or
+  busy) coordinate resets and replacement codes atomically. A claim expires after two minutes
+  (`username_reset_claim_live()`, the only place that says so; `RESET_CLAIM_TIMEOUT_MS` in
+  previews and tests must match it, and a unit test checks) to recover from a stopped worker.
+  The service passes the claim as the transient `jt_username_reset_claim` app-metadata field
+  with the password update. A deferred constraint trigger on `auth.users.encrypted_password`
+  checks the final metadata and consumes the code in Auth's own transaction, even when Auth
+  writes the password before metadata. Both changes commit or both roll back. The trigger
+  rejects stale claims and removes the transient marker; a lost HTTP reply cannot restore a
+  consumed code. Password writes without the marker are the account's own and always go ahead,
+  so if a future Auth version saved the marker in a separate transaction, resets would still
+  work: `username_reset_finish()`, called after every successful reset, then uses up the code
+  and removes the marker (normally it finds nothing to do). Supabase still validates the
+  password and manages sessions.
 - `username_auth_limits` is also service-only. Atomic counters, per 15 minutes: 300 requests per
   connecting address (a whole team on the gym's Wi-Fi shares one); sign-in and reset codes 10 per
   username from one address and 50 per username overall, so guesses from elsewhere can't lock a
-  player out on their own phone; signup 5 per username and 40 per address; adding a username 10 per
-  account; making reset codes 30 per captain. The address is `cf-connecting-ip`, else the first
-  `X-Forwarded-For` entry; with neither, all requests share one counter and the function logs a
-  warning. Keys are hashed. A new key takes over a row whose window is over, so the table stays
+  player out on their own phone; signup 5 per username, 40 per address and 100 for the whole team
+  (so the team code can't be guessed with new usernames from made-up addresses); adding a username
+  10 per account; making reset codes 30 per captain. The address is `cf-connecting-ip`, else the
+  first `X-Forwarded-For` entry, else `X-Real-IP`; with none, all requests share one counter and
+  the function logs a warning. Callers can make up the last two (Cloudflare sets the first), which
+  is why the per-username and team-wide limits don't depend on the address. Keys are hashed. A new key takes over a row whose window is over, so the table stays
   small without deleting rows. Limits fail closed on database errors.
 - Responses never expose stored hashes, passwords, or another user's email.
 - Failures are logged in the function's logs (what failed, never what the player typed). Supabase
@@ -71,10 +99,22 @@ unverified email.
   than "try again shortly".
 - `.github/workflows/functions.yml` publishes the account service alongside the notification
   service, and takes it off Supabase once its folder is gone (so an undo keeps that file; see
-  CLAUDE.md). New account data is additive; no existing team records are rewritten.
+  CLAUDE.md). A failed lookup or deletion fails that step; it never reports that the service
+  is absent after a failed lookup. Before deploying, it waits (up to 30 minutes) until the live
+  database has every database update in the commit (`scripts/wait-for-database.sh`), since the
+  Database update workflow runs separately and takes several minutes; if that update fails,
+  nothing new is deployed and the old service keeps running. New account data is additive; no
+  existing team records are rewritten.
 
 In previews, Jordan Rivera has the username `jordan` (password `demo1234`), so captains can try
 **Reset Jordan's password** on the Team page.
+The no-signal switch (`jt_demo_offline`) makes creating a reset code fail with **That didn't save**;
+retrying after signal is restored works. Each preview save also writes a new revision number
+(`jt_demo_rev`). Before using or changing data, a tab checks it and, when another tab has saved,
+brings that data into its own copy in place (so rows an operation holds across a wait stay the
+ones it saves). A code replaced in another tab is rejected, and an older tab cannot save the old
+password or used code back over a completed reset. Tests that edit the saved data directly to act
+out another tab also write a new `jt_demo_rev`.
 
 Tests cover the account handler, real-backend session integration, preview account behavior,
 database privileges and rate limits, and mobile/desktop signup, sign-in hints, linking and captain
