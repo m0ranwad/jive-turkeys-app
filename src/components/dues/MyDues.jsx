@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, Users } from 'lucide-react';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -192,7 +192,20 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   const partnerNow = data.profiles.find((p) => p.user_id === me?.pays_with);
   const pairingPlayers = over ? data.profiles : sessionSlice(data, current).members;
   const canPair = !isEarlier(period, current) && pairingPlayers.some((p) => p.user_id === user.id && p.status === 'active' && !p.removed);
-  const pairing = canPair && (
+  // Before paying, someone who pays alone is asked in the Pay card itself, where they look before sending money.
+  const askInPayCard = canPair && !over && !partnerNow && !mine.partner && mine.share && !mine.hasPayment && mine.balance > 0;
+  const pairingDialog = canPair && (
+    <PayTogetherDialog
+      open={pairingOpen}
+      onOpenChange={setPairingOpen}
+      player={me}
+      profiles={data.profiles}
+      options={pairingPlayers.filter((p) => p.status === 'active' && !p.removed)}
+      between={over}
+      onChanged={onChanged}
+    />
+  );
+  const pairing = canPair && !askInPayCard && (
     <div className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500" data-testid="pay-together">
       {partnerNow && <span className="font-medium">{over ? 'Next session: ' : ''}With {partnerNow.display_name}</span>}
       <Button
@@ -204,15 +217,6 @@ export function MyDues({ data, period, current, over = false, user, settings, on
         {partnerNow ? 'Change' : 'Pay together'}
       </Button>
       {over && !partnerNow && <span>From next session</span>}
-      <PayTogetherDialog
-        open={pairingOpen}
-        onOpenChange={setPairingOpen}
-        player={me}
-        profiles={data.profiles}
-        options={pairingPlayers.filter((p) => p.status === 'active' && !p.removed)}
-        between={over}
-        onChanged={onChanged}
-      />
     </div>
   );
 
@@ -307,6 +311,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
           <p className="mt-1 text-sm text-zinc-500">The fee for this session hasn't been set. It'll show up here.</p>
         </section>
         {pairing}
+        {pairingDialog}
         {otherSessions}
       </div>
     );
@@ -328,6 +333,19 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       {mine.share && !mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')}>
           <h3 className={HEADING}>Pay</h3>
+          {askInPayCard && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-50 py-2 pl-4 pr-2" data-testid="pay-together-ask">
+              <span className="text-sm font-semibold text-zinc-600">Paying for two?</span>
+              <Button
+                variant="outline"
+                onClick={() => setPairingOpen(true)}
+                className="h-11 shrink-0 rounded-xl bg-white px-4 font-bold"
+              >
+                <Users className="h-4 w-4" />
+                Pay together
+              </Button>
+            </div>
+          )}
           <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
             <span className="text-sm font-semibold text-zinc-500">Already paid?</span>
@@ -385,6 +403,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       )}
 
       {pairing}
+      {pairingDialog}
 
       <TeamProgress team={mine.team} onShowTeam={onShowTeam} />
 

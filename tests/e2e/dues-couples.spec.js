@@ -220,3 +220,16 @@ test('between sessions, a couple is linked from the next session and the one tha
   await page.getByRole('dialog', { name: 'Session 3 fee' }).getByRole('button', { name: 'Save fee' }).click();
   await expect(row(page, 'Sam Okafor')).toContainText('with Morgan L.');
 });
+
+test('a player who pays alone is asked about paying together in the Pay card, and it goes once they link someone', async ({ page }) => {
+  await signIn(page, 'chris@demo.test');
+  await page.locator('a[href="/dues"]:visible').first().click();
+  const ask = page.getByTestId('pay-together-ask');
+  await expect(ask).toContainText('Paying for two?');
+  // One way in: the small link below isn't shown as well.
+  await expect(page.getByTestId('pay-together')).toHaveCount(0);
+  await ask.getByRole('button', { name: 'Pay together', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Pay together', exact: true }).getByLabel('Who do you pay with?').selectOption({ label: 'Kelly Moss' });
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByTestId('pay-together')).toContainText('With Kelly Moss');
+});
