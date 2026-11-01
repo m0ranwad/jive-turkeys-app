@@ -2,7 +2,7 @@
 // team, captains see and change it, and Copy invite includes it. The database
 // enforces it (supabase/tests/membership.test.sql). The sample data's code is
 // TURKEY; Nia Newcomer signed up earlier but hasn't entered it.
-import { enterTeamCode, expect, signIn, test } from './helpers';
+import { answerPlaying, enterTeamCode, expect, signIn, test } from './helpers';
 
 async function createAccount(page, email) {
   await page.goto('/register');
@@ -36,6 +36,7 @@ test('a new account enters the team code before it sees anything', async ({ page
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   // In, on the page they asked for.
   await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
@@ -54,11 +55,12 @@ test('someone who signed up earlier still needs the code, and can sign out inste
 
 test('captains see the code, change it, and invites with the old one stop working', async ({ page }) => {
   await signIn(page);
-  // The Team page reminds captains while a new session is starting.
+  // The Team page doesn't nag about the code: Team Settings notes it next to the code itself.
   await page.locator('a[href="/team"]:visible').first().click();
-  const reminder = page.getByTestId('session-answers').getByTestId('team-code-stale');
-  await expect(reminder).toContainText('New session: change the team code');
-  await reminder.getByRole('link', { name: 'Team Settings' }).click();
+  await expect(page.getByTestId('session-answers')).toBeVisible();
+  await expect(page.getByTestId('team-code-stale')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'Team Settings' }).click();
   const card = page.getByTestId('team-code');
   await expect(card.getByTestId('team-code-value')).toHaveText('TURKEY');
   await expect(card.getByTestId('team-code-stale')).toContainText('Session 2 has started since the code last changed');
@@ -97,6 +99,7 @@ test('someone who already has an account is asked before making a second one', a
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan Rivera');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const ask = page.getByTestId('already-on-site');
   await expect(ask).toContainText('Jordan Rivera has an account here already');
@@ -109,6 +112,7 @@ test('someone who already has an account is asked before making a second one', a
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan R');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const reloaded = page.waitForEvent('load');
   await page.getByTestId('already-on-site').getByRole('button', { name: "No, that's someone else" }).click();

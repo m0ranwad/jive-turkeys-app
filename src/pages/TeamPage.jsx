@@ -5,6 +5,8 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
 import { AskSessionDialog } from '@/components/team/AskSessionDialog';
+import { AnswerForDialog } from '@/components/team/AnswerForDialog';
+import { SessionAnswersCard } from '@/components/team/SessionAnswersCard';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
 import { PasswordResetForTeammate, PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
@@ -15,9 +17,8 @@ import { CARD, DIALOG, DIALOG_TITLE, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/
 import { copyText } from '@/lib/clipboard';
 import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer, stepSession } from '@/lib/dues';
-import { fmtDateShort, initials, today } from '@/lib/format';
-import { askFor, beforeFirstGame, entryFor, isEarlier, sessionRows, stillAsking, unanswered } from '@/lib/roster';
-import { codeIsStale } from '@/lib/team-code';
+import { initials, today } from '@/lib/format';
+import { askFor, beforeFirstGame, entryFor, isEarlier, sessionGames, sessionRows, stillAsking, unanswered } from '@/lib/roster';
 import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -79,6 +80,8 @@ export function TeamPage() {
   // Captains: asking who's playing a later session, and answering it for teammates.
   const [askOpen, setAskOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
+  // Captains: one teammate's answer, from a name tapped on the Who's playing card ({ member, period, startsOn, current }).
+  const [answering, setAnswering] = useState(null);
 
   const loadGuests = useCallback(async () => {
     // Together, so a grey card never shows before we know which accounts it was taken off.
@@ -178,6 +181,7 @@ export function TeamPage() {
   const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
   const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
   const waiting = asking ? onList(unanswered(data.roster.rows, current)) : [];
+  const currentStartsOn = asking ? sessionGames(data.games, current)[0]?.date : null;
 
   // A session captains asked about ahead ("Playing session N?" before its schedule is out, or while
   // this one has games left), still being asked; or the session they can ask about next.
@@ -421,55 +425,34 @@ export function TeamPage() {
         </button>
       </PageHeader>
 
-      {waiting.length > 0 && (
-        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4" data-testid="session-answers">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-amber-950">
-            Playing session {current.session}? · {sessionTeam.length - waiting.length} of {sessionTeam.length} answered
-          </h3>
-          <p className="mt-1 text-xs font-medium text-amber-900">
-            Still to answer: {waiting.map((p) => p.display_name).join(', ')}. If they don't, their status carries over.
-            Tap a name to answer for someone.
-          </p>
-          {codeIsStale(joinCode, data.roster) && (
-            <p className="mt-2 text-xs font-semibold text-amber-950" data-testid="team-code-stale">
-              New session: change the team code in{' '}
-              <Link to="/settings" className="underline underline-offset-2">
-                Team Settings
-              </Link>{' '}
-              so invites from before stop working.
-            </p>
-          )}
-        </section>
-      )}
-
-      {askedPeriod && (
-        <section className={CARD} data-testid="session-ask">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-            Playing session {askedPeriod.session}? · {askedTeam.length - askedWaiting.length} of {askedTeam.length} answered
-          </h3>
-          <p className="mt-1 text-xs font-medium text-zinc-600">
-            Asked ahead · starts {fmtDateShort(asked.starts_on)}. Answers only count for session {askedPeriod.session}.
-            {askedWaiting.length > 0
-              ? ` Still to answer: ${askedWaiting.map((p) => p.display_name).join(', ')}.`
-              : ' Everyone has answered.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAnswersOpen(true)}
-              className="rounded-full bg-zinc-950 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800"
-            >
-              Answer for someone
-            </button>
-            <button
-              type="button"
-              onClick={() => setAskOpen(true)}
-              className="rounded-full bg-zinc-100 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
-            >
-              Change date
-            </button>
-          </div>
-        </section>
+      {data.isCaptain && (
+        <SessionAnswersCard
+          meId={data.user?.id}
+          sessions={[
+            waiting.length > 0 && {
+              testId: 'session-answers',
+              period: current,
+              startsOn: currentStartsOn,
+              total: sessionTeam.length,
+              waiting,
+              // The session about to start follows everyone's status, so the answer is their status right now.
+              onPick: (p) => setAnswering({ member: p, period: current, startsOn: currentStartsOn, current: true }),
+            },
+            askedPeriod && {
+              testId: 'session-ask',
+              period: askedPeriod,
+              startsOn: asked.starts_on,
+              ahead: true,
+              total: askedTeam.length,
+              waiting: askedWaiting,
+              // Between sessions it's already the current one: the answer is their status right now.
+              onPick: (p) =>
+                setAnswering({ member: p, period: askedPeriod, startsOn: asked.starts_on, current: !isEarlier(current, askedPeriod) }),
+              onChangeDate: () => setAskOpen(true),
+              onAllAnswers: () => setAnswersOpen(true),
+            },
+          ]}
+        />
       )}
       {nextPeriod && (
         <button
@@ -656,6 +639,18 @@ export function TeamPage() {
           period={askedPeriod || nextPeriod}
           ask={asked}
           onSaved={data.reload}
+        />
+      )}
+      {data.isCaptain && (
+        <AnswerForDialog
+          answering={answering}
+          rows={data.roster?.rows || []}
+          meId={data.user?.id}
+          onOpenChange={(open) => !open && setAnswering(null)}
+          onSaved={async () => {
+            await loadGuests();
+            await data.reload();
+          }}
         />
       )}
       {askedPeriod && (
