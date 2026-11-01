@@ -21,8 +21,20 @@ const CHOICES = [
  * ahead (`ahead`): there, anyone not on its list yet shows their status right now.
  * Between sessions that session is already the current one (`current`), so an
  * answer is their status right now, as when tapping a status on the Team page.
+ * `focus`: a member's id, to open on their answer (a name tapped on the Team page).
  */
-export function SessionRosterDialog({ open, onOpenChange, period, members, rows, meId, onSaved, ahead = false, current = false }) {
+export function SessionRosterDialog({
+  open,
+  onOpenChange,
+  period,
+  members,
+  rows,
+  meId,
+  onSaved,
+  ahead = false,
+  current = false,
+  focus = null,
+}) {
   const { toast } = useToast();
   const [picked, setPicked] = useState({});
   const [busy, setBusy] = useState(false);
@@ -79,7 +91,15 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Only the names scroll: the list shrinks to fit the screen, so the Save button stays put. */}
-      <DialogContent className={cn(DIALOG, 'flex flex-col')}>
+      <DialogContent
+        className={cn(DIALOG, 'flex flex-col')}
+        onOpenAutoFocus={(e) => {
+          const field = focus && document.getElementById(`session-answer-${focus}`);
+          if (!field) return;
+          e.preventDefault();
+          field.focus();
+        }}
+      >
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>
             {ahead ? `Answers for session ${period.session}` : `Who was on session ${period.session}`}
@@ -102,6 +122,7 @@ export function SessionRosterDialog({ open, onOpenChange, period, members, rows,
             <li key={m.user_id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0 truncate text-sm font-semibold">{m.display_name}</span>
               <select
+                id={`session-answer-${m.user_id}`}
                 aria-label={`${m.display_name} in session ${period.session}`}
                 value={shown(m)}
                 onChange={(e) => setPicked((p) => ({ ...p, [m.user_id]: e.target.value }))}

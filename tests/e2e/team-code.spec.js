@@ -56,9 +56,9 @@ test('captains see the code, change it, and invites with the old one stop workin
   await signIn(page);
   // The Team page reminds captains while a new session is starting.
   await page.locator('a[href="/team"]:visible').first().click();
-  const reminder = page.getByTestId('session-answers').getByTestId('team-code-stale');
-  await expect(reminder).toContainText('New session: change the team code');
-  await reminder.getByRole('link', { name: 'Team Settings' }).click();
+  const reminder = page.getByRole('link', { name: 'New session: change the team code so old invites stop working' });
+  await expect(reminder).toBeVisible();
+  await reminder.click();
   const card = page.getByTestId('team-code');
   await expect(card.getByTestId('team-code-value')).toHaveText('TURKEY');
   await expect(card.getByTestId('team-code-stale')).toContainText('Session 2 has started since the code last changed');

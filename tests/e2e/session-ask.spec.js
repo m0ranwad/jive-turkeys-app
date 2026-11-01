@@ -90,8 +90,17 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await signIn(page);
   await openTab(page, '/team', 'Team');
   const card = page.getByTestId('session-ask');
-  await expect(card).toContainText('Playing session 3? · 4 of 14 answered');
-  await expect(card).toContainText('Mike Russo');
+  await expect(card).toContainText('Session 3');
+  await expect(card).toContainText('Asked ahead · Starts Sat, Nov 14');
+  await expect(card).toContainText('4 of 14 answered');
+  await expect(card).toContainText('Waiting on 10');
+  await expect(card.locator('[data-waiting="Mike Russo"]')).toContainText('Mike R.');
+
+  // Tapping a name opens the answers on them.
+  await card.getByRole('button', { name: 'Answer for Jordan Rivera' }).click();
+  const answersOn = page.getByRole('dialog', { name: 'Answers for session 3' });
+  await expect(answersOn.getByLabel('Jordan Rivera in session 3')).toBeFocused();
+  await page.keyboard.press('Escape');
 
   // Mike hasn't joined the site: a captain answers for him.
   await card.getByRole('button', { name: 'Answer for someone' }).click();
@@ -113,7 +122,7 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await ask.getByLabel("First game's date").fill('2026-12-01');
   await ask.getByRole('button', { name: 'Ask the team' }).click();
   await expect(page.getByText("Asking who's playing session 3")).toBeVisible();
-  await expect(card).toContainText('starts Tue, Dec 1');
+  await expect(card).toContainText('Starts Tue, Dec 1');
   // The answers given before are kept.
   await expect(card).toContainText('5 of 14 answered');
 });

@@ -56,8 +56,17 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   // Captains see who hasn't answered.
   await openTab(page, '/team', 'Team');
   const answers = page.getByTestId('session-answers');
-  await expect(answers).toContainText('Playing session 2? · 8 of 14 answered');
-  await expect(answers).toContainText('Still to answer: Casey Captain, Sam Okafor, Morgan Lee, Riley Novak, Kelly Moss, Mike Russo.');
+  await expect(answers).toContainText('Session 2');
+  await expect(answers).toContainText('Starts Sat, Oct 10');
+  await expect(answers).toContainText('8 of 14 answered');
+  await expect(answers.getByRole('progressbar', { name: 'Session 2 answers' })).toHaveAttribute('aria-valuenow', '8');
+  // Who hasn't answered, as name chips ("You" for yourself).
+  await expect(answers).toContainText('Waiting on 6');
+  await expect
+    .poll(() => answers.locator('[data-waiting]').evaluateAll((els) => els.map((e) => e.dataset.waiting)))
+    .toEqual(['Casey Captain', 'Sam Okafor', 'Morgan Lee', 'Riley Novak', 'Kelly Moss', 'Mike Russo']);
+  await expect(answers.locator('[data-waiting="Casey Captain"]')).toContainText('You');
+  await expect(answers.locator('[data-waiting="Sam Okafor"]')).toContainText('Sam O.');
 
   await openTab(page, '/', 'Schedule');
   await prompt(page).getByRole('button', { name: 'Unavailable' }).click();
@@ -67,8 +76,10 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await openTab(page, '/team', 'Team');
   await expect(answers).toContainText('9 of 14 answered');
   await expect(answers).not.toContainText('Casey Captain');
-  // A captain answers for Mike, who hasn't joined the site, by confirming his status.
-  await (await playerOptions(page, 'Mike Russo')).getByRole('button', { name: 'Playing', exact: true }).click();
+  // A captain answers for Mike, who hasn't joined the site: tapping his name opens his options.
+  await answers.getByRole('button', { name: 'Answer for Mike Russo, not joined yet' }).click();
+  const mike = page.getByRole('dialog', { name: 'Mike Russo', exact: true });
+  await mike.getByRole('button', { name: 'Playing', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(answers).toContainText('10 of 14 answered');
   await expect(answers).not.toContainText('Mike Russo');
@@ -223,7 +234,7 @@ test("if who's on each session doesn't load, Playing session N? waits, and the n
 
   await restoreRosterReads(page);
   await openTab(page, '/team', 'Team');
-  await expect(page.getByTestId('session-answers')).toContainText('Playing session 2? · 8 of 14 answered');
+  await expect(page.getByTestId('session-answers')).toContainText('8 of 14 answered');
   await openTab(page, '/', 'Schedule');
   await expect(prompt(page)).toContainText('Playing session 2?');
 });

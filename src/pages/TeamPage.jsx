@@ -5,6 +5,7 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
 import { AskSessionDialog } from '@/components/team/AskSessionDialog';
+import { SessionAction, SessionAnswersCard } from '@/components/team/SessionAnswersCard';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
 import { PasswordResetForTeammate, PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
@@ -15,8 +16,8 @@ import { CARD, DIALOG, DIALOG_TITLE, STATUS_LABEL, STATUS_OPTIONS } from '@/lib/
 import { copyText } from '@/lib/clipboard';
 import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer, stepSession } from '@/lib/dues';
-import { fmtDateShort, initials, today } from '@/lib/format';
-import { askFor, beforeFirstGame, entryFor, isEarlier, sessionRows, stillAsking, unanswered } from '@/lib/roster';
+import { initials, today } from '@/lib/format';
+import { askFor, beforeFirstGame, entryFor, isEarlier, sessionGames, sessionRows, stillAsking, unanswered } from '@/lib/roster';
 import { codeIsStale } from '@/lib/team-code';
 import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
@@ -79,6 +80,8 @@ export function TeamPage() {
   // Captains: asking who's playing a later session, and answering it for teammates.
   const [askOpen, setAskOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
+  // The teammate tapped on the card, so the answers open on them.
+  const [answersFocus, setAnswersFocus] = useState(null);
 
   const loadGuests = useCallback(async () => {
     // Together, so a grey card never shows before we know which accounts it was taken off.
@@ -421,55 +424,47 @@ export function TeamPage() {
         </button>
       </PageHeader>
 
-      {waiting.length > 0 && (
-        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4" data-testid="session-answers">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em] text-amber-950">
-            Playing session {current.session}? · {sessionTeam.length - waiting.length} of {sessionTeam.length} answered
-          </h3>
-          <p className="mt-1 text-xs font-medium text-amber-900">
-            Still to answer: {waiting.map((p) => p.display_name).join(', ')}. If they don't, their status carries over.
-            Tap a name to answer for someone.
-          </p>
-          {codeIsStale(joinCode, data.roster) && (
-            <p className="mt-2 text-xs font-semibold text-amber-950" data-testid="team-code-stale">
-              New session: change the team code in{' '}
-              <Link to="/settings" className="underline underline-offset-2">
-                Team Settings
-              </Link>{' '}
-              so invites from before stop working.
-            </p>
-          )}
-        </section>
-      )}
-
-      {askedPeriod && (
-        <section className={CARD} data-testid="session-ask">
-          <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
-            Playing session {askedPeriod.session}? · {askedTeam.length - askedWaiting.length} of {askedTeam.length} answered
-          </h3>
-          <p className="mt-1 text-xs font-medium text-zinc-600">
-            Asked ahead · starts {fmtDateShort(asked.starts_on)}. Answers only count for session {askedPeriod.session}.
-            {askedWaiting.length > 0
-              ? ` Still to answer: ${askedWaiting.map((p) => p.display_name).join(', ')}.`
-              : ' Everyone has answered.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAnswersOpen(true)}
-              className="rounded-full bg-zinc-950 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-white transition hover:bg-zinc-800"
-            >
-              Answer for someone
-            </button>
-            <button
-              type="button"
-              onClick={() => setAskOpen(true)}
-              className="rounded-full bg-zinc-100 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
-            >
-              Change date
-            </button>
-          </div>
-        </section>
+      {data.isCaptain && (
+        <SessionAnswersCard
+          meId={data.user?.id}
+          codeStale={waiting.length > 0 && codeIsStale(joinCode, data.roster)}
+          sessions={[
+            waiting.length > 0 && {
+              testId: 'session-answers',
+              period: current,
+              startsOn: sessionGames(data.games, current)[0]?.date,
+              total: sessionTeam.length,
+              waiting,
+              // Their options on this page: a status picked now is their answer for this session.
+              onPick: (p) => (p.user_id === data.user.id ? setChangingMine(true) : setOptionsFor(p.id)),
+            },
+            askedPeriod && {
+              testId: 'session-ask',
+              period: askedPeriod,
+              startsOn: asked.starts_on,
+              aheadLabel: 'Asked ahead',
+              total: askedTeam.length,
+              waiting: askedWaiting,
+              onPick: (p) => {
+                setAnswersFocus(p.user_id);
+                setAnswersOpen(true);
+              },
+              actions: (
+                <>
+                  <SessionAction
+                    onClick={() => {
+                      setAnswersFocus(null);
+                      setAnswersOpen(true);
+                    }}
+                  >
+                    Answer for someone
+                  </SessionAction>
+                  <SessionAction onClick={() => setAskOpen(true)}>Change date</SessionAction>
+                </>
+              ),
+            },
+          ]}
+        />
       )}
       {nextPeriod && (
         <button
@@ -666,6 +661,7 @@ export function TeamPage() {
           members={roster}
           rows={data.roster.rows}
           meId={data.user?.id}
+          focus={answersFocus}
           onSaved={async () => {
             await loadGuests();
             await data.reload();
