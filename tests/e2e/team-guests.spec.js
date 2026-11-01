@@ -4,7 +4,7 @@
 // them off the team. Their roster status decides whether they split the dues, like
 // everyone else's.
 // The database enforces who can do what (supabase/tests/dues.test.sql).
-import { enterTeamCode, expect, expectTeam, notJoinedRows, openSection, playerOptions, rosterRow, signIn, test } from './helpers';
+import { answerPlaying, enterTeamCode, expect, expectTeam, notJoinedRows, openSection, playerOptions, rosterRow, signIn, test } from './helpers';
 
 // Mike Russo (man, Defense) and Dana Wells (woman, Forward) are Active and haven't joined yet in the sample data.
 // Kelly Moss picked "Kelly M" on the roster when she joined.
@@ -272,6 +272,7 @@ test('when someone signs up twice, captains see it and can move the roster spot 
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Kelly M.');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const reloaded = page.waitForEvent('load');
   await notThem(page);
@@ -317,6 +318,7 @@ test('two different people with names alike: the second adds a last name if need
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Kelly Moss');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   await notThem(page);
   await expect(page.getByTestId('name-taken')).toContainText(

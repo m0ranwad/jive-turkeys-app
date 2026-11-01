@@ -5,7 +5,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POSITIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', busy = false, hidePosition = false, hideYearJoined = false }) {
+// Asked at sign-up of someone who isn't a roster name, with nothing picked in advance: a fan or a
+// partner who signs up to follow along shouldn't land in the dues split without knowing it.
+const JOIN_STATUSES = [
+  { value: 'active', label: 'Playing', hint: 'On the team this session. You split the dues.' },
+  { value: 'sub_pool', label: 'Available to sub', hint: "We'll ask when we're short." },
+  { value: 'on_break', label: 'Just following along', hint: "Fan, partner or friend. You'll show as Unavailable and won't split the dues." },
+];
+
+export function ProfileForm({
+  initial,
+  onSubmit,
+  submitLabel = 'Save profile',
+  busy = false,
+  hidePosition = false,
+  hideYearJoined = false,
+  askStatus = false,
+}) {
   const id = useId();
   const [form, setForm] = useState({
     display_name: initial?.display_name || '',
@@ -13,6 +29,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
     phone: initial?.phone || '',
     position: initial?.position || '',
     year_joined: initial?.year_joined || '',
+    status: (askStatus && initial?.status) || '',
   });
   const [error, setError] = useState('');
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
@@ -21,6 +38,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
     e.preventDefault();
     if (!form.display_name.trim()) return setError('Add your display name.');
     if (!form.gender) return setError("Pick male or female — it's only used for coed headcount.");
+    if (askStatus && !form.status) return setError("Pick whether you're playing.");
     setError('');
     try {
       await onSubmit({
@@ -29,6 +47,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         phone: form.phone.trim(),
         position: form.position || null,
         year_joined: form.year_joined ? Number(form.year_joined) : null,
+        ...(askStatus ? { status: form.status } : {}),
       });
     } catch (err) {
       setError(err.message || "Couldn't save your profile.");
@@ -72,6 +91,32 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         </div>
         <p className="text-xs text-zinc-500">For coed headcounts.</p>
       </div>
+
+      {askStatus && (
+        <div className="space-y-2">
+          <Label id={`${id}-status`}>Are you playing?</Label>
+          <div role="group" aria-labelledby={`${id}-status`} className="grid gap-2">
+            {JOIN_STATUSES.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={form.status === opt.value}
+                onClick={() => set({ status: opt.value })}
+                className={cn(
+                  'rounded-2xl border-2 px-4 py-3 text-left transition',
+                  form.status === opt.value ? 'border-black bg-lime-400 text-black' : 'border-zinc-200 bg-white hover:border-zinc-300',
+                )}
+              >
+                <span className="block text-sm font-bold uppercase tracking-wide">{opt.label}</span>
+                <span className={cn('mt-0.5 block text-xs', form.status === opt.value ? 'text-black' : 'text-zinc-600')}>
+                  {opt.hint}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-500">You can change it any time on My Profile.</p>
+        </div>
+      )}
 
       <div className={cn('grid gap-5', !hidePosition && 'sm:grid-cols-2')}>
         <div className="space-y-2">
@@ -119,7 +164,7 @@ export function ProfileForm({ initial, onSubmit, submitLabel = 'Save profile', b
         </div>
       )}
 
-      {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</p>}
+      {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
 
       <Button type="submit" disabled={busy} className="h-12 w-full text-sm font-bold uppercase tracking-[0.12em]">
         {busy ? 'Saving…' : submitLabel}

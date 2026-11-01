@@ -1,4 +1,4 @@
-import { enterTeamCode, expect, expectTeam, notJoinedRows, test } from './helpers';
+import { answerPlaying, enterTeamCode, expect, expectTeam, notJoinedRows, test } from './helpers';
 
 test('a new player has to set up their profile, which puts them on the team', async ({ page }) => {
   await page.goto('/register');
@@ -20,12 +20,49 @@ test('a new player has to set up their profile, which puts them on the team', as
   await expect(page.getByLabel('Year joined (optional)')).toHaveCount(0);
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
+  // Whether they're playing is asked, with nothing picked for them: a fan shouldn't split the dues by accident.
+  const playing = page.getByRole('group', { name: 'Are you playing?' });
+  await expect(playing.getByRole('button')).toHaveText([/^Playing/, /^Available to sub/, /^Just following along/]);
+  for (const choice of await playing.getByRole('button').all()) await expect(choice).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  await expect(page.getByText("Pick whether you're playing.")).toBeVisible();
+  await answerPlaying(page);
+  await expect(playing.getByRole('button', { name: /^Playing/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Start using the app' }).click();
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Join the team' })).toHaveCount(0);
 
+  // Playing: on the team, and one more splitting this session's dues.
   await page.locator('a[href="/team"]:visible').first().click();
   await expect(page.getByText('Newbie Nguyen').first()).toBeVisible();
+  await expectTeam(page, { playing: 13, sub: 1, unavailable: 1, notJoined: 2 });
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await expect(page.getByTestId('team-progress')).toContainText('Team · 5 of 13 paid');
+});
+
+test('a fan or partner who signs up to follow along does not split the dues', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
+  await page.locator('#email').fill('fan@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
+
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Frankie Fan');
+  await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await answerPlaying(page, 'Just following along');
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+
+  // They're on the team as Unavailable, and the same twelve split the dues.
+  await page.locator('a[href="/team"]:visible').first().click();
+  await expectTeam(page, { playing: 12, sub: 1, unavailable: 2, notJoined: 2 });
+  await expect(page.locator('[data-status-group="on_break"]')).toContainText('Frankie Fan');
+  await page.locator('a[href="/dues"]:visible').first().click();
+  await expect(page.getByTestId('team-progress')).toContainText('Team · 5 of 12 paid');
+  await page.getByRole('tab', { name: 'Team dues' }).click();
+  await expect(page.getByTestId('dues-unpaid')).not.toContainText('Frankie Fan');
 });
 
 test('a new player can sign out instead of setting up a profile', async ({ page }) => {
@@ -166,6 +203,7 @@ test('a new player who types their name instead of picking it is asked if that i
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Dana');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const ask = page.getByTestId('is-that-you');
   await expect(ask).toContainText('Your captain put Dana Wells on the roster');
@@ -189,6 +227,7 @@ test('someone else with the same first name can say so', async ({ page }) => {
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Mike Rossi');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await answerPlaying(page);
   // "Mike Rossi" isn't "Mike Russo": no question.
   await finishProfile(page);
   await expect(page.getByTestId('is-that-you')).toHaveCount(0);
@@ -200,6 +239,7 @@ test('someone else with the same first name can say so', async ({ page }) => {
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Mike');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   await expect(page.getByTestId('is-that-you')).toContainText('Your captain put Mike Russo on the roster');
   await finishAnswer(page, "No, that's someone else");

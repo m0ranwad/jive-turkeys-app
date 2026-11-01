@@ -57,7 +57,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
     setBusy(true);
     try {
       const me = await api.auth.me();
-      await api.entities.PlayerProfile.create({ ...values, user_id: me.id, email: me.email, status: 'active' });
+      // Someone not on the roster said whether they're playing; a roster name's status comes with it below.
+      await api.entities.PlayerProfile.create({ ...values, user_id: me.id, email: me.email, status: values.status || 'active' });
       if (chosen) {
         try {
           // Their roster status, dues payments and history become theirs.
@@ -274,6 +275,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                       busy={busy}
                       hidePosition
                       hideYearJoined
+                      askStatus={!pick}
                     />
                   </div>
                 )}
