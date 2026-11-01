@@ -5,7 +5,8 @@ import { api } from '@/api';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionRosterDialog } from '@/components/dues/SessionRosterDialog';
 import { AskSessionDialog } from '@/components/team/AskSessionDialog';
-import { SessionAction, SessionAnswersCard } from '@/components/team/SessionAnswersCard';
+import { AnswerForDialog } from '@/components/team/AnswerForDialog';
+import { SessionAnswersCard } from '@/components/team/SessionAnswersCard';
 import { Formation } from '@/components/team/Formation';
 import { GuestDialog } from '@/components/team/GuestDialog';
 import { PasswordResetForTeammate, PickPositionCard, RemovePlayerDialog, UnlinkGuestDialog } from '@/components/team/TeamDialogs';
@@ -80,8 +81,8 @@ export function TeamPage() {
   // Captains: asking who's playing a later session, and answering it for teammates.
   const [askOpen, setAskOpen] = useState(false);
   const [answersOpen, setAnswersOpen] = useState(false);
-  // The teammate tapped on the card, so the answers open on them.
-  const [answersFocus, setAnswersFocus] = useState(null);
+  // Captains: one teammate's answer, from a name tapped on the Who's playing card ({ member, period, startsOn, current }).
+  const [answering, setAnswering] = useState(null);
 
   const loadGuests = useCallback(async () => {
     // Together, so a grey card never shows before we know which accounts it was taken off.
@@ -181,6 +182,7 @@ export function TeamPage() {
   const onList = (rows) => rows.map((r) => roster.find((p) => p.user_id === (r.user_id ?? r.guest_id))).filter(Boolean);
   const sessionTeam = asking ? onList(sessionRows(data.roster.rows, current).filter((r) => r.status !== 'off')) : [];
   const waiting = asking ? onList(unanswered(data.roster.rows, current)) : [];
+  const currentStartsOn = asking ? sessionGames(data.games, current)[0]?.date : null;
 
   // A session captains asked about ahead ("Playing session N?" before its schedule is out, or while
   // this one has games left), still being asked; or the session they can ask about next.
@@ -432,36 +434,24 @@ export function TeamPage() {
             waiting.length > 0 && {
               testId: 'session-answers',
               period: current,
-              startsOn: sessionGames(data.games, current)[0]?.date,
+              startsOn: currentStartsOn,
               total: sessionTeam.length,
               waiting,
-              // Their options on this page: a status picked now is their answer for this session.
-              onPick: (p) => (p.user_id === data.user.id ? setChangingMine(true) : setOptionsFor(p.id)),
+              // The session about to start follows everyone's status, so the answer is their status right now.
+              onPick: (p) => setAnswering({ member: p, period: current, startsOn: currentStartsOn, current: true }),
             },
             askedPeriod && {
               testId: 'session-ask',
               period: askedPeriod,
               startsOn: asked.starts_on,
-              aheadLabel: 'Asked ahead',
+              ahead: true,
               total: askedTeam.length,
               waiting: askedWaiting,
-              onPick: (p) => {
-                setAnswersFocus(p.user_id);
-                setAnswersOpen(true);
-              },
-              actions: (
-                <>
-                  <SessionAction
-                    onClick={() => {
-                      setAnswersFocus(null);
-                      setAnswersOpen(true);
-                    }}
-                  >
-                    Answer for someone
-                  </SessionAction>
-                  <SessionAction onClick={() => setAskOpen(true)}>Change date</SessionAction>
-                </>
-              ),
+              // Between sessions it's already the current one: the answer is their status right now.
+              onPick: (p) =>
+                setAnswering({ member: p, period: askedPeriod, startsOn: asked.starts_on, current: !isEarlier(current, askedPeriod) }),
+              onChangeDate: () => setAskOpen(true),
+              onAllAnswers: () => setAnswersOpen(true),
             },
           ]}
         />
@@ -653,6 +643,18 @@ export function TeamPage() {
           onSaved={data.reload}
         />
       )}
+      {data.isCaptain && (
+        <AnswerForDialog
+          answering={answering}
+          rows={data.roster?.rows || []}
+          meId={data.user?.id}
+          onOpenChange={(open) => !open && setAnswering(null)}
+          onSaved={async () => {
+            await loadGuests();
+            await data.reload();
+          }}
+        />
+      )}
       {askedPeriod && (
         <SessionRosterDialog
           open={answersOpen}
@@ -661,7 +663,6 @@ export function TeamPage() {
           members={roster}
           rows={data.roster.rows}
           meId={data.user?.id}
-          focus={answersFocus}
           onSaved={async () => {
             await loadGuests();
             await data.reload();

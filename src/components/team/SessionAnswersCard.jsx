@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
-import { Check, ChevronRight, KeyRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, KeyRound } from 'lucide-react';
 import { CARD } from '@/lib/constants';
 import { fmtDateShort, initials, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -7,11 +8,11 @@ import { cn } from '@/lib/utils';
 /**
  * Captains, on the Team page: "Playing session N?" at a glance. One card with a block per session
  * being asked (the session about to start, and one asked about ahead): how many have answered, a bar,
- * and who hasn't, as tappable name chips (dashed for roster names who haven't joined). Tapping a name
- * answers for them.
- * The team code reminder sits at the bottom while a new session is starting.
+ * and who hasn't, as name chips (dashed for roster names who haven't joined). Tapping a name answers
+ * for them. While the session about to start is still being answered, a session asked ahead keeps its
+ * names folded away until tapped. The team code reminder sits at the bottom while a new session is starting.
  *
- * `sessions`: [{ period, startsOn, aheadLabel, total, waiting, onPick, actions, testId }].
+ * `sessions`: [{ period, startsOn, ahead, total, waiting, onPick, onChangeDate, onAllAnswers, testId }].
  */
 export function SessionAnswersCard({ sessions, meId, codeStale }) {
   const shown = sessions.filter(Boolean);
@@ -22,7 +23,13 @@ export function SessionAnswersCard({ sessions, meId, codeStale }) {
         Who's playing
       </h3>
       {shown.map((s, i) => (
-        <SessionBlock key={`${s.period.year}-${s.period.session}`} session={s} meId={meId} divided={i > 0} />
+        <SessionBlock
+          key={`${s.period.year}-${s.period.session}`}
+          session={s}
+          meId={meId}
+          divided={i > 0}
+          folded={i > 0 && s.ahead}
+        />
       ))}
       {codeStale && (
         <Link
@@ -31,9 +38,7 @@ export function SessionAnswersCard({ sessions, meId, codeStale }) {
           className="-mx-1 flex items-center gap-3 rounded-2xl bg-amber-50 px-3 py-2.5 text-amber-950 transition hover:bg-amber-100"
         >
           <KeyRound aria-hidden="true" className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 text-xs font-semibold">
-            New session: change the team code so old invites stop working
-          </span>
+          <span className="min-w-0 flex-1 text-xs font-semibold">New session: change the team code so old invites stop working</span>
           <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
         </Link>
       )}
@@ -41,8 +46,11 @@ export function SessionAnswersCard({ sessions, meId, codeStale }) {
   );
 }
 
-function SessionBlock({ session, meId, divided }) {
-  const { period, startsOn, aheadLabel, total, waiting, onPick, actions, testId } = session;
+const LINK = 'font-semibold text-zinc-700 underline decoration-zinc-300 underline-offset-2 transition hover:text-black hover:decoration-zinc-900';
+
+function SessionBlock({ session, meId, divided, folded }) {
+  const { period, startsOn, ahead, total, waiting, onPick, onChangeDate, onAllAnswers, testId } = session;
+  const [open, setOpen] = useState(!folded);
   const answered = total - waiting.length;
   const pct = total ? Math.round((answered / total) * 100) : 0;
   // Short names ("Sam O."), unless two people would share one.
@@ -52,15 +60,25 @@ function SessionBlock({ session, meId, divided }) {
 
   return (
     <div data-testid={testId} className={cn(divided && 'border-t border-zinc-100 pt-4')}>
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="font-display text-base font-extrabold uppercase tracking-tight">Session {period.session}</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="font-display text-base font-extrabold uppercase tracking-tight">Session {period.session}</span>
+          {ahead && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600">Asked ahead</span>}
+        </div>
         <div className="shrink-0 text-xs font-semibold text-zinc-600">
           <span className="font-display text-base font-extrabold text-zinc-950">{answered}</span> of {total} answered
         </div>
       </div>
-      <div className="text-xs font-medium text-zinc-500">
-        {aheadLabel && `${aheadLabel} · `}
+      <div className="mt-0.5 text-xs font-medium text-zinc-500">
         {startsOn ? `Starts ${fmtDateShort(startsOn)}` : 'Start date to come'}
+        {onChangeDate && (
+          <>
+            {' · '}
+            <button type="button" onClick={onChangeDate} className={LINK}>
+              Change date
+            </button>
+          </>
+        )}
       </div>
       <div
         role="progressbar"
@@ -80,6 +98,24 @@ function SessionBlock({ session, meId, divided }) {
         <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-lime-700">
           <Check aria-hidden="true" className="h-4 w-4" /> Everyone has answered
         </p>
+      ) : !open ? (
+        // Folded: a few initials and how many are left; tapping shows the names.
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded="false"
+          className="-mx-1 mt-2 flex w-[calc(100%+0.5rem)] items-center gap-2.5 rounded-2xl px-1 py-1.5 text-left transition hover:bg-zinc-50"
+        >
+          <span aria-hidden="true" className="flex shrink-0 gap-1">
+            {waiting.slice(0, 4).map((p) => (
+              <Avatar key={p.id} player={p} />
+            ))}
+          </span>
+          <span className="min-w-0 flex-1 text-xs font-bold text-zinc-600">Waiting on {waiting.length}</span>
+          <span className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-zinc-600">
+            Show <ChevronDown aria-hidden="true" className="h-4 w-4" />
+          </span>
+        </button>
       ) : (
         <div className="mt-3">
           <div className="text-xs font-bold text-zinc-600">Waiting on {waiting.length} · tap a name to answer</div>
@@ -89,25 +125,14 @@ function SessionBlock({ session, meId, divided }) {
                 <button
                   type="button"
                   onClick={() => onPick(p)}
+                  aria-haspopup="dialog"
                   data-waiting={p.display_name}
                   className={cn(
                     'flex h-8 items-center gap-1.5 rounded-full py-1 pl-1 pr-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     p.guest ? 'border border-dashed border-zinc-300 bg-white hover:bg-zinc-50' : 'bg-zinc-100 hover:bg-zinc-200',
                   )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'grid h-6 w-6 shrink-0 place-items-center rounded-full font-display text-[11px] font-extrabold uppercase',
-                      p.guest
-                        ? 'border border-dashed border-zinc-400 bg-white text-zinc-600'
-                        : p.gender === 'F'
-                          ? 'bg-lime-400 text-black'
-                          : 'bg-zinc-900 text-lime-400',
-                    )}
-                  >
-                    {initials(p.display_name)}
-                  </span>
+                  <Avatar player={p} />
                   <span aria-hidden="true" className="whitespace-nowrap text-xs font-semibold text-zinc-800">
                     {labelOf(p)}
                   </span>
@@ -121,20 +146,35 @@ function SessionBlock({ session, meId, divided }) {
           </ul>
         </div>
       )}
-      {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
+      {onAllAnswers && (open || waiting.length === 0) && (
+        <button
+          type="button"
+          onClick={onAllAnswers}
+          className="mt-3 flex items-center gap-0.5 text-xs font-bold text-zinc-700 transition hover:text-black"
+        >
+          See all answers <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
 
-/** The small grey buttons under a session ("Answer for someone", "Change date"). */
-export function SessionAction({ onClick, children }) {
+/** Initials in a small circle, coloured like the Team page (dashed for roster names who haven't joined). */
+function Avatar({ player, className }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full bg-zinc-100 px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-zinc-700 transition hover:bg-zinc-200"
+    <span
+      aria-hidden="true"
+      className={cn(
+        'grid h-6 w-6 shrink-0 place-items-center rounded-full font-display text-[11px] font-extrabold uppercase',
+        player.guest
+          ? 'border border-dashed border-zinc-400 bg-white text-zinc-600'
+          : player.gender === 'F'
+            ? 'bg-lime-400 text-black'
+            : 'bg-zinc-900 text-lime-400',
+        className,
+      )}
     >
-      {children}
-    </button>
+      {initials(player.display_name)}
+    </span>
   );
 }

@@ -230,7 +230,14 @@ test('captains asking who\'s playing, and between sessions', async ({ page }) =>
   test.setTimeout(60_000);
   await signIn(page);
   await visit(page, '/team', 'Team');
-  await page.getByRole('button', { name: 'Answer for someone' }).click();
+  // The Who's playing card, with session 3's names shown.
+  await page.getByTestId('session-ask').getByRole('button', { name: /Waiting on 10/ }).click();
+  await expectAccessible(page, "Team, who's playing");
+  await page.getByTestId('session-answers').getByRole('button', { name: 'Answer for Mike Russo, not joined yet' }).click();
+  await expect(page.getByRole('dialog', { name: 'Mike Russo' })).toBeVisible();
+  await expectAccessible(page, 'Answer for a teammate');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'See all answers' }).click();
   await expect(page.getByRole('dialog', { name: 'Answers for session 3' })).toBeVisible();
   await expectAccessible(page, 'Answers for a later session');
   await page.keyboard.press('Escape');

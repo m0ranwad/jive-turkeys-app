@@ -15,26 +15,40 @@ const CHOICES = [
 ];
 
 /**
+ * One teammate's answer for a session (captains, for anyone). For the current session, or between
+ * sessions the one asked about (`current`), it's their status right now: the session's list follows
+ * it (the database's follow triggers). Otherwise, and for "Not on the team", it goes in that
+ * session's list only.
+ */
+export async function saveSessionAnswer({ member, status, period, rows, current, meId }) {
+  if (current && status !== 'off') {
+    if (member.guest) await api.entities.TeamGuest.update(member.id, { status });
+    else await api.entities.PlayerProfile.update(member.id, { status });
+    return;
+  }
+  const fields = { status, answered_at: new Date().toISOString(), changed_by: meId };
+  const entry = entryFor(rows, period, member.user_id);
+  if (entry) await api.entities.SessionRoster.update(entry.id, fields);
+  else {
+    await api.entities.SessionRoster.create({
+      season_year: Number(period.year),
+      session: Number(period.session),
+      user_id: member.guest ? null : member.user_id,
+      guest_id: member.guest ? member.user_id : null,
+      ...fields,
+    });
+  }
+}
+
+/**
  * Captains: correct who was on a past session, say someone who sat it out but
  * was left Active. Only that session's list changes (and so its split). Also
  * used to answer "Playing session N?" for teammates in a session asked about
  * ahead (`ahead`): there, anyone not on its list yet shows their status right now.
  * Between sessions that session is already the current one (`current`), so an
  * answer is their status right now, as when tapping a status on the Team page.
- * `focus`: a member's id, to open on their answer (a name tapped on the Team page).
  */
-export function SessionRosterDialog({
-  open,
-  onOpenChange,
-  period,
-  members,
-  rows,
-  meId,
-  onSaved,
-  ahead = false,
-  current = false,
-  focus = null,
-}) {
+export function SessionRosterDialog({ open, onOpenChange, period, members, rows, meId, onSaved, ahead = false, current = false }) {
   const { toast } = useToast();
   const [picked, setPicked] = useState({});
   const [busy, setBusy] = useState(false);
@@ -57,26 +71,7 @@ export function SessionRosterDialog({
     setBusy(true);
     try {
       for (const m of changed) {
-        // The current session's list follows everyone's status (the database's follow triggers).
-        // "Not on the team" is for this session only, so it goes on the list.
-        if (current && picked[m.user_id] !== 'off') {
-          const status = picked[m.user_id];
-          if (m.guest) await api.entities.TeamGuest.update(m.id, { status });
-          else await api.entities.PlayerProfile.update(m.id, { status });
-          continue;
-        }
-        const fields = { status: picked[m.user_id], answered_at: new Date().toISOString(), changed_by: meId };
-        const entry = entryFor(rows, period, m.user_id);
-        if (entry) await api.entities.SessionRoster.update(entry.id, fields);
-        else {
-          await api.entities.SessionRoster.create({
-            season_year: Number(period.year),
-            session: Number(period.session),
-            user_id: m.guest ? null : m.user_id,
-            guest_id: m.guest ? m.user_id : null,
-            ...fields,
-          });
-        }
+        await saveSessionAnswer({ member: m, status: picked[m.user_id], period, rows, current, meId });
       }
       await onSaved();
       toast({ title: `Session ${period.session} updated` });
@@ -91,15 +86,7 @@ export function SessionRosterDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Only the names scroll: the list shrinks to fit the screen, so the Save button stays put. */}
-      <DialogContent
-        className={cn(DIALOG, 'flex flex-col')}
-        onOpenAutoFocus={(e) => {
-          const field = focus && document.getElementById(`session-answer-${focus}`);
-          if (!field) return;
-          e.preventDefault();
-          field.focus();
-        }}
-      >
+      <DialogContent className={cn(DIALOG, 'flex flex-col')}>
         <DialogHeader className="text-left">
           <DialogTitle className={DIALOG_TITLE}>
             {ahead ? `Answers for session ${period.session}` : `Who was on session ${period.session}`}
@@ -122,12 +109,11 @@ export function SessionRosterDialog({
             <li key={m.user_id} className="flex items-center justify-between gap-3 py-2">
               <span className="min-w-0 truncate text-sm font-semibold">{m.display_name}</span>
               <select
-                id={`session-answer-${m.user_id}`}
                 aria-label={`${m.display_name} in session ${period.session}`}
                 value={shown(m)}
                 onChange={(e) => setPicked((p) => ({ ...p, [m.user_id]: e.target.value }))}
                 className={cn(
-                  'h-10 shrink-0 rounded-xl border border-zinc-200 bg-white px-2.5 text-sm font-semibold outline-none focus:border-zinc-900',
+                  'h-10 shrink-0 rounded-xl border border-zinc-200 bg-white px-2.5 text-base font-semibold outline-none focus:border-zinc-900 md:text-sm',
                   ['off', ''].includes(shown(m)) && 'text-zinc-500',
                 )}
               >

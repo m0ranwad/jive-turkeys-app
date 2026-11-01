@@ -76,11 +76,14 @@ test('a new session asks who is playing, and the last session keeps its dues', a
   await openTab(page, '/team', 'Team');
   await expect(answers).toContainText('9 of 14 answered');
   await expect(answers).not.toContainText('Casey Captain');
-  // A captain answers for Mike, who hasn't joined the site: tapping his name opens his options.
+  // A captain answers for Mike, who hasn't joined the site: tapping his name asks just about him.
   await answers.getByRole('button', { name: 'Answer for Mike Russo, not joined yet' }).click();
   const mike = page.getByRole('dialog', { name: 'Mike Russo', exact: true });
+  await expect(mike).toContainText('Playing session 2?');
+  await expect(mike).toContainText('Down as Playing until someone answers.');
   await mike.getByRole('button', { name: 'Playing', exact: true }).click();
-  await page.keyboard.press('Escape');
+  await expect(page.getByText('Mike Russo: Playing for session 2')).toBeVisible();
+  await expect(mike).toHaveCount(0);
   await expect(answers).toContainText('10 of 14 answered');
   await expect(answers).not.toContainText('Mike Russo');
 
