@@ -66,10 +66,12 @@ export function SchedulePage() {
     .filter((g) => !g.has_result && g.date >= todayIso)
     .sort((a, b) => (a.date === b.date ? (a.time || '').localeCompare(b.time || '') : a.date < b.date ? -1 : 1))[0];
   const currentKey = nextGame ? `${nextGame.season_year}-${nextGame.session}` : sessions[0] && `${sessions[0].year}-${sessions[0].session}`;
-  // The current session and the one before it stay open (last week's results, Player of the Match); older ones fold away.
+  // The current session stays open, and the one before it when it's the same season (last week's results, Player of
+  // the Match). Older sessions and earlier seasons fold away, so a new season doesn't start under last season's games.
   const currentIndex = Math.max(0, sessions.findIndex((s) => `${s.year}-${s.session}` === currentKey));
-  const currentSessions = sessions.slice(0, currentIndex + 2);
-  const pastSessions = sessions.slice(currentIndex + 2);
+  const staysOpen = (s, i) => i <= currentIndex || (i === currentIndex + 1 && s.year === sessions[currentIndex].year);
+  const currentSessions = sessions.filter(staysOpen);
+  const pastSessions = sessions.filter((s, i) => !staysOpen(s, i));
   const onRoster = isRosterStatus(data.profile);
   // "Playing session N?": at the top between sessions (no game coming up), under the
   // Next game card when it's about a later session asked ahead, else the current session's card.
