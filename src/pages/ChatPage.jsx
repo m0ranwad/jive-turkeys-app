@@ -33,6 +33,7 @@ import {
   canManageRoom,
   catchUpMessages,
   directChat,
+  gifMessage,
   insertMessage,
   isAfter,
   isLounge,
@@ -714,10 +715,11 @@ export function ChatPage() {
     }
   };
 
-  const enqueue = (target, body, replyId, mentioned) => {
+  const enqueue = (target, body, replyId, mentioned, attachments = null) => {
     const pending = {
       id: crypto.randomUUID(), pending: true, user_id: me, author_name: myName, body,
-      thread_id: target, reply_to_id: replyId ?? null, ...mentioned, created_date: new Date().toISOString(),
+      thread_id: target, reply_to_id: replyId ?? null, ...mentioned, ...(attachments && { attachments }),
+      created_date: new Date().toISOString(),
     };
     updateOutbox((list) => [...list, pending]);
     return deliver(pending);
@@ -728,6 +730,15 @@ export function ChatPage() {
     const replyId = replyTo?.id;
     setReplyTo(null);
     return enqueue(room, body, replyId, mentionFields(body));
+  };
+
+  // A GIF from the GIF search: sent as soon as it's tapped, as a reply if one was being written.
+  const sendGif = (gif) => {
+    if (!me) return false;
+    const replyId = replyTo?.id;
+    setReplyTo(null);
+    const { body, attachments } = gifMessage(gif);
+    return enqueue(room, body, replyId, {}, attachments);
   };
 
   const loadEarlier = async () => {
@@ -1189,6 +1200,7 @@ export function ChatPage() {
                   }
                   onCancelReply={() => setReplyTo(null)}
                   onSend={send}
+                  onSendGif={sendGif}
                   editing={editing}
                   onCancelEdit={() => setEditing(null)}
                   onSaveEdit={saveEdit}

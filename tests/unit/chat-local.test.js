@@ -62,6 +62,15 @@ describe('safe sending and retries', () => {
     expect(api.entities.Message.filter).toHaveBeenCalledWith({ id: message.id, user_id: message.user_id });
   });
 
+  it('sends a GIF with its GIF, and other messages without one', async () => {
+    const attachments = [{ type: 'gif', url: 'https://static.klipy.com/ii/a.webp', width: 300, height: 200 }];
+    const api = { entities: { Message: { create: vi.fn(async (row) => row), filter: vi.fn() } } };
+    await sendChatMessage(api, { ...message, body: 'GIF', attachments });
+    expect(api.entities.Message.create.mock.calls[0][0].attachments).toEqual(attachments);
+    await sendChatMessage(api, message);
+    expect(api.entities.Message.create.mock.calls[1][0]).not.toHaveProperty('attachments');
+  });
+
   it('keeps a real failure available for retry and rejects a message from a different room', async () => {
     const error = new TypeError('Failed to fetch');
     const api = { entities: { Message: { create: vi.fn().mockRejectedValue(error), filter: vi.fn().mockResolvedValue([{ ...message, thread_id: 'another-room' }]) } } };

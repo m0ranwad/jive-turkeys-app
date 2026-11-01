@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, LoaderCircle } from 'lucide-react';
 import { MessageRow } from './MessageRow';
-import { buildTimeline, summarizeReactions } from '@/lib/chat';
+import { buildTimeline, gifOf, summarizeReactions } from '@/lib/chat';
 import { plural } from '@/lib/format';
 import { scrollBehavior } from '@/lib/utils';
 
@@ -219,7 +219,8 @@ export function Conversation({
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
               canDelete={!m.pending && (mine || isCaptain)}
-              canEdit={mine && !m.pending && !!onEdit}
+              // A GIF can't be edited, only deleted (message_gif_fixed() in the database).
+              canEdit={mine && !m.pending && !!onEdit && !gifOf(m)}
               onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
               onReact={(message, emoji, fromMenu) => {
                 if (fromMenu) setSelectedId(null);

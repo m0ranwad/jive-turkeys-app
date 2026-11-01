@@ -3,9 +3,11 @@
 // for Player of the Match voting (the potm_voting_window migration), game
 // reminders (the game_reminders migration) and "Playing session N?" (the
 // session_question_notifications migration); the
-// site calls it for the public key and for "Send a test".
+// site calls it for the public key and for "Send a test", and for the chat's
+// GIF search ({ action: 'gifs' }, ../_shared/gifs.js).
 // Deployed by .github/workflows/functions.yml. The logic lives in ../_shared/notify.js.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { handleGifs } from '../_shared/gifs.js';
 import { handleNotify } from '../_shared/notify.js';
 import { secretKey } from '../_shared/secret-key.ts';
 
@@ -82,6 +84,27 @@ Deno.serve(async (req) => {
       },
     },
   };
+
+  // GIF search: only for signed-in teammates, with the KLIPY key set by a co-owner
+  // (the KLIPY_API_KEY function secret). Until then the picker says it isn't set up.
+  if (body?.action === 'gifs') {
+    try {
+      const [status, json] = await handleGifs(body, token, {
+        klipyKey: Deno.env.get('KLIPY_API_KEY'),
+        fetch,
+        userOf: deps.userOf,
+        async isTeamMember(userId: string) {
+          const { data, error } = await admin.from('users').select('joined_team_at, role').eq('id', userId).maybeSingle();
+          if (error) throw error;
+          return !!data && (data.joined_team_at !== null || data.role === 'admin');
+        },
+      });
+      return reply(status, json);
+    } catch (err) {
+      console.error(err);
+      return reply(500, { error: 'Something went wrong.' });
+    }
+  }
 
   try {
     const [status, json] = await handleNotify(body, token, deps);

@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_TEAM_CODE, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v34';
+const DB_KEY = 'jt_demo_db_v35';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -280,6 +280,54 @@ describe('@mentions', () => {
     await api.entities.Message.create({ user_id: (await api.auth.me()).id, author_name: 'Casey', body: '@Jordan R. hi', thread_id: null, mentions: [jordan.id] });
     await api.auth.signIn('jordan@demo.test', 'demo1234');
     expect((await api.chat.overview()).find((o) => o.thread_id === null).mentions).toBe(1);
+  });
+});
+
+describe('GIFs (docs/chat.md section 8)', () => {
+  it("finds the preview's pretend GIFs: trending with no words, then by word", async () => {
+    const { api } = await signedIn();
+    const trending = await api.chat.gifs('');
+    expect(trending.ready).toBe(true);
+    expect(trending.gifs.length).toBeGreaterThan(4);
+    expect(trending.gifs[0]).toMatchObject({ url: expect.stringMatching(/^\/demo-gifs\/.+\.gif$/), width: expect.any(Number), height: expect.any(Number) });
+    expect((await api.chat.gifs('turk')).gifs.map((g) => g.title)).toEqual(['Turkey dance']);
+    expect((await api.chat.gifs('zzz')).gifs).toEqual([]);
+    expect((await api.chat.gifs('', { page: 2 })).gifs).toEqual([]);
+  });
+
+  it('has a sample GIF in Team Chat', async () => {
+    const { api } = await signedIn();
+    const team = await api.chat.history(null);
+    expect(team.find((m) => m.attachments)).toMatchObject({ body: 'GIF', attachments: [{ type: 'gif', url: '/demo-gifs/turkey-dance.gif' }] });
+  });
+
+  it('sends one GIF, never a GIF from elsewhere, and a GIF stays as sent until deleted (like the database)', async () => {
+    const { api, me } = await signedIn();
+    const [gif] = (await api.chat.gifs('goal')).gifs;
+    const attachments = [{ type: 'gif', url: gif.url, width: gif.width, height: gif.height, title: gif.title }];
+    const sent = await api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'GIF', thread_id: null, attachments });
+    expect(sent.attachments).toEqual(attachments);
+    const klipy = [{ type: 'gif', url: 'https://static.klipy.com/ii/abc/goal.webp', width: 300, height: 200 }];
+    await expect(api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'GIF', thread_id: null, attachments: klipy })).resolves.toBeTruthy();
+
+    for (const bad of [
+      [{ type: 'gif', url: 'https://evil.example/x.gif', width: 300, height: 200 }],
+      [{ type: 'image', url: gif.url, width: 300, height: 200 }],
+      [...attachments, ...attachments],
+      [{ ...attachments[0], onclick: 'x' }],
+    ]) {
+      await expect(api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'GIF', thread_id: null, attachments: bad })).rejects.toThrow();
+    }
+    await expect(api.entities.Message.update(sent.id, { body: 'not a gif' })).rejects.toThrow("A GIF can't be edited");
+    await expect(api.entities.Message.update(sent.id, { attachments: klipy })).rejects.toThrow();
+    await api.entities.Message.delete(sent.id);
+    expect((await api.chat.history(null)).some((m) => m.id === sent.id)).toBe(false);
+  });
+
+  it("only for teammates who've entered the team code", async () => {
+    const api = createDemoBackend();
+    await api.auth.signIn('nia@demo.test', 'demo1234');
+    await expect(api.chat.gifs('goal')).rejects.toThrow();
   });
 });
 

@@ -13,7 +13,7 @@ import {
 } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v34';
+const DB_KEY = 'jt_demo_db_v35';
 // A new value on every save, so a tab notices another tab's save without
 // reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
 const REV_KEY = 'jt_demo_rev';
@@ -205,6 +205,9 @@ function seed() {
   const win = say(null, profiles[1], 'Great win last night! That second-half comeback 🔥', 1560);
   react(win, '🔥', [profiles[2], profiles[3], me]);
   react(win, '💪', [profiles[4]]);
+  // A GIF from the GIF button (docs/chat.md section 8).
+  const dance = DEMO_GIFS.find((g) => g.id === 'demo-turkey');
+  react(say(null, profiles[3], 'GIF', 1558, null, { attachments: [{ type: 'gif', url: dance.url, width: dance.width, height: dance.height, title: dance.title }] }), '😂', [profiles[1], me]);
   say(null, profiles[2], 'Defense was locked in', 1556);
   // What the site posts when Player of the Match voting closes (potm_tick() in the database).
   const potmGame = games.filter((g) => g.has_result && g.season_year === year).sort((a, b) => (a.date < b.date ? 1 : -1))[1];
@@ -588,6 +591,33 @@ function refreshInPlace(db, latest) {
   }
 }
 
+// The preview's pretend GIFs (public/demo-gifs/), with the words that find them.
+const DEMO_GIFS = [
+  { id: 'demo-goal', title: 'Goal!', url: '/demo-gifs/goal.gif', width: 240, height: 180, words: ['goal', 'score', 'win', 'yes', 'celebrate'] },
+  { id: 'demo-turkey', title: 'Turkey dance', url: '/demo-gifs/turkey-dance.gif', width: 220, height: 220, words: ['turkey', 'dance', 'party', 'celebrate', 'win', 'jive'] },
+  { id: 'demo-lets-go', title: "Let's go!", url: '/demo-gifs/lets-go.gif', width: 240, height: 180, words: ["let's", 'lets', 'go', 'hype', 'game', 'pumped'] },
+  { id: 'demo-whos-in', title: "Who's in?", url: '/demo-gifs/whos-in.gif', width: 240, height: 180, words: ['who', "who's", 'in', 'rsvp', 'subs', 'game'] },
+  { id: 'demo-on-my-way', title: 'On my way', url: '/demo-gifs/on-my-way.gif', width: 280, height: 160, words: ['on', 'my', 'way', 'omw', 'late', 'coming'] },
+  { id: 'demo-gg', title: 'GG', url: '/demo-gifs/gg.gif', width: 200, height: 200, words: ['gg', 'good', 'game', 'win'] },
+  { id: 'demo-lol', title: 'LOL', url: '/demo-gifs/lol.gif', width: 240, height: 160, words: ['lol', 'laugh', 'funny', 'haha'] },
+  { id: 'demo-nooo', title: 'Nooo', url: '/demo-gifs/nooo.gif', width: 260, height: 160, words: ['no', 'nooo', 'sad', 'loss', 'ouch'] },
+];
+
+/** The preview's chat_attachments_ok(): one GIF, from KLIPY or the pretend ones, as the GIF search sends it. */
+function demoGifOk(attachments) {
+  if (!Array.isArray(attachments) || attachments.length !== 1) return false;
+  const [gif] = attachments;
+  const keys = Object.keys(gif || {});
+  return (
+    keys.every((k) => ['type', 'url', 'width', 'height', 'title'].includes(k)) &&
+    gif.type === 'gif' &&
+    (/^https:\/\/([a-z0-9-]+\.)*klipy\.com\/[^\s"'<>]+$/i.test(gif.url) || DEMO_GIFS.some((g) => g.url === gif.url)) &&
+    Number.isInteger(gif.width) && gif.width > 0 && gif.width < 10000 &&
+    Number.isInteger(gif.height) && gif.height > 0 && gif.height < 10000 &&
+    (gif.title === undefined || (typeof gif.title === 'string' && gif.title.length <= 120))
+  );
+}
+
 const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), 120));
 
 /**
@@ -910,6 +940,13 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (table === 'messages' && action === 'create') {
       const thread = record.thread_id ? threadOf(record.thread_id) : null;
       if (!canRead(record.thread_id ?? null, me) || thread?.archived) refuse();
+      // Same as the database's chat_attachments_ok(): one GIF, from KLIPY (here, the pretend ones).
+      if (record.attachments != null && !demoGifOk(record.attachments)) refuse();
+    }
+    // Same as message_gif_fixed() and the update rights: a GIF can't be edited or swapped, only deleted.
+    if (table === 'messages' && action === 'update') {
+      if ('attachments' in patch) refuse();
+      if (record.attachments && 'body' in patch && patch.body !== record.body) throw new Error("A GIF can't be edited. Delete it and send another.");
     }
     if (table === 'messages' && action === 'delete') {
       const own = record.user_id === me.id;
@@ -1503,6 +1540,16 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   };
 
   const chat = {
+    // Previews can't reach KLIPY, so the GIF search finds these pretend GIFs (public/demo-gifs/).
+    async gifs(q = '', { page = 1 } = {}) {
+      requireUser();
+      failIfOffline();
+      if (!onTeam(currentUser())) refuse();
+      const words = String(q).toLowerCase().split(/[^a-z']+/).filter(Boolean);
+      const found = DEMO_GIFS.filter((g) => words.every((w) => g.words.some((tag) => tag.startsWith(w))));
+      const gifs = (page > 1 ? [] : found).map(({ words: _, ...gif }) => ({ ...gif, preview: { url: gif.url, width: gif.width, height: gif.height } }));
+      return delay({ ready: true, gifs, more: false });
+    },
     async history(threadId, { before, limit = 60 } = {}) {
       requireUser();
       failIfUnreadable('messages');

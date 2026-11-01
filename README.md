@@ -53,6 +53,7 @@ The other co-owner can work the same way, or locally with Claude Code.
 | Google sign-in | Google Auth Platform project "Jive Turkeys" | Free. Needs the [/privacy](src/pages/LegalPages.jsx) and /terms pages |
 | Database updates | GitHub Actions secret `SUPABASE_DB_URL` | Supabase **Session pooler** string; GitHub's runners are IPv4-only |
 | Phone notifications | Supabase Edge Function `notify-chat`, deployed by [functions.yml](.github/workflows/functions.yml) | GitHub secret `SUPABASE_ACCESS_TOKEN`: a Supabase token for this project only, with Project Settings read, Edge Functions read-write and Edge Function Secrets read-write. The sending keys (`VAPID_*`) are created once by the workflow and kept as function secrets; never replace them |
+| Chat GIFs | [KLIPY](https://partner.klipy.com) GIF API (free), searched through `notify-chat` | Function secret `KLIPY_API_KEY` (a co-owner adds it; until then the GIF button says search isn't turned on). Content rating PG-13 is set in KLIPY's partner panel. Their brand asks for "Powered by KLIPY", shown in the GIF search |
 | Security headers | [public/_headers](public/_headers) | Served by Cloudflare. The Content-Security-Policy is report-only until it's checked on the live site ([issue #32](https://github.com/m0ranwad/jive-turkeys-app/issues/32)) |
 | Dependency updates | [Dependabot](.github/dependabot.yml) | Grouped security fixes, and one monthly pull request for minor and patch updates. Security updates are turned on in Settings → Advanced Security |
 | Domain | `jiveturkeys.app` on Cloudflare | The only running cost |
@@ -73,6 +74,8 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - [ ] Nightly backups: the owners' backup key and the `BACKUP_AGE_RECIPIENT` variable (see [Backups](#backups))
 - [x] Phone notifications for chat: `SUPABASE_ACCESS_TOKEN` secret added. The function and its keys are set
       up automatically the first time the notifications change reaches `main`
+- [ ] Chat GIFs: a KLIPY partner account and API key, saved as the Supabase function secret `KLIPY_API_KEY`
+      (PG-13 in KLIPY's partner panel; request production access there)
 - [ ] Give the creator access (in progress):
   - [x] Preview flow tested end to end. Cloudflare's Worker Previews needed a `previews` block in
         `wrangler.jsonc`. Previews answer "Not found" for any path but `/` (Cloudflare beta limitation),
