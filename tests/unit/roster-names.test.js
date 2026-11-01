@@ -2,7 +2,28 @@
 // someone already on the roster, even under a shorter name, mustn't be added
 // twice, or they'd be counted twice in the dues.
 import { describe, expect, it } from 'vitest';
-import { likelyAccount, lookalikeAccounts, nameList, sameName, skippedRosterName, sortPastedNames } from '@/lib/team-logic';
+import { likelyAccount, lookalikeAccounts, nameList, needsLastName, sameName, skippedRosterName, sortPastedNames } from '@/lib/team-logic';
+
+describe('needsLastName', () => {
+  it('asks a new player for more than a first name', () => {
+    expect(needsLastName('Fuzzy')).toBe(true);
+    expect(needsLastName('  Josh  ')).toBe(true);
+    expect(needsLastName('')).toBe(true);
+    // A roster name a captain typed as one word still needs a last name when it's picked.
+    expect(needsLastName('Mike', null)).toBe(true);
+    expect(needsLastName('Josh Smith')).toBe(false);
+    expect(needsLastName('Sam O')).toBe(false);
+    expect(needsLastName('Kelly M.')).toBe(false);
+    expect(needsLastName('Mary Ann Lee')).toBe(false);
+  });
+
+  it("leaves a saved one-word name alone until its owner changes it", () => {
+    expect(needsLastName('Josh', 'Josh')).toBe(false);
+    expect(needsLastName('Josh ', 'Josh')).toBe(false);
+    expect(needsLastName('Joshua', 'Josh')).toBe(true);
+    expect(needsLastName('Josh Smith', 'Josh')).toBe(false);
+  });
+});
 
 describe('sameName', () => {
   it('matches a short last name or a first name alone', () => {

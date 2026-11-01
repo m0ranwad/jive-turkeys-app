@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { api } from '@/api';
 import { ProfileForm } from '@/components/ProfileForm';
 import { signOut } from '@/lib/actions';
-import { sameName } from '@/lib/team-logic';
+import { nameList, sameName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -156,7 +156,7 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
               <div>
                 <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                 <p className="mt-1.5 text-sm text-zinc-500">
-                  Find your name. Your roster spot and payments will come with you.
+                  Find your name. Your spot on the team and any dues you've paid come with you.
                 </p>
                 <div className="mt-4 grid gap-2">
                   {names.map((g) => (
@@ -190,20 +190,20 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                 <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">Join the team</h2>
                 {pick ? (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Confirm your details.{' '}
+                    You're joining as <b className="text-zinc-900">{pick.display_name}</b>. Check your details below. Only your
+                    teammates can see them.{' '}
                     <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
                       Not you?
                     </button>
                   </p>
                 ) : (
                   <p className="mt-1.5 text-sm text-zinc-500">
-                    Name and gender are for coed headcounts. A phone number is optional; it lets captains tap to call
-                    you. Everything else is in My Profile.
+                    Just the basics. Only your teammates can see any of this.
                     {names.length > 0 && (
                       <>
                         {' '}
                         <button type="button" onClick={backToNames} className="font-semibold text-zinc-700 underline underline-offset-2">
-                          Back to the names
+                          Back to the list
                         </button>
                       </>
                     )}
@@ -240,8 +240,9 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                   <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4" data-testid="is-that-you">
                     <p className="text-sm font-bold text-amber-950">Is that you on the roster?</p>
                     <p className="text-sm text-amber-900">
-                      Your captain put {asking.matches.map((g) => g.display_name).join(' and ')} on the roster. If that's
-                      you, your spot and dues come with you, and you keep the name {asking.values.display_name}.
+                      {nameList(asking.matches.map((g) => g.display_name))} {asking.matches.length === 1 ? 'is' : 'are'} already
+                      on the roster. If that's you, your spot and dues come with you, and you keep the name{' '}
+                      {asking.values.display_name}.
                     </p>
                     {asking.matches.map((g) => (
                       <button
@@ -268,8 +269,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                   <div className="mt-5">
                     {retry && (
                       <p className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-950" role="alert" data-testid="name-taken">
-                        There's already a {retry.taken} on the team. Add your last name or an initial so teammates can tell
-                        you apart.
+                        There's already a {retry.taken} on the team. Add a middle initial or spell out your last name so
+                        teammates can tell you apart.
                       </p>
                     )}
                     <ProfileForm

@@ -61,8 +61,8 @@ test('joining the team: finding your name, and saying whether you are playing', 
   await expect(page.getByRole('group', { name: 'Are you playing?' })).toBeVisible();
   await expectAccessible(page, 'Join the team: your details');
   await page.getByRole('button', { name: 'Start using the app' }).click();
-  await expect(page.getByText('Add your display name.')).toBeVisible();
-  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await expect(page.getByText('Add your full name.')).toBeVisible();
+  await page.getByLabel('Full name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page, 'Just following along');
   await expectAccessible(page, 'Join the team: answered');

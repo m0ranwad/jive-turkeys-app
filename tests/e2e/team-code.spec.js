@@ -34,7 +34,7 @@ test('a new account enters the team code before it sees anything', async ({ page
 
   await enterTeamCode(page, ' turkey ');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await page.getByLabel('Full name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -97,7 +97,7 @@ test('someone who already has an account is asked before making a second one', a
   await createAccount(page, 'jordan.rivera@demo.test');
   await enterTeamCode(page);
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Jordan Rivera');
+  await page.getByLabel('Full name').fill('Jordan Rivera');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -110,7 +110,7 @@ test('someone who already has an account is asked before making a second one', a
   await createAccount(page, 'jordan.r@demo.test');
   await enterTeamCode(page);
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Jordan R');
+  await page.getByLabel('Full name').fill('Jordan R');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
