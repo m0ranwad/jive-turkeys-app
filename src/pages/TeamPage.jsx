@@ -469,8 +469,9 @@ export function TeamPage() {
       )}
 
       {data.profile && <PickPositionCard profile={data.profile} onSaved={data.reload} />}
-      {/* Where everyone likes to play, then the list. Roster names only show once a captain sets their position. */}
-      <Formation players={roster.filter((p) => !p.guest || p.position)} />
+      {/* Where everyone likes to play, then the list. Unavailable players aren't on the field; roster names only
+          show once a captain sets their position. */}
+      <Formation players={roster.filter((p) => p.status !== 'on_break' && (!p.guest || p.position))} />
 
       {/* Everyone on the team by status: Playing (with how many women), Available to sub, Unavailable. */}
       {groups.map((g) => (
