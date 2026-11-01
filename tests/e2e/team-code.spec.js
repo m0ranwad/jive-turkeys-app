@@ -54,11 +54,12 @@ test('someone who signed up earlier still needs the code, and can sign out inste
 
 test('captains see the code, change it, and invites with the old one stop working', async ({ page }) => {
   await signIn(page);
-  // The Team page reminds captains while a new session is starting.
+  // The Team page doesn't nag about the code: Team Settings notes it next to the code itself.
   await page.locator('a[href="/team"]:visible').first().click();
-  const reminder = page.getByRole('link', { name: 'New session: change the team code so old invites stop working' });
-  await expect(reminder).toBeVisible();
-  await reminder.click();
+  await expect(page.getByTestId('session-answers')).toBeVisible();
+  await expect(page.getByTestId('team-code-stale')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'Team Settings' }).click();
   const card = page.getByTestId('team-code');
   await expect(card.getByTestId('team-code-value')).toHaveText('TURKEY');
   await expect(card.getByTestId('team-code-stale')).toContainText('Session 2 has started since the code last changed');

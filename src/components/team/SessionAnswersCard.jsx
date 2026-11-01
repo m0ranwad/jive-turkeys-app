@@ -1,54 +1,37 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { Check, ChevronDown, ChevronRight, KeyRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { CARD } from '@/lib/constants';
 import { fmtDateShort, initials, shortName } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
- * Captains, on the Team page: "Playing session N?" at a glance. One card with a block per session
- * being asked (the session about to start, and one asked about ahead): how many have answered, a bar,
- * and who hasn't, as name chips (dashed for roster names who haven't joined). Tapping a name answers
- * for them. While the session about to start is still being answered, a session asked ahead keeps its
- * names folded away until tapped. The team code reminder sits at the bottom while a new session is starting.
+ * Captains, on the Team page: "Playing session N?" at a glance. Under a "Who's playing" label, a card
+ * per session being asked (the session about to start, marked Up next, and one asked about ahead): how
+ * many have answered, a bar, and who hasn't, as name chips (dashed for roster names who haven't joined).
+ * Tapping a name answers for them. While the session about to start is still being answered, a session
+ * asked ahead keeps its names folded away until tapped.
  *
  * `sessions`: [{ period, startsOn, ahead, total, waiting, onPick, onChangeDate, onAllAnswers, testId }].
  */
-export function SessionAnswersCard({ sessions, meId, codeStale }) {
+export function SessionAnswersCard({ sessions, meId }) {
   const shown = sessions.filter(Boolean);
   if (!shown.length) return null;
   return (
-    <section className={cn(CARD, 'space-y-4')} aria-labelledby="session-answers-title">
-      <h3 id="session-answers-title" className="font-display text-sm font-extrabold uppercase tracking-[0.12em]">
+    <section className="space-y-2" aria-labelledby="session-answers-title">
+      {/* Labelled like the Team page's groups below (Playing, Available to sub, Unavailable). */}
+      <h3 id="session-answers-title" className="px-1 pt-1 text-[11px] font-black uppercase tracking-[0.14em] text-zinc-500">
         Who's playing
       </h3>
       {shown.map((s, i) => (
-        <SessionBlock
-          key={`${s.period.year}-${s.period.session}`}
-          session={s}
-          meId={meId}
-          divided={i > 0}
-          folded={i > 0 && s.ahead}
-        />
+        <SessionBlock key={`${s.period.year}-${s.period.session}`} session={s} meId={meId} folded={i > 0 && s.ahead} />
       ))}
-      {codeStale && (
-        <Link
-          to="/settings"
-          data-testid="team-code-stale"
-          className="-mx-1 flex items-center gap-3 rounded-2xl bg-amber-50 px-3 py-2.5 text-amber-950 transition hover:bg-amber-100"
-        >
-          <KeyRound aria-hidden="true" className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 text-xs font-semibold">New session: change the team code so old invites stop working</span>
-          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
-        </Link>
-      )}
     </section>
   );
 }
 
 const LINK = 'font-semibold text-zinc-700 underline decoration-zinc-300 underline-offset-2 transition hover:text-black hover:decoration-zinc-900';
 
-function SessionBlock({ session, meId, divided, folded }) {
+function SessionBlock({ session, meId, folded }) {
   const { period, startsOn, ahead, total, waiting, onPick, onChangeDate, onAllAnswers, testId } = session;
   const [open, setOpen] = useState(!folded);
   const answered = total - waiting.length;
@@ -59,11 +42,15 @@ function SessionBlock({ session, meId, divided, folded }) {
   const labelOf = (p) => (p.user_id === meId ? 'You' : counts.get(shortName(p.display_name)) > 1 ? p.display_name : shortName(p.display_name));
 
   return (
-    <div data-testid={testId} className={cn(divided && 'border-t border-zinc-100 pt-4')}>
+    <div data-testid={testId} className={CARD}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="font-display text-base font-extrabold uppercase tracking-tight">Session {period.session}</span>
-          {ahead && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600">Asked ahead</span>}
+          {ahead ? (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600">Asked ahead</span>
+          ) : (
+            <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-bold text-lime-800">Up next</span>
+          )}
         </div>
         <div className="shrink-0 text-xs font-semibold text-zinc-600">
           <span className="font-display text-base font-extrabold text-zinc-950">{answered}</span> of {total} answered

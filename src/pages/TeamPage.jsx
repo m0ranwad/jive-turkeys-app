@@ -19,7 +19,6 @@ import { saveFailedToast } from '@/lib/errors';
 import { guestAsPlayer, stepSession } from '@/lib/dues';
 import { initials, today } from '@/lib/format';
 import { askFor, beforeFirstGame, entryFor, isEarlier, sessionGames, sessionRows, stillAsking, unanswered } from '@/lib/roster';
-import { codeIsStale } from '@/lib/team-code';
 import { likelyAccount, lookalikeAccounts, nameList, skippedRosterName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -429,7 +428,6 @@ export function TeamPage() {
       {data.isCaptain && (
         <SessionAnswersCard
           meId={data.user?.id}
-          codeStale={waiting.length > 0 && codeIsStale(joinCode, data.roster)}
           sessions={[
             waiting.length > 0 && {
               testId: 'session-answers',
