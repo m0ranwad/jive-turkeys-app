@@ -190,14 +190,12 @@ export function TeamDues({ data, period, current, over = false, user, isCaptain,
     (nameOf) =>
       reminderText({
         session: period.session,
-        parts: feeParts(row),
         perPlayer: team.perPlayer,
-        activeCount: team.active.length,
         unpaid: team.stillToPay.map((line, i) => ({ ...line, people: team.owingPeople[i] })),
         link: `${window.location.origin}/dues`,
         nameOf,
       }),
-    [period.session, row, team],
+    [period.session, team],
   );
 
   const markedBy = (userId) => {

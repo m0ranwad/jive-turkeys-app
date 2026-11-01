@@ -18,18 +18,26 @@ export function chatNamer(profiles) {
   return (player) => (!player.guest && labels.has(player.user_id) ? `@${labels.get(player.user_id)}` : player.display_name);
 }
 
+/** "Sat, Nov 8, 7:30 PM vs Ball Busters" (no time if it isn't set). */
+const when = (game) => `${[fmtDateShort(game.date), fmtTime(game.time)].filter(Boolean).join(', ')} vs ${game.opponent}`;
+
+/** The shortage the way a teammate says it: "We need 2 more, including a girl." Null when we aren't short. */
+function weNeed(headcount) {
+  const short = shortageText(headcount);
+  return short ? `We ${short[0].toLowerCase()}${short.slice(1)}.` : null;
+}
+
 /** "Are you in?" for a game: who hasn't answered, and how many more we need. */
 export function gameReminder({ game, headcount, settings, link, nameOf = plainName }) {
   const pending = headcount.groups.none.map((e) => nameOf(e.profile));
   const lines = [
-    `🦃 Jive Turkeys — ${fmtDateShort(game.date)} at ${fmtTime(game.time)}`,
-    `vs ${game.opponent} · Field ${game.field_number || 'TBD'}`,
+    when(game),
     `Jersey: ${jerseyText(game.jersey, settings)}`,
-    `Still to RSVP: ${pending.length ? pending.join(', ') : "everyone's in"}`,
+    pending.length ? `Still to RSVP: ${pending.join(', ')}` : 'Everyone has answered.',
   ];
-  const short = shortageText(headcount);
-  if (short) lines.push(`${short}. Subs, tap IN if you can play.`);
-  lines.push(`RSVP: ${link}`);
+  const short = weNeed(headcount);
+  if (short) lines.push(`${short} Subs, can you play?`);
+  lines.push(link);
   return lines.join('\n');
 }
 
@@ -56,14 +64,12 @@ export function subsToAsk({ game, profiles, rsvps, headcount }) {
 export function subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf = plainName }) {
   const subs = subsToAsk({ game, profiles, rsvps, headcount }).map(nameOf);
   const lines = [
-    `🦃 Jive Turkeys — subs needed for ${fmtDateShort(game.date)} · ${fmtTime(game.time)}`,
-    `vs ${game.opponent} · Field ${game.field_number || 'TBD'} · Jersey: ${jerseyText(game.jersey, settings)}`,
+    `Subs needed: ${when(game)}`,
+    `Jersey: ${jerseyText(game.jersey, settings)}`,
   ];
-  if (subs.length) lines.push(`Available to sub: ${subs.join(', ')}`);
-  else lines.push('No available subs left to ask.');
-
-  const short = shortageText(headcount);
-  if (short) lines.push(`${short}. Tap IN if you can play.`);
-  lines.push(`RSVP: ${link}`);
+  const short = weNeed(headcount);
+  if (short) lines.push(short);
+  lines.push(subs.length ? `${subs.join(', ')}, can you play?` : 'Anyone free?');
+  lines.push(link);
   return lines.join('\n');
 }

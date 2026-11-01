@@ -100,7 +100,7 @@ test('players cannot see the voting settings', async ({ page }) => {
 test('the winners post in Team Chat comes from the Scoreboard', async ({ page }) => {
   await signIn(page);
   await openChat(page);
-  await expect(page.getByRole('log', { name: 'Messages' })).toContainText('🏆 Player of the Match, 4–1 W vs Ball Busters');
+  await expect(page.getByRole('log', { name: 'Messages' })).toContainText('🏆 Votes are in: 4–1 win over Ball Busters');
 });
 
 test('captains set game reminders: on, 6 hours before kickoff unless changed', async ({ page }) => {

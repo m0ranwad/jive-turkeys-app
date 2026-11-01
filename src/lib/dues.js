@@ -479,19 +479,18 @@ export function payOptions(settings, amount, note) {
  * A nudge for Team Chat naming who still owes. `unpaid` is [{ name, people,
  * amount, more }], `more` for the difference after a share went up. `nameOf`
  * names each of `people` (a chat @mention, so their phones buzz); without
- * `people`, `name` is used.
+ * `people`, `name` is used. How the fee adds up is on the Dues page, not here.
  */
-export function reminderText({ session, parts, perPlayer, activeCount, unpaid, link, nameOf = null }) {
+export function reminderText({ session, perPlayer, unpaid, link, nameOf = null }) {
   const names = unpaid.map((p) => {
     const who = nameOf && p.people ? p.people.map(nameOf).join(' & ') : p.name;
     if (p.more) return `${who} (${dollars(p.amount)} more)`;
     return p.amount === perPlayer ? who : `${who} (${dollars(p.amount)})`;
   });
   return [
-    `🦃 Jive Turkeys — Session ${session} dues: ${dollars(perPlayer)} each`,
-    `That's ${feeSentence(parts)}, split across ${activeCount} players.`,
+    `Session ${session} dues are ${dollars(perPlayer)} each.`,
     `Still to pay: ${names.join(', ')}`,
-    `See your amount and pay: ${link}`,
+    `Pay here: ${link}`,
   ].join('\n');
 }
 

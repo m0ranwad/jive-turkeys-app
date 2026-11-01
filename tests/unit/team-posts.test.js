@@ -34,15 +34,31 @@ describe('the game reminder', () => {
       needWomen: 1,
     };
     const text = gameReminder({ game, headcount, settings, link, nameOf: chatNamer(profiles) });
-    expect(text).toContain('Still to RSVP: @Casey C., @Jordan R., Mike Russo');
-    expect(text).toContain('Need 2 more, including a girl. Subs, tap IN if you can play.');
+    expect(text).toBe(
+      [
+        'Thu, Oct 29, 7:00 PM vs Goal Diggers',
+        'Jersey: Bright green/yellow',
+        'Still to RSVP: @Casey C., @Jordan R., Mike Russo',
+        'We need 2 more, including a girl. Subs, can you play?',
+        link,
+      ].join('\n'),
+    );
     const people = mentionPeople(profiles.filter((p) => !p.guest));
     expect(findMentions(text, people, { me: 'cc' }).mentions).toEqual(['jr']);
   });
 
-  it("copies with plain names", () => {
+  it("says when everyone has answered (some may have said OUT), and leaves out the shortage when we aren't short", () => {
     const headcount = { groups: { none: [] }, needTotal: 0, needWomen: 0 };
-    expect(gameReminder({ game, headcount, settings, link })).toContain("Still to RSVP: everyone's in");
+    const text = gameReminder({ game, headcount, settings, link });
+    expect(text).toContain('Everyone has answered.');
+    expect(text).not.toContain('Still to RSVP');
+    expect(text).not.toContain('We need');
+  });
+
+  it("leaves out the field (there are only two) and a missing time", () => {
+    const headcount = { groups: { none: [] }, needTotal: 0, needWomen: 0 };
+    expect(gameReminder({ game, headcount, settings, link })).not.toContain('Field');
+    expect(gameReminder({ game: { ...game, time: '' }, headcount, settings, link })).toMatch(/^Thu, Oct 29 vs Goal Diggers\n/);
   });
 });
 
@@ -60,9 +76,15 @@ describe('the call for subs', () => {
   it('names them with their @mention, and says how many more we need', () => {
     const headcount = computeHeadcount({ game, rsvps, profiles, settings });
     const text = subsCall({ game, headcount, settings, profiles, rsvps, link, nameOf: chatNamer(profiles) });
-    expect(text).toContain('Available to sub: @Drew P., Mike Russo');
-    expect(text).toContain('Need 7 more, including 3 girls. Tap IN if you can play.');
-    expect(text).toContain(`RSVP: ${link}`);
+    expect(text).toBe(
+      [
+        'Subs needed: Thu, Oct 29, 7:00 PM vs Goal Diggers',
+        'Jersey: Bright green/yellow',
+        'We need 7 more, including 3 girls.',
+        '@Drew P., Mike Russo, can you play?',
+        link,
+      ].join('\n'),
+    );
   });
 
   it('asks only girls when only girls are needed, because a guy would sit on the bench', () => {
@@ -75,8 +97,7 @@ describe('the call for subs', () => {
     const headcount = computeHeadcount({ game, rsvps: ins, profiles: team, settings });
     expect(subsToAsk({ game, profiles: team, rsvps: ins, headcount }).map((p) => p.user_id)).toEqual(['kn']);
     const text = subsCall({ game, headcount, settings, profiles: team, rsvps: ins, link });
-    expect(text).toContain('Available to sub: Kim Nguyen');
-    expect(text).toContain('Need 2 more girls. Tap IN if you can play.');
+    expect(text).toContain('We need 2 more girls.\nKim Nguyen, can you play?');
   });
 
   it("counts the shortage the way the game screen does, so an IN from someone off the roster doesn't hide it", () => {
@@ -85,6 +106,9 @@ describe('the call for subs', () => {
     const ins = [...team.map((p) => ({ game_id: 'g1', user_id: p.user_id, status: 'in' })), { game_id: 'g1', user_id: 'gone', status: 'in' }];
     const headcount = computeHeadcount({ game, rsvps: ins, profiles: team, settings });
     expect(headcount.isShort).toBe(true);
-    expect(subsCall({ game, headcount, settings, profiles: team, rsvps: ins, link })).toContain('Need 1 more. Tap IN if you can play.');
+    expect(subsCall({ game, headcount, settings, profiles: team, rsvps: ins, link })).toContain(
+      // Nobody is left to ask by name.
+      'We need 1 more.\nAnyone free?',
+    );
   });
 });

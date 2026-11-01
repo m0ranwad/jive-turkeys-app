@@ -639,9 +639,7 @@ describe('the reminder', () => {
   it('names who still owes, with amounts for anyone not on the even split or paying a difference', () => {
     const text = reminderText({
       session: 2,
-      parts: DUES_DEFAULTS,
       perPlayer: 73,
-      activeCount: 10,
       unpaid: [
         { name: 'Alex Chen', amount: 73 },
         { name: 'Kelly Moss', amount: 40 },
@@ -651,10 +649,9 @@ describe('the reminder', () => {
     });
     expect(text).toBe(
       [
-        '🦃 Jive Turkeys — Session 2 dues: $73 each',
-        "That's the $595 league fee plus $18 refs × 7 games = $721, split across 10 players.",
+        'Session 2 dues are $73 each.',
         'Still to pay: Alex Chen, Kelly Moss ($40), Sam Okafor ($11 more)',
-        'See your amount and pay: https://jiveturkeys.app/dues',
+        'Pay here: https://jiveturkeys.app/dues',
       ].join('\n'),
     );
   });
@@ -664,9 +661,7 @@ describe('the reminder', () => {
     const dana = { user_id: 'dw', display_name: 'Dana Wells', guest: true };
     const text = reminderText({
       session: 2,
-      parts: DUES_DEFAULTS,
       perPlayer: 61,
-      activeCount: 12,
       unpaid: [
         { name: 'Jordan Rivera & Sam Okafor', people: [jordan, sam], amount: 122 },
         { name: 'Dana Wells', people: [dana], amount: 61 },

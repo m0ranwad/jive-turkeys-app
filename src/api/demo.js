@@ -13,7 +13,7 @@ import {
 } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v33';
+const DB_KEY = 'jt_demo_db_v34';
 // A new value on every save, so a tab notices another tab's save without
 // reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
 const REV_KEY = 'jt_demo_rev';
@@ -209,9 +209,12 @@ function seed() {
   // What the site posts when Player of the Match voting closes (potm_tick() in the database).
   const potmGame = games.filter((g) => g.has_result && g.season_year === year).sort((a, b) => (a.date < b.date ? 1 : -1))[1];
   const firstOf = (gender) => profiles.slice(2).find((p) => p.gender === gender).display_name;
+  // "5–3 win over Ball Busters", as potm_result_label() says it.
+  const { score_us: us, score_them: them, opponent } = potmGame;
+  const result = us > them ? `${us}–${them} win over ${opponent}` : us < them ? `${them}–${us} loss to ${opponent}` : `${us}–${them} tie with ${opponent}`;
   messages.push({
     id: uid(), thread_id: null, reply_to_id: null, user_id: null, author_name: 'Scoreboard',
-    body: `🏆 Player of the Match, ${potmGame.score_us}–${potmGame.score_them} W vs ${potmGame.opponent}\nMan of the Match: ${firstOf('M')} (3 votes)\nWoman of the Match: ${firstOf('F')} (2 votes)`,
+    body: `🏆 Votes are in: ${result}\nMan of the Match: ${firstOf('M')} (3 votes)\nWoman of the Match: ${firstOf('F')} (2 votes)`,
     created_date: minutesAgo(1540), updated_date: minutesAgo(1540),
   });
   const bottle = say(null, profiles[2], 'Also, who grabbed my water bottle? Blue Hydro Flask', 1555);
@@ -1344,8 +1347,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       db.new_player_notices.push({ user_id: me.id, season_year: period.year, session: period.session, created_date: now() });
       const message = {
         id: uid(), thread_id: lounge.id, reply_to_id: null, user_id: null, author_name: 'Roster',
-        body: `👋 ${profile.display_name} just joined and said they're Playing, so they now split session ${period.session}'s dues. `
-          + "If they're not playing, change their status on the Team page before people pay.",
+        body: `${profile.display_name} just joined as Playing, so session ${period.session}'s dues are now split one more way. `
+          + "If that's wrong, change their status on the Team page before people pay.",
         created_date: now(), updated_date: now(),
       };
       db.messages.push(message);

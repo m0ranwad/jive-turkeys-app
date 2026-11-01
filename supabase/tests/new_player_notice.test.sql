@@ -115,8 +115,8 @@ reset role;
 select heads_up_test.ok((select count(*) from heads_up_test.posts()) = 1, 'a new player who says Playing gets one post in the Lounge');
 select heads_up_test.ok(
   (select body from heads_up_test.posts()) =
-    '👋 Neo New just joined and said they''re Playing, so they now split session 2''s dues. '
-    || 'If they''re not playing, change their status on the Team page before people pay.',
+    'Neo New just joined as Playing, so session 2''s dues are now split one more way. '
+    || 'If that''s wrong, change their status on the Team page before people pay.',
   'it names them and the session whose dues they split, and says what to do'
 );
 select heads_up_test.ok((select user_id from heads_up_test.posts()) is null, 'it''s from the site, not from the new player');

@@ -131,16 +131,16 @@ create temp table rsvp_sent as select * from public.game_reminder_targets(rem_te
 select rem_test.ok(rem_test.names(array(select subscription_id from rsvp_sent)) = '{dan}',
   '"Are you in?" goes to Active players who haven''t answered (not MAYBE, not subs, not on break)');
 select rem_test.ok(
-  (select bool_and(title = '⚽ Are you in?' and body ~ '^[A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M vs Ball Busters, Field 2\. You haven''t answered yet\.'
+  (select bool_and(title = 'Are you in?' and body ~ '^[A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M vs Ball Busters\. You haven''t answered yet\.$'
      and url = '/games/' || rem_test.id('g1')) from rsvp_sent),
-  'it says when, who against and the field, and opens the game');
+  'it says when and who against (not the field), and opens the game');
 
 create temp table subs_sent as select * from public.game_reminder_targets(rem_test.id('g1'), 'subs');
 select rem_test.ok(rem_test.names(array(select subscription_id from subs_sent)) = '{sid,sue}',
   'the call for subs goes to the sub pool, not to someone on break who said OUT');
 select rem_test.ok(
-  (select bool_and(title = '🆘 We need subs' and body like 'We need 5 more players, including 3 girls, for % vs Ball Busters, Field 2. Can you play?%') from subs_sent),
-  'it says how many we need, and how many girls');
+  (select bool_and(title = 'Can you sub?' and body ~ '^[A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M vs Ball Busters\. We need 5 more, including 3 girls\.$') from subs_sent),
+  'it says when, who against, how many we need and how many girls, like the game page');
 
 select rem_test.ok((select count(*) = 0 from public.game_reminder_targets(rem_test.id('g1'), 'rsvp')), 'each goes out once');
 select public.game_reminders_tick();
@@ -168,7 +168,7 @@ select rem_test.ok(
   'captains'' minimums count (3 players, 1 woman)');
 create temp table women_sent as select * from public.game_reminder_targets(rem_test.id('g1'), 'subs');
 select rem_test.ok(rem_test.names(array(select subscription_id from women_sent)) = '{sue}', 'short only on girls: only girls are asked');
-select rem_test.ok((select bool_and(body like 'We need 1 more girl for %') from women_sent), 'and it says so');
+select rem_test.ok((select bool_and(body like '%. We need 1 more girl.') from women_sent), 'and it says so');
 
 -- Short on players too, but the open spots are full (4 players, 3 girls: 3 in, none of them
 -- girls on the field): another guy would only sit on the bench, so only girls are asked.
@@ -179,7 +179,7 @@ select rem_test.ok(
   'one more player and three more girls short');
 create temp table girls_sent as select * from public.game_reminder_targets(rem_test.id('g1'), 'subs');
 select rem_test.ok(rem_test.names(array(select subscription_id from girls_sent)) = '{sue}', 'with the open spots full, only girls are asked');
-select rem_test.ok((select bool_and(body like 'We need 3 more girls for %') from girls_sent), 'and it says how many girls');
+select rem_test.ok((select bool_and(body like '%. We need 3 more girls.') from girls_sent), 'and it says how many girls');
 update public.team_settings set min_players = 3, min_women = 1;
 
 -- Not short: no call for subs, even later on.

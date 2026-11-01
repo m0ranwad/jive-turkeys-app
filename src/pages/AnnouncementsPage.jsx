@@ -174,7 +174,7 @@ export function AnnouncementsPage() {
         open={!!sharing}
         onOpenChange={(open) => !open && setSharing(null)}
         title="Post in Team Chat?"
-        intro="So everyone sees it where they already are. @team buzzes everyone with notifications on."
+        intro="@team buzzes everyone with notifications on."
         message={shareMessage}
         everyone
       />
