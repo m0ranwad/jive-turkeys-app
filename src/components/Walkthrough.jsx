@@ -67,6 +67,13 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
           // Someone picked it first: they're still on the team, and a captain can link them.
         }
       }
+      try {
+        // Joined as Playing during a session: captains hear about it in their Lounge, so a fan who
+        // tapped the wrong answer is caught before people pay. Not worth stopping sign-up over.
+        await api.users.tellCaptainsNewPlayer();
+      } catch {
+        // No heads-up this time; captains still see them on the Team page.
+      }
       onClose();
       // Every page holds its own copy of the roster; start fresh with the new profile.
       window.location.reload();

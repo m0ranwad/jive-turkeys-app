@@ -296,3 +296,13 @@ begin
   end if;
 end;
 $$;
+
+-- Captains were told Sam joined as Playing during session 2 (once those heads-ups exist).
+do $$
+begin
+  if to_regclass('public.new_player_notices') is not null then
+    insert into public.new_player_notices (user_id, season_year, session, created_date) values
+      ('33333333-3333-4333-8333-333333333333', 2026, 2, '2026-10-02 18:00+00');
+  end if;
+end;
+$$;

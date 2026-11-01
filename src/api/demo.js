@@ -502,6 +502,8 @@ function seed() {
     team_guest_links: guestLinks,
     // Captains' answers to the Team page's name checks: none yet.
     team_name_checks: [],
+    // Who captains were told joined as Playing (tellCaptainsNewPlayer()): nobody yet.
+    new_player_notices: [],
     session_roster: sessionRoster,
     session_asks: sessionAsks,
     // Last changed before session 2 started, so captains are reminded to change it.
@@ -1318,6 +1320,37 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         .filter((l) => l.guest_id === guestId && l.user_id === currentUser().id && !l.unlinked_at)
         .forEach((l) => Object.assign(l, { status_after: guest.status }));
       persist();
+      return delay(null);
+    },
+    // Same as the database's tell_captains_new_player(): a heads-up in the Captains' Lounge
+    // when someone new joins as Playing while a session is open, once. Not for a roster
+    // name's pick (a captain set that), or anyone who joined over an hour ago.
+    async tellCaptainsNewPlayer() {
+      requireUser();
+      const me = currentUser();
+      if (!onTeam(me)) throw new Error('Join the team first');
+      const profile = db.player_profiles.find((p) => p.user_id === me.id);
+      const period = open();
+      const lounge = db.chat_threads.find((t) => t.visibility === 'captains');
+      db.new_player_notices ||= [];
+      if (
+        !profile || profile.removed || profile.status !== 'active' || me.role === 'admin' ||
+        dayjs(profile.created_date).isBefore(dayjs().subtract(1, 'hour')) ||
+        db.team_guests.some((g) => g.linked_user_id === me.id) ||
+        !period || !lounge || db.new_player_notices.some((n) => n.user_id === me.id)
+      ) {
+        return delay(null);
+      }
+      db.new_player_notices.push({ user_id: me.id, season_year: period.year, session: period.session, created_date: now() });
+      const message = {
+        id: uid(), thread_id: lounge.id, reply_to_id: null, user_id: null, author_name: 'Roster',
+        body: `👋 ${profile.display_name} just joined and said they're Playing, so they now split session ${period.session}'s dues. `
+          + "If they're not playing, change their status on the Team page before people pay.",
+        created_date: now(), updated_date: now(),
+      };
+      db.messages.push(message);
+      persist();
+      notify('messages', 'onInsert', message);
       return delay(null);
     },
     async linkGuest(guestId, userId) {

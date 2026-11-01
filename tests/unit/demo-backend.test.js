@@ -2,7 +2,7 @@
 // the real database for chat (the rules themselves are tested in
 // supabase/tests/chat.test.sql), and its chats must persist in the browser.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, createDemoBackend } from '@/api/demo';
+import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_TEAM_CODE, createDemoBackend } from '@/api/demo';
 
 const DB_KEY = 'jt_demo_db_v33';
 
@@ -893,5 +893,55 @@ describe('dues', () => {
     expect(await api.entities.DuesPayment.filter({ session: 1, user_id: me.id, paid: true })).toHaveLength(1);
     expect((await api.entities.TeamGuest.filter({ id: mike.id }))[0].linked_user_id).toBe(me.id);
     await expect(api.users.claimGuest(dana.id)).rejects.toThrow('already has a name');
+  });
+});
+
+// Same as the database's tell_captains_new_player() (supabase/tests/new_player_notice.test.sql).
+describe("a heads-up in the Captains' Lounge when someone new joins as Playing", () => {
+  const join = async (api, email, name, status) => {
+    await api.auth.signUp(email, 'demo1234');
+    await api.users.joinTeam(DEMO_TEAM_CODE);
+    const me = await api.auth.me();
+    await api.entities.PlayerProfile.create({ user_id: me.id, display_name: name, gender: 'F', status });
+    return me;
+  };
+  const headsUps = async (api) => {
+    const [lounge] = await api.entities.ChatThread.filter({ visibility: 'captains' });
+    return (await api.entities.Message.filter({ thread_id: lounge.id })).filter((m) => m.author_name === 'Roster');
+  };
+
+  it('tells captains once, naming the player and the session whose dues they now split', async () => {
+    const api = createDemoBackend();
+    await join(api, 'newbie@demo.test', 'Newbie Nguyen', 'active');
+    await api.users.tellCaptainsNewPlayer();
+    await api.users.tellCaptainsNewPlayer();
+    // Players don't see the Lounge.
+    expect(await api.entities.Message.filter({ author_name: 'Roster' })).toHaveLength(0);
+
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    const posts = await headsUps(api);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ user_id: null });
+    expect(posts[0].body).toMatch(
+      /^👋 Newbie Nguyen just joined and said they're Playing, so they now split session \d's dues\. If they're not playing, change their status on the Team page before people pay\.$/,
+    );
+  });
+
+  it("says nothing for someone who isn't Playing, picked a roster name, or isn't on the team", async () => {
+    const api = createDemoBackend();
+    await join(api, 'fan@demo.test', 'Frankie Fan', 'on_break');
+    await api.users.tellCaptainsNewPlayer();
+    await join(api, 'sub@demo.test', 'Sasha Sub', 'sub_pool');
+    await api.users.tellCaptainsNewPlayer();
+    // Mike picks his roster name, which a captain set to Playing.
+    await join(api, 'mike@demo.test', 'Mike Russo', 'active');
+    const [mike] = await api.entities.TeamGuest.filter({ display_name: 'Mike Russo' });
+    await api.users.claimGuest(mike.id);
+    await api.users.tellCaptainsNewPlayer();
+    await api.auth.signUp('outsider@demo.test', 'demo1234');
+    await expect(api.users.tellCaptainsNewPlayer()).rejects.toThrow('Join the team first');
+
+    await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+    expect(await headsUps(api)).toHaveLength(0);
   });
 });
