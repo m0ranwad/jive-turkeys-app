@@ -118,8 +118,8 @@ create temp table asked_sent as select * from public.session_ask_targets(2031, 2
 select sn_test.ok(sn_test.names(array(select subscription_id from asked_sent)) = '{lee,pat}',
   'to everyone asked: Active and sub pool (not the captain who asked, not with Game alerts off, not taken off the team, not before the team code)');
 select sn_test.ok(
-  (select bool_and(title = '📋 Playing session 2?'
-     and body = 'Session 2 starts ' || to_char(sn_test.today() + 30, 'Dy, Mon FMDD') || '. Tap to choose Playing, Available to sub or Unavailable.'
+  (select bool_and(title = 'Playing session 2?'
+     and body = 'Session 2 starts ' || to_char(sn_test.today() + 30, 'Dy, Mon FMDD') || '.'
      and url = '/') from asked_sent),
   'it says when the session starts and opens Schedule');
 select sn_test.ok((select count(*) = 0 from public.session_ask_targets(2031, 2, 'asked')), 'it goes out once');
@@ -164,9 +164,8 @@ create temp table reminder_sent as select * from public.session_ask_targets(2031
 select sn_test.ok(sn_test.names(array(select subscription_id from reminder_sent)) = '{kim,lee}',
   'the reminder goes to everyone asked who hasn''t answered, the captain who asked too');
 select sn_test.ok(
-  (select bool_and(title = '📋 Playing session 2?'
-     and body = 'Session 2 starts ' || to_char(sn_test.today() + 30, 'Dy, Mon FMDD')
-       || ' and you haven''t answered yet. Tap to choose Playing, Available to sub or Unavailable.'
+  (select bool_and(title = 'Playing session 2?'
+     and body = 'Session 2 starts ' || to_char(sn_test.today() + 30, 'Dy, Mon FMDD') || '. You haven''t answered yet.'
      and url = '/') from reminder_sent),
   'it says they haven''t answered yet');
 select sn_test.ok((select count(*) = 0 from public.session_ask_targets(2031, 2, 'reminder', sn_test.at(23, '12:10'))), 'it goes out once');
@@ -194,7 +193,7 @@ select sn_test.ok(sn_test.sent(3) = '{reminder}', 'then goes out');
 create temp table own_sent as select * from public.session_ask_targets(2031, 3, 'reminder', sn_test.at(1, '12:00'));
 select sn_test.ok(sn_test.names(array(select subscription_id from own_sent)) = '{kim,lee,pat}',
   'to everyone who hasn''t answered (the session''s list starts if nobody opened the site)');
-select sn_test.ok((select bool_and(body like 'Session 3 starts % and you haven''t answered yet.%') from own_sent), 'about session 3');
+select sn_test.ok((select bool_and(body like 'Session 3 starts %. You haven''t answered yet.') from own_sent), 'about session 3');
 
 -- Once its first game is played, nothing more.
 delete from public.session_ask_log where season_year = 2031 and session = 3;

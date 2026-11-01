@@ -82,8 +82,8 @@ the words and picks who gets each one (`game_reminder_targets`).
 
 | Rule | Checked by |
 |---|---|
-| A set time before kickoff (6 hours unless captains change it in Team Settings, or turn reminders off), Playing teammates who haven't answered get "Are you in?" with the day, time, opponent and field. Tapping it opens the game. | `[db]` `[unit]` |
-| When we're short then, only teammates **Available to sub** who haven't said IN or OUT get "We need subs", worded like the site ("We need 2 more players, including a girl, for …", "We need 2 more girls for …"). Once the open spots are full, only girls are asked, as in Call for subs: another guy would sit on the bench. If someone drops out later, up to kickoff, it goes out then. | `[db]` `[unit]` |
+| A set time before kickoff (6 hours unless captains change it in Team Settings, or turn reminders off), Playing teammates who haven't answered get "Are you in?": "Sat 7:30 PM vs Ball Busters. You haven't answered yet." (no field number: there are only two). Tapping it opens the game. | `[db]` `[unit]` |
+| When we're short then, only teammates **Available to sub** who haven't said IN or OUT get "Can you sub?", with the day, time and opponent and the shortage worded like the game page ("Sat 7:30 PM vs Ball Busters. We need 2 more, including a girl.", "… We need 2 more girls."). Once the open spots are full, only girls are asked, as in Call for subs: another guy would sit on the bench. If someone drops out later, up to kickoff, it goes out then. | `[db]` `[unit]` |
 | The headcount behind it is the site's: a girl in goal doesn't count toward the girls, roster names count, and captains' minimums apply. | `[db]` |
 | Each goes out once per game; none after kickoff or once there's a result; never to players who turned **Game alerts** off. | `[db]` |
 | Kickoff times are read the way captains type them ("19:00", "7:00 PM", "7pm"), in Eastern time; a game with no time gets no reminder. | `[db]` |
@@ -120,7 +120,7 @@ the date captains gave.
 
 | Rule | Checked by |
 |---|---|
-| When captains ask about a session, everyone on its list gets "📋 Playing session N?" with when it starts; not the captain who asked. Tapping it opens Schedule. Changing the date, or stopping and asking again, doesn't send it again. | `[db]` `[unit]` |
-| At noon (Eastern) a week before a session starts, anyone asked who hasn't answered gets a reminder: whenever the question is open, whether captains asked ahead or it opened on its own once the schedule was up. A timer (`pg_cron`, every 5 minutes, `session_asks_tick()`) sends it. | `[db]` |
+| When captains ask about a session, everyone on its list gets "Playing session N?" with when it starts ("Session 2 starts Sat, Jan 3."); not the captain who asked. Tapping it opens Schedule. Changing the date, or stopping and asking again, doesn't send it again. | `[db]` `[unit]` |
+| At noon (Eastern) a week before a session starts, anyone asked who hasn't answered gets a reminder (the same, plus "You haven't answered yet."): whenever the question is open, whether captains asked ahead or it opened on its own once the schedule was up. A timer (`pg_cron`, every 5 minutes, `session_asks_tick()`) sends it. | `[db]` |
 | If the question opens later than that, the reminder goes at the next chance between noon and 9 PM, at least a day after the "captains asked" one, and never on the first game's day. | `[db]` |
 | Each goes out once per session, only to players on the team who kept **Game alerts** on, never to anyone taken off the team or not yet in with the team code. Nothing once the first game is played. | `[db]` |

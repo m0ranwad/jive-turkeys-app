@@ -230,17 +230,17 @@ export function TeamPage() {
     const names = roster.filter((p) => p.guest).map((p) => p.display_name);
     await copyText(
       [
-        "🦃 You're on the Jive Turkeys roster! Join the team site:",
-        window.location.origin,
+        `Join the Jive Turkeys team site: ${window.location.origin}`,
+        // The words on the sign-up screens ("Find your name").
         joinCode
-          ? `Sign up with Google or email, enter the team code ${joinCode.code}, then pick your name from the list. Your spot and dues are already there.`
-          : 'Sign up with Google or email, then pick your name from the list. Your spot and dues are already there.',
+          ? `Sign up, enter team code ${joinCode.code}, then find your name on the list.`
+          : 'Sign up, then find your name on the list.',
         names.length ? `Still to join: ${names.join(', ')}` : '',
       ]
         .filter(Boolean)
         .join('\n'),
     );
-    toast({ title: 'Invite copied', description: "Text or email it to whoever hasn't joined. Once they're in, the team talks in Team Chat." });
+    toast({ title: 'Invite copied' });
   };
 
   const toggleCaptain = async (profile) => {

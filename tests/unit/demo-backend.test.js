@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_TEAM_CODE, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v33';
+const DB_KEY = 'jt_demo_db_v34';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -923,7 +923,7 @@ describe("a heads-up in the Captains' Lounge when someone new joins as Playing",
     expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({ user_id: null });
     expect(posts[0].body).toMatch(
-      /^👋 Newbie Nguyen just joined and said they're Playing, so they now split session \d's dues\. If they're not playing, change their status on the Team page before people pay\.$/,
+      /^Newbie Nguyen just joined as Playing, so session \d's dues are now split one more way\. If that's wrong, change their status on the Team page before people pay\.$/,
     );
   });
 

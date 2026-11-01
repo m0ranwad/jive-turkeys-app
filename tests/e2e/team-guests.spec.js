@@ -73,9 +73,9 @@ test('everyone sees players who have not joined yet in their status group, in th
   await page.getByRole('button', { name: 'Copy invite' }).click();
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
-  expect(invite).toContain("You're on the Jive Turkeys roster!");
-  expect(invite).toContain('enter the team code TURKEY, then pick your name from the list');
-  expect(invite).toContain('Still to join: Dana Wells, Mike Russo');
+  expect(invite).toMatch(
+    /^Join the Jive Turkeys team site: http:\/\/localhost:\d+\nSign up, enter team code TURKEY, then find your name on the list\.\nStill to join: Dana Wells, Mike Russo$/,
+  );
 });
 
 test('a captain adds several players at once, and they split the dues', async ({ page }) => {
