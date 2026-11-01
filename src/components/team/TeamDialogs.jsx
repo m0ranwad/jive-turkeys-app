@@ -33,7 +33,7 @@ export function PickPositionCard({ profile, onSaved }) {
     <div className="rounded-3xl border-2 border-lime-400 bg-lime-50 p-4">
       <h3 className="font-display text-sm font-extrabold uppercase tracking-[0.1em] text-lime-900">Pick your spot</h3>
       <p className="mt-1 text-xs font-medium text-lime-900/80">
-        Where do you like to play? You'll show up there on the field below, so the team knows your favorite spot. You can change it anytime on your profile.
+        Where do you like to play? You'll show up on the field below.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Select value={position || 'none'} onValueChange={(v) => setPosition(v === 'none' ? '' : v)}>
