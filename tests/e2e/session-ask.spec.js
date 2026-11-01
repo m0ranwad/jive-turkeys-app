@@ -90,18 +90,39 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await signIn(page);
   await openTab(page, '/team', 'Team');
   const card = page.getByTestId('session-ask');
-  await expect(card).toContainText('Playing session 3? · 4 of 14 answered');
-  await expect(card).toContainText('Mike Russo');
+  await expect(card).toContainText('Session 3');
+  await expect(card).toContainText('Asked ahead');
+  await expect(card).toContainText('Starts Sat, Nov 14');
+  await expect(card).toContainText('4 of 14 answered');
+  // Session 2 is still being answered, so session 3's names are folded away until tapped.
+  const show = card.getByRole('button', { name: /Waiting on 10/ });
+  await expect(show).toHaveAttribute('aria-expanded', 'false');
+  await expect(card.locator('[data-waiting]')).toHaveCount(0);
+  await show.click();
+  await expect(card.locator('[data-waiting]')).toHaveCount(10);
+  await expect(card.locator('[data-waiting="Mike Russo"]')).toContainText('Mike R.');
 
-  // Mike hasn't joined the site: a captain answers for him.
-  await card.getByRole('button', { name: 'Answer for someone' }).click();
-  const answers = page.getByRole('dialog', { name: 'Answers for session 3' });
-  await expect(answers).toContainText('Only session 3 changes');
-  await answers.getByLabel('Mike Russo in session 3').selectOption('active');
-  await answers.getByRole('button', { name: 'Save 1 change' }).click();
-  await expect(page.getByText('Session 3 updated')).toBeVisible();
+  // Mike hasn't joined the site: a captain taps his name and answers for him, with no dropdown.
+  await card.getByRole('button', { name: 'Answer for Mike Russo, not joined yet' }).click();
+  const mike = page.getByRole('dialog', { name: 'Mike Russo' });
+  await expect(mike).toContainText('Playing session 3?');
+  await expect(mike).toContainText("Starts Sat, Nov 14 · Hasn't joined the site");
+  await expect(mike.locator('select')).toHaveCount(0);
+  await mike.getByRole('button', { name: 'Playing', exact: true }).click();
+  await expect(page.getByText('Mike Russo: Playing for session 3')).toBeVisible();
   await expect(card).toContainText('5 of 14 answered');
   await expect(card).not.toContainText('Mike Russo');
+  // Only session 3 changed: session 2 still has Mike to answer.
+  await expect(page.getByTestId('session-answers')).toContainText('Mike Russo');
+
+  // Everyone's answers, to change any of them.
+  await card.getByRole('button', { name: 'See all answers' }).click();
+  const answers = page.getByRole('dialog', { name: 'Answers for session 3' });
+  await expect(answers).toContainText('Only session 3 changes');
+  await answers.getByLabel('Jordan Rivera in session 3').selectOption('sub_pool');
+  await answers.getByRole('button', { name: 'Save 1 change' }).click();
+  await expect(page.getByText('Session 3 updated')).toBeVisible();
+  await expect(card).toContainText('6 of 14 answered');
 
   await card.getByRole('button', { name: 'Change date' }).click();
   const ask = page.getByRole('dialog', { name: "Ask who's playing session 3" });
@@ -113,9 +134,9 @@ test('captains see the answers, answer for someone, change the date or stop aski
   await ask.getByLabel("First game's date").fill('2026-12-01');
   await ask.getByRole('button', { name: 'Ask the team' }).click();
   await expect(page.getByText("Asking who's playing session 3")).toBeVisible();
-  await expect(card).toContainText('starts Tue, Dec 1');
+  await expect(card).toContainText('Starts Tue, Dec 1');
   // The answers given before are kept.
-  await expect(card).toContainText('5 of 14 answered');
+  await expect(card).toContainText('6 of 14 answered');
 });
 
 test('stopping the question keeps future dues current and preserves explicit answers', async ({ page }) => {
@@ -237,7 +258,9 @@ test("between sessions, a captain's answer for someone is their status right now
   await signIn(page);
   await endSession2(page);
   await openTab(page, '/team', 'Team');
-  await page.getByTestId('session-ask').getByRole('button', { name: 'Answer for someone' }).click();
+  // Session 3 is the only one being asked, so its names show.
+  await expect(page.getByTestId('session-answers')).toHaveCount(0);
+  await page.getByTestId('session-ask').getByRole('button', { name: 'See all answers' }).click();
   const answers = page.getByRole('dialog', { name: 'Answers for session 3' });
   await expect(answers).toContainText("It's their status for session 3");
   await answers.getByLabel('Mike Russo in session 3').selectOption('sub_pool');
@@ -249,6 +272,14 @@ test("between sessions, a captain's answer for someone is their status right now
   await page.keyboard.press('Escape');
   const sam = await playerOptions(page, 'Sam Okafor');
   await expect(sam.getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+
+  // Tapping a name does the same for one teammate.
+  await page.getByTestId('session-ask').getByRole('button', { name: 'Answer for Taylor Brooks' }).click();
+  await page.getByRole('dialog', { name: 'Taylor Brooks' }).getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.getByText('Taylor Brooks: Unavailable for session 3')).toBeVisible();
+  const taylor = await playerOptions(page, 'Taylor Brooks');
+  await expect(taylor.getByRole('button', { name: 'Unavailable' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test("captains' new games go in the session they're asking about, with dates in the season's years", async ({ page }) => {
