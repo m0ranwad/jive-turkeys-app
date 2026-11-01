@@ -127,6 +127,7 @@ A room only captains see, built in (the database starts it). In the database it'
 | Every captain sees it in the room list (by latest activity, like every room), with a "C" armband icon and "Captains only · N captains"; a player made captain sees it from then, and a captain made a player again loses it. Players never see it, its messages or its unread count, and can't post or react in it. | `[db]` `[unit]` `[browser]` |
 | Nobody can rename, close or delete it (no **⋯** menu). Captains can delete any message in it, like in Team Chat. | `[db]` `[browser]` |
 | Its unread count adds to captains' Chat tab like Team Chat's, opened or not. | `[db]` `[unit]` |
+| The site posts in it as **Roster** when someone new joins as Playing while a session is open, so captains can catch a fan who tapped the wrong answer before people pay (the rule is in section 2 of `docs/dues.md`). It notifies like any Lounge message. | `[db]` `[unit]` `[browser]` |
 
 ## 5. Unread counts
 

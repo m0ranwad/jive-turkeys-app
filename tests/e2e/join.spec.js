@@ -1,4 +1,4 @@
-import { enterTeamCode, expect, expectTeam, notJoinedRows, test } from './helpers';
+import { chatTab, enterTeamCode, expect, expectTeam, message, messageRow, notJoinedRows, openRoom, test } from './helpers';
 
 test('a new player has to set up their profile, which puts them on the team', async ({ page }) => {
   await page.goto('/register');
@@ -216,3 +216,44 @@ async function finishAnswer(page, name) {
   await reloaded;
   await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
 }
+
+async function signOutAndInAsCaptain(page) {
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  // No chat tip or notifications offer in the way.
+  await page.evaluate(() => {
+    localStorage.setItem('jt_chat_tip_seen', '1');
+    localStorage.setItem('jt_push_prompt_dismissed', '1');
+  });
+  await page.locator('#email').fill('captain@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Log in' }).click();
+  await expect(page.getByRole('heading', { name: 'Schedule' })).toBeVisible();
+}
+
+test("captains get a heads-up in their Lounge when someone new joins as Playing, but not for a roster name's pick", async ({ page }) => {
+  await register(page, 'newbie@demo.test');
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await page.getByRole('button', { name: 'Female' }).click();
+  await finishProfile(page);
+
+  // Mike picks his roster name: a captain already set him to Playing, so there's nothing to check.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: /Sign out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await register(page, 'mike@demo.test');
+  await page.getByRole('button', { name: 'Mike Russo' }).click();
+  await finishProfile(page);
+
+  await signOutAndInAsCaptain(page);
+  await chatTab(page).click();
+  await openRoom(page, "Captains' Lounge");
+  const headsUp = message(page, 'Newbie Nguyen just joined');
+  await expect(headsUp).toContainText(
+    /Newbie Nguyen just joined and said they're Playing, so they now split session \d's dues\. If they're not playing, change their status on the Team page before people pay\./,
+  );
+  await expect(messageRow(page, 'Newbie Nguyen just joined')).toContainText('Roster');
+  await expect(message(page, 'Mike Russo just joined')).toHaveCount(0);
+});

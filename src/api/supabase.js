@@ -241,6 +241,14 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.rpc('claim_team_guest', { p_guest_id: guestId });
       if (error) fail(error);
     },
+    /**
+     * Right after signing up: a heads-up for captains in the Captains' Lounge if this player joined as
+     * Playing during a session. The database decides whether there's anything to say.
+     */
+    async tellCaptainsNewPlayer() {
+      const { error } = await supabase.rpc('tell_captains_new_player');
+      if (error) fail(error);
+    },
     /** Captains: link a roster name to the account its player joined with. */
     async linkGuest(guestId, userId) {
       const { error } = await supabase.rpc('link_team_guest', { p_guest_id: guestId, p_user_id: userId });
