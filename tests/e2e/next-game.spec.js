@@ -1,6 +1,6 @@
 // The Next game card at the top of Schedule: when and where, the headcount,
 // and your answer right there; answers from the upcoming games list; earlier
-// sessions folded away. docs/games.md lists the rules.
+// sessions and earlier seasons folded away. docs/games.md lists the rules.
 //
 // Sample data: the next game is vs Goal Diggers (6 IN, the captain hasn't
 // answered), then FC Lightning, in session 2; session 1 is over, and last season's game is older.
@@ -191,4 +191,26 @@ test('sessions before the last one are folded away until you open them', async (
   await expect(page.getByRole('heading', { name: /· Session 3$/ })).toHaveCount(0);
   await toggle.click();
   await expect(page.getByRole('heading', { name: /· Session 3$/ })).toBeVisible();
+});
+
+test("at the start of a season, last season's sessions are folded away", async ({ page }) => {
+  await signIn(page);
+  // A new season's first session, with last season's session 2 (the played games) and session 3 right before it.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    db.games.filter((g) => g.season_year === 2026).forEach((g) => {
+      if (g.session === 1) Object.assign(g, { season_year: 2025, session: 2 });
+      else g.session = 1;
+    });
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '2026–27 · Session 1' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^2025–26/ })).toHaveCount(0);
+  const toggle = page.getByRole('button', { name: 'Past sessions · 2' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(page.getByRole('heading', { name: '2025–26 · Session 3' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '2025–26 · Session 2' })).toBeVisible();
 });
