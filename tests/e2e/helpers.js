@@ -165,6 +165,11 @@ export async function enterTeamCode(page, code = 'TURKEY') {
   await page.getByRole('button', { name: 'Join the team' }).click();
 }
 
+/** Someone signing up who isn't a roster name says whether they're playing (nothing is picked for them). */
+export async function answerPlaying(page, answer = 'Playing') {
+  await page.getByRole('group', { name: 'Are you playing?' }).getByRole('button', { name: new RegExp(`^${answer}`) }).click();
+}
+
 /** A rare dues action, reached from the player's compact payment sheet. */
 export async function duesOption(sheet, name) {
   await sheet.getByRole('button', { name: 'More options', exact: true }).click();

@@ -2,7 +2,7 @@
 // accessibility basics (WCAG 2.1 A and AA): text contrast, names on buttons and
 // fields, and so on. A new screen or dialog should get a line here.
 import AxeBuilder from '@axe-core/playwright';
-import { duesOption, expect, openResult, openSection, PLAYER, signIn, test, whoTab } from './helpers';
+import { answerPlaying, duesOption, enterTeamCode, expect, openResult, openSection, PLAYER, signIn, test, whoTab } from './helpers';
 
 async function expectAccessible(page, screen) {
   // Check what's on screen once it has settled (not halfway through fading in).
@@ -45,6 +45,27 @@ test('the sign-in screens', async ({ page }) => {
 
   await visit(page, '/privacy', 'Privacy');
   await expectAccessible(page, 'Privacy');
+});
+
+test('joining the team: finding your name, and saying whether you are playing', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
+  await page.locator('#email').fill('newbie@demo.test');
+  await page.locator('#password').fill('demo1234');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await enterTeamCode(page);
+  await expect(page.getByText('Find your name.')).toBeVisible();
+  await expectAccessible(page, 'Join the team: roster names');
+
+  await page.getByRole('button', { name: "I'm not on the list" }).click();
+  await expect(page.getByRole('group', { name: 'Are you playing?' })).toBeVisible();
+  await expectAccessible(page, 'Join the team: your details');
+  await page.getByRole('button', { name: 'Start using the app' }).click();
+  await expect(page.getByText('Add your display name.')).toBeVisible();
+  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page, 'Just following along');
+  await expectAccessible(page, 'Join the team: answered');
 });
 
 test('resetting a password with a code from a captain', async ({ page }) => {

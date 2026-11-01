@@ -2,7 +2,7 @@
 // team, captains see and change it, and Copy invite includes it. The database
 // enforces it (supabase/tests/membership.test.sql). The sample data's code is
 // TURKEY; Nia Newcomer signed up earlier but hasn't entered it.
-import { enterTeamCode, expect, signIn, test } from './helpers';
+import { answerPlaying, enterTeamCode, expect, signIn, test } from './helpers';
 
 async function createAccount(page, email) {
   await page.goto('/register');
@@ -36,6 +36,7 @@ test('a new account enters the team code before it sees anything', async ({ page
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   // In, on the page they asked for.
   await expect(page.getByRole('heading', { name: 'Team', exact: true })).toBeVisible();
@@ -97,6 +98,7 @@ test('someone who already has an account is asked before making a second one', a
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan Rivera');
   await page.getByRole('button', { name: 'Female' }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const ask = page.getByTestId('already-on-site');
   await expect(ask).toContainText('Jordan Rivera has an account here already');
@@ -109,6 +111,7 @@ test('someone who already has an account is asked before making a second one', a
   await page.getByRole('button', { name: "I'm not on the list" }).click();
   await page.getByLabel('Display name').fill('Jordan R');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
+  await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const reloaded = page.waitForEvent('load');
   await page.getByTestId('already-on-site').getByRole('button', { name: "No, that's someone else" }).click();
