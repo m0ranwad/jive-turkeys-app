@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
+import { GifPicker } from './GifPicker';
 import { initials } from '@/lib/format';
 import { TEAM, mentionChoices, mentionQuery } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
@@ -11,10 +12,11 @@ const MAX_LENGTH = 2000;
 const keepTyping = (e) => e.preventDefault();
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
- * reply preview, and a list of teammates to @mention while typing a name after
- * @ (`people`, from mentionPeople(); @team too with `canMentionTeam`). With
- * `editing` (one of your messages), it holds that message's text and saves the
- * change instead of sending.
+ * GIF search (with `onSendGif`: tapping a GIF sends it, as a reply if one is
+ * being written), reply preview, and a list of teammates to @mention while
+ * typing a name after @ (`people`, from mentionPeople(); @team too with
+ * `canMentionTeam`). With `editing` (one of your messages), it holds that
+ * message's text and saves the change instead of sending.
  */
 export const Composer = forwardRef(function Composer(
   {
@@ -24,6 +26,7 @@ export const Composer = forwardRef(function Composer(
     replyName,
     onCancelReply,
     onSend,
+    onSendGif,
     editing,
     onCancelEdit,
     onSaveEdit,
@@ -35,6 +38,7 @@ export const Composer = forwardRef(function Composer(
 ) {
   const [draft, setDraft] = useState(() => chatDraft(me, room));
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
   const box = useRef(null);
 
   // The @mention list: shown while the cursor is in a name typed after @.
@@ -72,6 +76,7 @@ export const Composer = forwardRef(function Composer(
   const draftBeforeEdit = useRef('');
   useEffect(() => {
     if (!editing) return;
+    setGifOpen(false);
     draftBeforeEdit.current = chatDraft(me, room);
     setDraft(editing.body);
     requestAnimationFrame(() => {
@@ -195,7 +200,20 @@ export const Composer = forwardRef(function Composer(
           ))}
         </div>
       )}
-      {emojiOpen && !picking && (
+      {gifOpen && !editing && (
+        <GifPicker
+          onPick={(gif) => {
+            setGifOpen(false);
+            onSendGif(gif);
+          }}
+          onClose={() => {
+            setGifOpen(false);
+            box.current?.focus();
+          }}
+          className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 sm:right-auto sm:w-[26rem]"
+        />
+      )}
+      {emojiOpen && !picking && !gifOpen && (
         <EmojiPicker
           onPick={insertEmoji}
           keepFocus
@@ -242,7 +260,10 @@ export const Composer = forwardRef(function Composer(
       >
         <button
           type="button"
-          onClick={() => setEmojiOpen((open) => !open)}
+          onClick={() => {
+            setGifOpen(false);
+            setEmojiOpen((open) => !open);
+          }}
           onMouseDown={keepTyping}
           aria-label="Emoji"
           aria-pressed={emojiOpen}
@@ -253,6 +274,23 @@ export const Composer = forwardRef(function Composer(
         >
           <Smile className="h-6 w-6" />
         </button>
+        {onSendGif && !editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setEmojiOpen(false);
+              setGifOpen((open) => !open);
+            }}
+            aria-label="GIF"
+            aria-pressed={gifOpen}
+            className={cn(
+              '-ml-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
+              gifOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700',
+            )}
+          >
+            <span className="rounded-md border-2 border-current px-1 text-[11px] font-black leading-4 tracking-wide">GIF</span>
+          </button>
+        )}
         <textarea
           ref={box}
           rows={1}

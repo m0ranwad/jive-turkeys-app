@@ -111,6 +111,10 @@ test("the captain's screens", async ({ page }) => {
 
   await visit(page, '/banter?room=team', 'Team Chat');
   await expectAccessible(page, 'Team Chat');
+  await page.getByRole('button', { name: 'GIF', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Send GIF: Turkey dance' })).toBeVisible();
+  await expectAccessible(page, 'GIF search');
+  await page.getByRole('button', { name: 'Close GIF search' }).click();
 
   await visit(page, '/rules', 'Field Rules');
   await expectAccessible(page, 'Field Rules');

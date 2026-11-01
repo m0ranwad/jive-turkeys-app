@@ -57,9 +57,11 @@ export function clearChatLocal() {
 
 /** Reuse the same ID on every attempt, including when a saved message's response was lost. */
 export async function sendChatMessage(api, message) {
-  const { id, user_id, author_name, body, thread_id, reply_to_id, mentions, mentions_team } = message;
+  const { id, user_id, author_name, body, thread_id, reply_to_id, mentions, mentions_team, attachments } = message;
   try {
-    return await api.entities.Message.create({ id, user_id, author_name, body, thread_id, reply_to_id, mentions, mentions_team });
+    return await api.entities.Message.create({
+      id, user_id, author_name, body, thread_id, reply_to_id, mentions, mentions_team, ...(attachments && { attachments }),
+    });
   } catch (error) {
     try {
       const [saved] = await api.entities.Message.filter({ id, user_id });

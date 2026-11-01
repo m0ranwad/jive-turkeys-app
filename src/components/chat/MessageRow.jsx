@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { Copy, CornerUpLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
-import { QUICK_REACTIONS, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
+import { QUICK_REACTIONS, gifOf, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
 import { initials, shortName } from '@/lib/format';
 import { TEAM, mentionParts } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
@@ -74,7 +74,8 @@ export function MessageRow({
   onJumpTo,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const big = isEmojiOnly(m.body);
+  const gif = gifOf(m);
+  const big = !gif && isEmojiOnly(m.body);
 
   const bubble = cn(
     'rounded-[20px] px-3.5 py-2 text-[15px] font-medium leading-snug md:text-sm',
@@ -138,19 +139,35 @@ export function MessageRow({
               }
             }}
             aria-expanded={selected}
+            aria-label={gif ? `GIF${gif.title ? `: ${gif.title}` : ''}` : undefined}
             className={cn(
               'max-w-full cursor-pointer text-left outline-none transition focus-visible:ring-2 focus-visible:ring-lime-400',
-              big ? 'px-1 text-4xl leading-tight' : bubble,
+              gif ? 'overflow-hidden rounded-[20px] bg-zinc-100' : big ? 'px-1 text-4xl leading-tight' : bubble,
               selected && (big ? 'rounded-2xl bg-lime-100' : 'ring-2 ring-lime-400 ring-offset-1'),
               highlighted && 'ring-2 ring-amber-300 ring-offset-1',
               m.pending && !m.failed && 'opacity-60',
               m.failed && 'ring-1 ring-red-300',
             )}
           >
-            <span className="whitespace-pre-wrap break-words">
-              <Body message={m} mine={mine && !big} me={me} people={people} />
-            </span>
-            {m.edited_date && (
+            {gif ? (
+              // About 240px wide at most, keeping its shape so the chat doesn't jump as it loads.
+              <img
+                src={gif.url}
+                alt=""
+                width={gif.width}
+                height={gif.height}
+                loading="lazy"
+                decoding="async"
+                data-gif
+                className="block h-auto max-w-full"
+                style={{ width: `${Math.min(gif.width, 240)}px`, aspectRatio: `${gif.width} / ${gif.height}` }}
+              />
+            ) : (
+              <span className="whitespace-pre-wrap break-words">
+                <Body message={m} mine={mine && !big} me={me} people={people} />
+              </span>
+            )}
+            {m.edited_date && !gif && (
               <span className={cn('ml-1.5 align-baseline text-[11px] font-semibold', big ? 'text-zinc-500' : 'opacity-75')}>edited</span>
             )}
           </div>
@@ -240,7 +257,7 @@ export function MessageRow({
           )}
           <div className="flex gap-1.5">
             <ActionButton icon={CornerUpLeft} label="Reply" onClick={() => onReply(m)} />
-            <ActionButton icon={Copy} label="Copy" onClick={() => onCopy(m)} />
+            {!gif && <ActionButton icon={Copy} label="Copy" onClick={() => onCopy(m)} />}
             {canEdit && <ActionButton icon={Pencil} label="Edit" onClick={() => onEdit(m)} />}
             {canDelete && <ActionButton icon={Trash2} label="Delete" danger onClick={() => onDelete(m)} />}
           </div>

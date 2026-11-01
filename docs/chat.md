@@ -65,7 +65,7 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | Reactions show under the message with a count. Yours are highlighted. Tapping a reaction adds or removes yours. The options list who reacted with what. | `[browser]` `[unit]` |
 | One of each emoji per player per message. You can only add or remove your own reactions; captains can also remove others'. | `[db]` |
 | **Reply** quotes the message above yours ("Replying to Jordan R." while typing, Esc or ✕ cancels). Tapping the quote jumps to the original and flashes it. If the original was deleted, the quote says "Original message was deleted". | `[browser]` `[db]` |
-| **Copy** copies the text. | `[browser]` |
+| **Copy** copies the text (not on a GIF; see section 8). | `[browser]` |
 | **Delete** (after a confirm) removes the message for everyone, with its reactions. Replies to it stay. Players see Delete only on their own messages; captains on every message, except in private chats, where everyone deletes only their own. The database enforces the same. | `[browser]` `[db]` |
 | **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Editing the latest message also updates the room-list preview, for the sender and live viewers. Older edits do not replace the latest message's preview. | `[browser]` `chat-recovery.spec.js` |
@@ -208,6 +208,24 @@ The sending keys (VAPID) are created once by `.github/workflows/functions.yml` a
 secrets. They're never in the code. Never replace them: every phone that turned notifications on would
 stop getting them until the player turns them on again.
 
+## 8. GIFs
+
+The **GIF** button beside the emoji button in the message box searches GIFs from KLIPY (Tenor, Google's
+free GIF service, shut down for apps in June 2026; GIPHY's free plan is for testing only). The search goes
+through the chat's Supabase function (`notify-chat`, `{ action: 'gifs' }`, `supabase/functions/_shared/gifs.js`),
+so the KLIPY key stays on the server as the `KLIPY_API_KEY` function secret. KLIPY's partner panel sets what
+it shows: PG-13. Previews find a few pretend GIFs (`public/demo-gifs/`, `DEMO_GIFS` in `src/api/demo.js`).
+
+| Expected behavior | Checked by |
+|---|---|
+| Opening the GIF search shows what's trending; typing searches (after a short pause), with **More GIFs** while there are more. It says "Powered by KLIPY". Close (✕ or Escape) sends nothing. The GIF button is hidden while editing a message. | `[browser]` `chat-gifs.spec.js` |
+| Tapping a GIF sends it right away, as a reply when you were replying. It shows in the chat about 240px wide at most, keeping its shape. | `[browser]` `chat-gifs.spec.js` |
+| A GIF message says "GIF": the room list, reply quotes, search and its notification ("Jordan R.: GIF") show that. | `[unit]` |
+| A GIF can be replied to, reacted to and deleted like any message, but not edited or copied, and the GIF can't be swapped after it's sent. | `[browser]` `[db]` `[unit]` |
+| Only one GIF per message, only from KLIPY's servers (`https://*.klipy.com/`), with its size: the database refuses anything else (`chat_attachments_ok()`), so a message can't make phones load from another site. `public/_headers` lets pages show images from `*.klipy.com`. | `[db]` `[unit]` |
+| Only signed-in teammates can search. Nothing about the player goes to KLIPY with a search; showing a GIF loads it from KLIPY's servers. | `[unit]` `tests/unit/gifs.test.js` |
+| Until a co-owner adds the KLIPY key, the search says "GIF search isn't turned on yet." If KLIPY can't be reached it says "Couldn't load GIFs. Check your signal and try again." with **Try again**. | `[unit]` `[browser]` |
+
 ## What automation can't check (try these by hand before relying on a big chat change)
 
 The browser tests run in demo mode, so they can't cover real-time delivery between two people, the real
@@ -247,6 +265,9 @@ devices signed in as different players:
    up on the other device without a refresh, with a lock, and their phone gets a notification for its first
    message. A third player (or a captain) who isn't in it doesn't see it. Leave it on one device: it disappears
    there, and the other still sees the messages.
+11. GIFs (after a change to them, and once after the KLIPY key is added): tap **GIF**, search for something and
+   send one. It shows on the other device without a refresh and plays there too, and the notification says
+   "GIF".
 
 ## Running the tests
 
