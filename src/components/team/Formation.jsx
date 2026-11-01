@@ -24,7 +24,7 @@ function PlayerChip({ player }) {
   );
 }
 
-/** Pitch diagram with everyone at their preferred position. */
+/** Pitch diagram with everyone at their preferred position. The Team page leaves out Unavailable players. */
 export function Formation({ players = [] }) {
   const floaters = players.filter((p) => !p.position);
   const placed = players.filter((p) => p.position);
