@@ -269,8 +269,8 @@ export function Walkthrough({ open, needsProfile, profile, onClose }) {
                   <div className="mt-5">
                     {retry && (
                       <p className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-950" role="alert" data-testid="name-taken">
-                        There's already a {retry.taken} on the team. Add a middle initial or spell out your last name so
-                        teammates can tell you apart.
+                        There's already a {retry.taken} on the team. Add your last name or an initial so teammates can tell
+                        you apart.
                       </p>
                     )}
                     <ProfileForm

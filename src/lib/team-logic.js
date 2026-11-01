@@ -283,13 +283,6 @@ export function sameName(a, b) {
 }
 
 /**
- * A first name alone, when we ask for a full name: "Fuzzy" could be anyone. `saved` is the name already
- * on the player's profile; a one-word name from before full names were asked stays until its owner
- * changes it.
- */
-export const needsLastName = (name, saved = null) => nameWords(name).length < 2 && (saved == null || name.trim() !== saved.trim());
-
-/**
  * The account a roster name's player probably joined with, or null: a name like
  * it, on an account that hasn't picked a roster name, and not one a captain
  * already took this name off (`links` are team_guest_links rows).

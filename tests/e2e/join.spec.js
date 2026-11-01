@@ -15,14 +15,10 @@ test('a new player has to set up their profile, which puts them on the team', as
 
   // Not one of the names the captain put on the roster.
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  // Full name and gender, and a phone number if they like, so teammates can tap to call.
+  // Name and gender, and a phone number if they like, so teammates can tap to call. All of it stays on the team.
   await expect(page.getByText('Only your teammates can see any of this.')).toBeVisible();
   await expect(page.getByLabel('Phone (optional)')).toBeVisible();
   await expect(page.getByLabel('Year joined (optional)')).toHaveCount(0);
-  // A first name alone ("Fuzzy" could be anyone) isn't enough.
-  await page.getByLabel('Full name').fill('Newbie');
-  await page.getByRole('button', { name: 'Start using the app' }).click();
-  await expect(page.getByText('Add your last name too, so teammates know who you are.')).toBeVisible();
   await page.getByLabel('Full name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   // Whether they're playing is asked, with nothing picked for them: a fan shouldn't split the dues by accident.
@@ -206,13 +202,13 @@ test('once every name is picked, new players go straight to their profile', asyn
 test('a new player who types their name instead of picking it is asked if that is them', async ({ page }) => {
   await register(page, 'dana@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Full name').fill('Dana W');
+  await page.getByLabel('Full name').fill('Dana');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const ask = page.getByTestId('is-that-you');
   await expect(ask).toContainText('Dana Wells is already on the roster');
-  await expect(ask).toContainText('you keep the name Dana W.');
+  await expect(ask).toContainText('you keep the name Dana');
   const reloaded = page.waitForEvent('load');
   await ask.getByRole('button', { name: "Yes, I'm Dana Wells" }).click();
   await reloaded;
@@ -242,7 +238,7 @@ test('someone else with the same first name can say so', async ({ page }) => {
   await expect(page).toHaveURL(/\/login$/);
   await register(page, 'mike2@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Full name').fill('Mike R');
+  await page.getByLabel('Full name').fill('Mike');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();

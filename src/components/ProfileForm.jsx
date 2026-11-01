@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POSITIONS } from '@/lib/constants';
-import { needsLastName } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
 // Asked at sign-up of someone who isn't a roster name, with nothing picked in advance: a fan or a
@@ -38,10 +37,6 @@ export function ProfileForm({
   const submit = async (e) => {
     e.preventDefault();
     if (!form.display_name.trim()) return setError('Add your full name.');
-    // A name already saved on a profile (`initial.id`) can stay; a roster name being picked is new.
-    if (needsLastName(form.display_name, initial?.id ? initial.display_name : null)) {
-      return setError('Add your last name too, so teammates know who you are.');
-    }
     if (!form.gender) return setError("Pick male or female. It's only used for the coed rules.");
     if (askStatus && !form.status) return setError("Pick whether you're playing.");
     setError('');
