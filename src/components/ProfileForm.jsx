@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils';
 // Asked at sign-up of someone who isn't a roster name, with nothing picked in advance: a fan or a
 // partner who signs up to follow along shouldn't land in the dues split without knowing it.
 const JOIN_STATUSES = [
-  { value: 'active', label: 'Playing', hint: 'On the team this session. You split the dues.' },
-  { value: 'sub_pool', label: 'Available to sub', hint: "We'll ask when we're short." },
-  { value: 'on_break', label: 'Just following along', hint: "Fan, partner or friend. You'll show as Unavailable and won't split the dues." },
+  { value: 'active', label: 'Playing', hint: "You're on the team this session and split the dues." },
+  { value: 'sub_pool', label: 'Available to sub', hint: "We'll ask you when we're short a player." },
+  { value: 'on_break', label: 'Just following along', hint: "Fan, partner or friend. You won't split the dues." },
 ];
 
 export function ProfileForm({
@@ -36,8 +36,8 @@ export function ProfileForm({
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.display_name.trim()) return setError('Add your display name.');
-    if (!form.gender) return setError("Pick male or female — it's only used for coed headcount.");
+    if (!form.display_name.trim()) return setError('Add your full name.');
+    if (!form.gender) return setError("Pick male or female. It's only used for the coed rules.");
     if (askStatus && !form.status) return setError("Pick whether you're playing.");
     setError('');
     try {
@@ -57,12 +57,13 @@ export function ProfileForm({
   return (
     <form onSubmit={submit} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor={`${id}-display_name`}>Display name</Label>
+        <Label htmlFor={`${id}-display_name`}>Full name</Label>
         <Input
           id={`${id}-display_name`}
           value={form.display_name}
           onChange={(e) => set({ display_name: e.target.value })}
-          placeholder="What the team calls you"
+          placeholder="First and last"
+          autoComplete="name"
         />
       </div>
 
@@ -89,7 +90,7 @@ export function ProfileForm({
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500">For coed headcounts.</p>
+        <p className="text-xs text-zinc-500">Only used for the coed rules.</p>
       </div>
 
       {askStatus && (
@@ -128,7 +129,7 @@ export function ProfileForm({
             onChange={(e) => set({ phone: e.target.value })}
             placeholder="(555) 555-5555"
           />
-          <p className="text-xs text-zinc-500">Only teammates see this.</p>
+          <p className="text-xs text-zinc-500">Teammates can tap to call you. No one else sees it.</p>
         </div>
         {!hidePosition && (
           <div className="space-y-2">

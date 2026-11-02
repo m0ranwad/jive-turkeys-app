@@ -270,7 +270,7 @@ test('when someone signs up twice, captains see it and can move the roster spot 
   // Kelly makes a second account and says she isn't the Kelly already on the site.
   await register(page, 'kelly.again@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Kelly M.');
+  await page.getByLabel('Full name').fill('Kelly M.');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -316,7 +316,7 @@ test('two different people with names alike: the second adds a last name if need
   // Another Kelly joins and types "Kelly Moss", the same as a teammate's name.
   await register(page, 'kelly.two@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Kelly Moss');
+  await page.getByLabel('Full name').fill('Kelly Moss');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -324,9 +324,9 @@ test('two different people with names alike: the second adds a last name if need
   await expect(page.getByTestId('name-taken')).toContainText(
     "There's already a Kelly Moss on the team. Add your last name or an initial so teammates can tell you apart.",
   );
-  await expect(page.getByLabel('Display name')).toHaveValue('Kelly Moss');
+  await expect(page.getByLabel('Full name')).toHaveValue('Kelly Moss');
   // Just "Kelly" isn't anyone's name: she's asked once more if she's the Kelly on the site, then joins.
-  await page.getByLabel('Display name').fill('Kelly');
+  await page.getByLabel('Full name').fill('Kelly');
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const reloaded = page.waitForEvent('load');
   await notThem(page);

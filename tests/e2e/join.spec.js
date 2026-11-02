@@ -15,10 +15,11 @@ test('a new player has to set up their profile, which puts them on the team', as
 
   // Not one of the names the captain put on the roster.
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  // Name and gender, and a phone number if they like, so captains can tap to call.
+  // Name and gender, and a phone number if they like, so teammates can tap to call. All of it stays on the team.
+  await expect(page.getByText('Only your teammates can see any of this.')).toBeVisible();
   await expect(page.getByLabel('Phone (optional)')).toBeVisible();
   await expect(page.getByLabel('Year joined (optional)')).toHaveCount(0);
-  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await page.getByLabel('Full name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   // Whether they're playing is asked, with nothing picked for them: a fan shouldn't split the dues by accident.
   const playing = page.getByRole('group', { name: 'Are you playing?' });
@@ -49,7 +50,7 @@ test('a fan or partner who signs up to follow along does not split the dues', as
   await enterTeamCode(page);
 
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Frankie Fan');
+  await page.getByLabel('Full name').fill('Frankie Fan');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
   await answerPlaying(page, 'Just following along');
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -89,7 +90,7 @@ test('a new player picks their name on the roster, and their spot and dues come 
   await expect(page.getByText('Find your name.')).toBeVisible();
   await page.getByRole('button', { name: 'Mike Russo' }).click();
   await expect(page.getByText("You're joining as Mike Russo.")).toBeVisible();
-  await expect(page.getByLabel('Display name')).toHaveValue('Mike Russo');
+  await expect(page.getByLabel('Full name')).toHaveValue('Mike Russo');
   // Finishing the profile reloads the page; wait for that before moving on.
   const reloaded = page.waitForEvent('load');
   await page.getByRole('button', { name: 'Start using the app' }).click();
@@ -164,12 +165,12 @@ test('a new player who taps the wrong name, or says they are not on the list, ca
   await expect(page.getByText('Find your name.')).toBeVisible();
 
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await expect(page.getByLabel('Display name')).toHaveValue('');
-  await page.getByRole('button', { name: 'Back to the names' }).click();
+  await expect(page.getByLabel('Full name')).toHaveValue('');
+  await page.getByRole('button', { name: 'Back to the list' }).click();
   await page.getByRole('button', { name: 'Dana Wells' }).click();
-  await expect(page.getByLabel('Display name')).toHaveValue('Dana Wells');
+  await expect(page.getByLabel('Full name')).toHaveValue('Dana Wells');
   // What the captain entered can still be corrected.
-  await page.getByLabel('Display name').fill('Dana W.');
+  await page.getByLabel('Full name').fill('Dana W.');
   await finishProfile(page);
 
   await page.locator('a[href="/team"]:visible').first().click();
@@ -193,20 +194,20 @@ test('once every name is picked, new players go straight to their profile', asyn
   }
 
   await register(page, 'latecomer@demo.test');
-  await expect(page.getByLabel('Display name')).toBeVisible();
+  await expect(page.getByLabel('Full name')).toBeVisible();
   await expect(page.getByText('Find your name.')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Back to the names' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Back to the list' })).toHaveCount(0);
 });
 
 test('a new player who types their name instead of picking it is asked if that is them', async ({ page }) => {
   await register(page, 'dana@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Dana');
+  await page.getByLabel('Full name').fill('Dana');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
   const ask = page.getByTestId('is-that-you');
-  await expect(ask).toContainText('Your captain put Dana Wells on the roster');
+  await expect(ask).toContainText('Dana Wells is already on the roster');
   await expect(ask).toContainText('you keep the name Dana');
   const reloaded = page.waitForEvent('load');
   await ask.getByRole('button', { name: "Yes, I'm Dana Wells" }).click();
@@ -225,7 +226,7 @@ test('a new player who types their name instead of picking it is asked if that i
 test('someone else with the same first name can say so', async ({ page }) => {
   await register(page, 'mikey@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Mike Rossi');
+  await page.getByLabel('Full name').fill('Mike Rossi');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
   await answerPlaying(page);
   // "Mike Rossi" isn't "Mike Russo": no question.
@@ -237,11 +238,11 @@ test('someone else with the same first name can say so', async ({ page }) => {
   await expect(page).toHaveURL(/\/login$/);
   await register(page, 'mike2@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Mike');
+  await page.getByLabel('Full name').fill('Mike');
   await page.getByRole('button', { name: 'Male', exact: true }).click();
   await answerPlaying(page);
   await page.getByRole('button', { name: 'Start using the app' }).click();
-  await expect(page.getByTestId('is-that-you')).toContainText('Your captain put Mike Russo on the roster');
+  await expect(page.getByTestId('is-that-you')).toContainText('Mike Russo is already on the roster');
   await finishAnswer(page, "No, that's someone else");
   // Mike Russo is still waiting for his own sign-up.
   await page.locator('a[href="/team"]:visible').first().click();
@@ -275,7 +276,7 @@ async function signOutAndInAsCaptain(page) {
 test("captains get a heads-up in their Lounge when someone new joins as Playing, but not for a roster name's pick", async ({ page }) => {
   await register(page, 'newbie@demo.test');
   await page.getByRole('button', { name: "I'm not on the list" }).click();
-  await page.getByLabel('Display name').fill('Newbie Nguyen');
+  await page.getByLabel('Full name').fill('Newbie Nguyen');
   await page.getByRole('button', { name: 'Female' }).click();
   await answerPlaying(page);
   await finishProfile(page);
