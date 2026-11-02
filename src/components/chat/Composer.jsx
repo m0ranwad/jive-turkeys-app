@@ -40,6 +40,25 @@ export const Composer = forwardRef(function Composer(
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
   const box = useRef(null);
+  const wrap = useRef(null);
+
+  // The room above the message box, up to the top of the chat, so the GIF search, emoji picker and @ list
+  // open within it. With a phone's keyboard up there can be little, and the GIF search box (at the top of
+  // its panel) used to end up above the screen.
+  const [above, setAbove] = useState(null);
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    const chat = el?.parentElement;
+    if (!chat || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = () => setAbove(Math.round(el.getBoundingClientRect().top - chat.getBoundingClientRect().top));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(chat);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // Each opens 8px above the box (mb-2) and stops 8px short of the top.
+  const fitAbove = above == null ? undefined : Math.max(0, above - 16);
 
   // The @mention list: shown while the cursor is in a name typed after @.
   const [caret, setCaret] = useState(null);
@@ -162,12 +181,13 @@ export const Composer = forwardRef(function Composer(
   };
 
   return (
-    <div className="relative border-t border-black/5 bg-white p-2.5">
+    <div ref={wrap} className="relative border-t border-black/5 bg-white p-2.5">
       {picking && (
         <div
           id={`mentions-${room}`}
           role="listbox"
           aria-label="Mention a teammate"
+          style={fitAbove == null ? undefined : { maxHeight: `min(13rem, ${fitAbove}px)` }}
           className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 max-h-52 overflow-y-auto overscroll-contain rounded-3xl border border-black/5 bg-white p-1.5 shadow-xl sm:right-auto sm:w-80"
         >
           {choices.map((choice, i) => (
@@ -210,6 +230,7 @@ export const Composer = forwardRef(function Composer(
             setGifOpen(false);
             box.current?.focus();
           }}
+          maxHeight={fitAbove}
           className="absolute bottom-full left-2.5 right-2.5 z-10 mb-2 sm:right-auto sm:w-[26rem]"
         />
       )}
@@ -217,6 +238,7 @@ export const Composer = forwardRef(function Composer(
         <EmojiPicker
           onPick={insertEmoji}
           keepFocus
+          maxHeight={fitAbove}
           className="absolute bottom-full left-2.5 right-2.5 mb-2 sm:right-auto sm:w-96"
         />
       )}

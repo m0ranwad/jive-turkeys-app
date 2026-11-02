@@ -11,9 +11,10 @@ const LOAD_FAILED = "Couldn't load GIFs. Check your signal and try again.";
  * The GIF search (the GIF button in the message box): what's trending until you
  * type, then GIFs for your words. Tapping one sends it right away (`onPick`).
  * Searches go through the site's server to KLIPY (api.chat.gifs()); previews show
- * pretend GIFs. docs/chat.md section 8.
+ * pretend GIFs. docs/chat.md section 8. With `maxHeight` (the room above the
+ * message box), only the GIFs shrink, so the search box always shows.
  */
-export function GifPicker({ onPick, onClose, className }) {
+export function GifPicker({ onPick, onClose, maxHeight, className }) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState({ status: 'loading', gifs: [], more: false, page: 1, ready: true });
   const [attempt, setAttempt] = useState(0);
@@ -50,9 +51,10 @@ export function GifPicker({ onPick, onClose, className }) {
     <div
       role="region"
       aria-label="GIF search"
+      style={maxHeight == null ? undefined : { maxHeight }}
       className={cn('flex flex-col rounded-2xl border border-black/5 bg-white p-2 shadow-lg', className)}
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-black/10 bg-zinc-50 px-3 focus-within:border-lime-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-lime-200">
           <Search className="h-4 w-4 shrink-0 text-zinc-500" />
           <input
@@ -78,7 +80,8 @@ export function GifPicker({ onPick, onClose, className }) {
         </button>
       </div>
 
-      <div className="mt-2 max-h-64 min-h-28 overflow-y-auto overscroll-contain sm:max-h-72" aria-busy={status === 'loading'}>
+      {/* One height whatever it shows, so the search box doesn't move while you type. */}
+      <div className="mt-2 h-64 min-h-0 overflow-y-auto overscroll-contain sm:h-72" aria-busy={status === 'loading'}>
         {status === 'loading' && !gifs.length ? (
           <p className="flex items-center justify-center gap-2 py-8 text-sm font-semibold text-zinc-500">
             <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" /> Loading GIFs…
@@ -137,7 +140,7 @@ export function GifPicker({ onPick, onClose, className }) {
           </>
         )}
       </div>
-      <p className="mt-1.5 text-right text-[11px] font-semibold text-zinc-500">Powered by KLIPY</p>
+      <p className="mt-1.5 shrink-0 text-right text-[11px] font-semibold text-zinc-500">Powered by KLIPY</p>
     </div>
   );
 }

@@ -182,12 +182,15 @@ function useChatViewport(ref, ready) {
   // While it's pinned above the keyboard, a swipe on the chat scrolls only what's under the finger (the
   // messages, a long message being typed, the @ list or the emoji picker). iPhones otherwise slide the page
   // behind, and the chat with it, when a swipe starts on the room name or around the message box.
+  // A finger moving in a text box is left alone: that's how iPhones move the cursor (press and drag) and
+  // stretch a selection, and stopping it made both nearly impossible in a short message.
   const pinned = !!box?.keyboard;
   useEffect(() => {
     const el = ref.current;
     if (!pinned || !el) return undefined;
     const hold = (e) => {
-      if (e.touches.length === 1 && !scrollsUnder(e.target, el)) e.preventDefault();
+      if (e.touches.length !== 1 || e.target.closest?.('textarea, input, [contenteditable]')) return;
+      if (!scrollsUnder(e.target, el)) e.preventDefault();
     };
     el.addEventListener('touchmove', hold, { passive: false });
     return () => el.removeEventListener('touchmove', hold);
