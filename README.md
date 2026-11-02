@@ -40,7 +40,8 @@ There are no required approvals: changes go live without review, as they did in 
 - Destructive database changes are blocked.
 - Row-level security still governs who can see and edit what.
 
-The other co-owner can work the same way, or locally with Claude Code.
+The other co-owner can work the same way, or locally with Claude Code. Developers joining the project:
+start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Where everything lives
 
