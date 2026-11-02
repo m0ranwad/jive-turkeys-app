@@ -2,12 +2,18 @@ import { useState } from 'react';
 import { EMOJI_GROUPS } from '@/lib/chat';
 import { cn } from '@/lib/utils';
 
-/** A small built-in emoji grid (phones also have their own emoji keyboard). */
-export function EmojiPicker({ onPick, keepFocus, className }) {
+/**
+ * A small built-in emoji grid (phones also have their own emoji keyboard). With
+ * `maxHeight`, only the emojis shrink, so the row of groups always shows.
+ */
+export function EmojiPicker({ onPick, keepFocus, maxHeight, className }) {
   const [group, setGroup] = useState(0);
   return (
-    <div className={cn('rounded-2xl border border-black/5 bg-white p-2 shadow-lg', className)}>
-      <div className="flex gap-1 border-b border-black/5 pb-1.5">
+    <div
+      style={maxHeight == null ? undefined : { maxHeight }}
+      className={cn('flex flex-col rounded-2xl border border-black/5 bg-white p-2 shadow-lg', className)}
+    >
+      <div className="flex shrink-0 gap-1 border-b border-black/5 pb-1.5">
         {EMOJI_GROUPS.map((g, i) => (
           <button
             key={g.label}
@@ -28,7 +34,7 @@ export function EmojiPicker({ onPick, keepFocus, className }) {
           {EMOJI_GROUPS[group].label}
         </span>
       </div>
-      <div className="grid max-h-44 grid-cols-8 gap-0.5 overflow-y-auto overscroll-contain pt-1.5 sm:grid-cols-10">
+      <div className="grid max-h-44 min-h-0 grid-cols-8 gap-0.5 overflow-y-auto overscroll-contain pt-1.5 sm:grid-cols-10">
         {EMOJI_GROUPS[group].emojis.map((emoji) => (
           <button
             key={emoji}

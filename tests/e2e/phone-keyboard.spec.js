@@ -124,3 +124,56 @@ test("with the keyboard up, a swipe on the room name doesn't slide the chat, and
   await page.evaluate(() => window.keyboard(0));
   expect(await swipeStopped(roomName)).toBe(false);
 });
+
+test('with the keyboard up, a finger moving in the message box is left to the phone (moving the cursor, selecting)', async ({ page }) => {
+  // iPhones move the cursor with a press and drag, and stretch a selection by dragging its ends.
+  const box = composer(page);
+  await box.click();
+  await page.evaluate(() => window.keyboard(330));
+  await box.fill('Running late');
+  expect(await swipeStopped(box)).toBe(false);
+  expect(await swipeStopped(page.getByRole('button', { name: 'Send' })), 'around the box, a swipe still stays put').toBe(true);
+
+  await page.getByRole('button', { name: 'GIF', exact: true }).click();
+  expect(await swipeStopped(page.getByRole('searchbox', { name: 'Search GIFs' }))).toBe(false);
+});
+
+/** Inside the part of the screen above the keyboard, and not cut off by the edge of the chat. */
+async function expectShown(locator, area) {
+  await expectInside(locator, area);
+  const chat = await locator.page().locator('[data-chat-shell] section').boundingBox();
+  const box = await locator.boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(chat.y);
+}
+
+// A small iPhone in Safari: the keyboard and its bars leave about 280px of the page.
+const SMALL_PHONE_KEYBOARD = 560;
+
+test('with the keyboard up on a small phone, the GIF search box stays on screen above the GIFs', async ({ page }) => {
+  await page.getByRole('button', { name: 'GIF', exact: true }).click();
+  const search = page.getByRole('searchbox', { name: 'Search GIFs' });
+  await expect(search).toBeFocused();
+  await page.evaluate((height) => window.keyboard(height), SMALL_PHONE_KEYBOARD);
+
+  const area = await visibleArea(page);
+  await expectShown(search, area);
+  await expectShown(page.getByRole('button', { name: 'Close GIF search' }), area);
+  await search.pressSequentially('goal');
+  const gif = page.getByRole('button', { name: 'Send GIF: Goal!' });
+  await expect(gif).toBeVisible();
+  await expectShown(gif, area);
+  await expectInside(composer(page), area);
+});
+
+test('with the keyboard up on a small phone, the emoji picker fits with its row of groups', async ({ page }) => {
+  const box = composer(page);
+  await box.click();
+  await page.evaluate((height) => window.keyboard(height), SMALL_PHONE_KEYBOARD);
+  await page.getByRole('button', { name: 'Emoji' }).click();
+
+  const area = await visibleArea(page);
+  await expectShown(page.getByRole('button', { name: 'Faces' }), area);
+  await page.getByRole('button', { name: '😂', exact: true }).click();
+  await expect(box).toHaveValue('😂');
+  await expect(box).toBeFocused();
+});
