@@ -5,6 +5,17 @@ version for developers. [CLAUDE.md](CLAUDE.md) is the complete playbook. It's wr
 assistants, but it's accurate for people too, and it wins if the two ever disagree.
 [README.md](README.md) lists the services and accounts.
 
+## TL;DR
+
+1. Branch from the latest `main`. `npm install && npm run dev` runs the site locally on sample data.
+2. Push and open a pull request. Cloudflare builds a preview site for the branch in about a minute,
+   also on sample data. There's no staging site or dev database.
+3. Wait for the three **Tests** checks to go green. Nobody has to approve it, so the checks are the gate.
+4. Squash-merge. `main` goes live at jiveturkeys.app in about two minutes.
+5. Database changes are new files in `supabase/migrations/`. They're additive only, rehearsed on a
+   copy of the database during step 3, and applied to the live database automatically on merge.
+6. Undo with a revert commit on `main`. Never force-push.
+
 ## Before you start
 
 - **Access.** A co-owner adds you as a collaborator on this GitHub repo. You don't need Cloudflare
