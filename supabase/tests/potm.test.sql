@@ -137,7 +137,7 @@ select potm_test.ok(potm_test.names(array(select subscription_id from open_sent)
 select potm_test.ok(
   (select bool_and(
       title = '🏆 Player of the Match'
-      and body ~ '^Final: 5–3 W vs Ball Busters\. Voting is open until [A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M\.$'
+      and body ~ '^We beat Ball Busters 5–3\. Vote by [A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M\.$'
       and url = '/games/' || potm_test.id('g1'))
    from open_sent),
   'with the score and when voting closes; tapping it opens the game');
@@ -188,12 +188,11 @@ select public.potm_tick();
 select potm_test.ok(potm_test.sent(potm_test.id('g1')) = '{open,reminder}', 'once it''s gone out, the timer doesn''t ask again');
 select potm_test.ok(potm_test.names(array(select subscription_id from reminder_sent)) = '{ann,kim,lee}',
   'it goes to players who played and haven''t cast every vote');
+select potm_test.ok((select bool_and(title = '🏆 Voting closes in 3 hours') from reminder_sent), 'saying voting closes in 3 hours');
 select potm_test.ok(
-  (select bool_and(
-      title = '🏆 Voting closes in 3 hours'
-      and body ~ '^You haven''t voted for Player of the Match \(6–3 W vs Ball Busters\)\. Voting closes [A-Z][a-z]{2} \d{1,2}:\d{2} [AP]M\.$')
-   from reminder_sent),
-  'saying voting closes in 3 hours, and when');
+  potm_test.names(array(select subscription_id from reminder_sent where body = 'You haven''t voted for the Ball Busters game yet.')) = '{ann}'
+  and potm_test.names(array(select subscription_id from reminder_sent where body = 'You still have a vote left for the Ball Busters game.')) = '{kim,lee}',
+  'and whether they haven''t voted, or voted for one award and still have a vote left');
 select potm_test.ok((select count(*) = 0 from public.potm_push_targets(potm_test.id('g1'), 'reminder')), 'and it goes out once');
 
 -- ---------------------------------------------------------------------------
@@ -227,12 +226,22 @@ select potm_test.ok(
   (select count(*) = 1 from public.messages where user_id is null and author_name = 'Scoreboard'),
   'when voting closes, the winners are posted in Team Chat, once');
 select potm_test.ok(
-  (select body = E'🏆 Player of the Match, 6–3 W vs Ball Busters\nMan of the Match: Lee & Mike & Pat (1 vote each, tied)\nWoman of the Match: Kim (1 vote)'
+  (select body = E'🏆 Votes are in: 6–3 win over Ball Busters\nMan of the Match: Lee, Mike and Pat (tied, 1 vote each)\nWoman of the Match: Kim (1 vote)'
    from public.messages where author_name = 'Scoreboard'),
   'naming each award''s winner, ties and roster names included');
 select potm_test.ok(
   (select count(*) = 1 from net.test_requests where body ? 'message_id'),
   'and it notifies like any Team Chat message');
+
+-- How a game went, the way people say it: a loss puts our score second.
+select potm_test.ok(
+  (select public.potm_result_sentence(g) = 'We lost 4–2 to Ball Busters' and public.potm_result_label(g) = '4–2 loss to Ball Busters'
+   from jsonb_populate_record(null::public.games, '{"opponent": "Ball Busters", "score_us": 2, "score_them": 4}') g),
+  'a loss: "We lost 4–2 to Ball Busters", "4–2 loss to Ball Busters"');
+select potm_test.ok(
+  (select public.potm_result_sentence(g) = 'We tied Ball Busters 3–3' and public.potm_result_label(g) = '3–3 tie with Ball Busters'
+   from jsonb_populate_record(null::public.games, '{"opponent": "Ball Busters", "score_us": 3, "score_them": 3}') g),
+  'a tie: "We tied Ball Busters 3–3", "3–3 tie with Ball Busters"');
 
 -- ---------------------------------------------------------------------------
 -- Team Settings: a shorter window, no "voting is open" notification, no

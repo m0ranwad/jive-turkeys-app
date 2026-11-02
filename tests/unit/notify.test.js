@@ -192,7 +192,7 @@ describe('handleNotify', () => {
       ...phone(id),
       subscription_id: id,
       title: '🏆 Voting closes in 3 hours',
-      body: "You haven't voted for Player of the Match (5–3 W vs Ball Busters). Voting closes Fri 9:30 AM.",
+      body: "You haven't voted for the Ball Busters game yet.",
       url: `/games/${GAME}`,
     });
     const { deps, db, delivered } = await setup({ targets: [row('a'), row('b')] });
@@ -202,7 +202,7 @@ describe('handleNotify', () => {
     expect(db.potmTargets).toHaveBeenCalledWith(GAME, 'reminder');
     expect(delivered[0].message).toEqual({
       title: '🏆 Voting closes in 3 hours',
-      body: "You haven't voted for Player of the Match (5–3 W vs Ball Busters). Voting closes Fri 9:30 AM.",
+      body: "You haven't voted for the Ball Busters game yet.",
       url: `/games/${GAME}`,
       tag: `potm-${GAME}`,
     });
@@ -231,8 +231,8 @@ describe('game reminders', () => {
     const row = (id) => ({
       ...phone(id),
       subscription_id: id,
-      title: '🆘 We need subs',
-      body: 'We need 2 more players (1 woman) for Thu 8:00 PM vs Ball Busters, Field 2. Can you play? Tap to answer.',
+      title: 'Can you sub?',
+      body: 'Thu 8:00 PM vs Ball Busters. We need 2 more, including a girl.',
       url: `/games/${GAME}`,
     });
     const { deps, db, delivered } = await setup({ targets: [row('a')] });
@@ -240,7 +240,7 @@ describe('game reminders', () => {
     expect(status).toBe(200);
     expect(result).toMatchObject({ sent: 1 });
     expect(db.reminderTargets).toHaveBeenCalledWith(GAME, 'subs');
-    expect(delivered[0].message).toMatchObject({ title: '🆘 We need subs', url: `/games/${GAME}`, tag: `game-${GAME}-subs` });
+    expect(delivered[0].message).toMatchObject({ title: 'Can you sub?', url: `/games/${GAME}`, tag: `game-${GAME}-subs` });
     expect(gameReminderNotification({ title: 't', body: 'b', url: '/u' }, 'g', 'rsvp').tag).toBe('game-g-rsvp');
   });
 
@@ -257,8 +257,8 @@ describe('"Playing session N?"', () => {
     const row = (id) => ({
       ...phone(id),
       subscription_id: id,
-      title: '📋 Playing session 2?',
-      body: "Session 2 starts Sat, Jan 2 and you haven't answered yet. Tap to choose Playing, Available to sub or Unavailable.",
+      title: 'Playing session 2?',
+      body: "Session 2 starts Sat, Jan 2. You haven't answered yet.",
       url: '/',
     });
     const { deps, db, delivered } = await setup({ targets: [row('a'), row('b')] });
@@ -266,7 +266,7 @@ describe('"Playing session N?"', () => {
     expect(status).toBe(200);
     expect(result).toMatchObject({ sent: 2 });
     expect(db.sessionAskTargets).toHaveBeenCalledWith(2026, 2, 'reminder');
-    expect(delivered[0].message).toMatchObject({ title: '📋 Playing session 2?', url: '/', tag: 'session-2026-2' });
+    expect(delivered[0].message).toMatchObject({ title: 'Playing session 2?', url: '/', tag: 'session-2026-2' });
     // The reminder replaces the "captains asked" one on screen.
     expect(sessionAskNotification({ title: 't', body: 'b', url: '/' }, { year: 2026, session: 2 }).tag).toBe('session-2026-2');
   });

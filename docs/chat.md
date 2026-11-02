@@ -53,7 +53,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 | A one-time tip at the top of the room list (never over the messages) explains tapping a message and **New**. It stays dismissed. | `[browser]` |
 | Drafts are kept per player and room on this device while switching rooms and after refresh. Signing out clears this device's drafts and unsent messages. If browser storage is unavailable, they are kept for this visit. | `[browser]` `chat-recovery.spec.js`, `[unit]` `chat-local.test.js` |
 | If the room list or message history cannot load, **Try again** is shown with a plain-language error. A failed history request never shows the empty-room greeting. While reconnecting, loaded messages stay visible; a failed catch-up offers **Try again** and does not mark unseen messages read. No signal is shown above the conversation. | `[browser]` `chat-recovery.spec.js`, `chat-catch-up.spec.js` |
-| **Posting from other screens:** a game's **Remind team** and **Call for subs** (captains), **Remind who owes** on Team dues and an announcement (captains, also offered right after posting one) show the message first, then **Post in Team Chat** or **Copy instead**. It posts as you, naming teammates on the site with their @mention (whoever hasn't answered, the available subs who haven't said IN or OUT, whoever still owes; @team for an announcement) so their phones buzz. Roster names who haven't joined are plain names, and the window says to copy it for them. Copy gives plain names. (`PostToChatDialog`, `src/lib/team-posts.js`) | `[browser]` `[unit]` |
+| **Posting from other screens:** a game's **Remind team** and **Call for subs** (captains), **Remind who owes** on Team dues and an announcement (captains, also offered right after posting one) show the message first, then **Post in Team Chat** or **Copy instead**. It posts as you, naming teammates on the site with their @mention (whoever hasn't answered, the available subs who haven't said IN or OUT, whoever still owes; @team for an announcement) so their phones buzz. Roster names who haven't joined are plain names, and the window says to copy it for them. Copy gives plain names. The messages read like a captain wrote them: no team banner and no field number. Remind team has the day, time, opponent and jersey, "Still to RSVP: …" (or "Everyone has answered."), and when we're short "We need 2 more, including a girl. Subs, can you play?". Call for subs starts "Subs needed: …" and ends "@Drew P., Mike Russo, can you play?" (or "Anyone free?" with nobody left to ask). (`PostToChatDialog`, `src/lib/team-posts.js`) | `[browser]` `[unit]` |
 
 ## 3. Message options: react, reply, copy, edit, delete
 
@@ -65,7 +65,7 @@ Tapping (or clicking) a message shows its options. Tap it again, or press Escape
 | Reactions show under the message with a count. Yours are highlighted. Tapping a reaction adds or removes yours. The options list who reacted with what. | `[browser]` `[unit]` |
 | One of each emoji per player per message. You can only add or remove your own reactions; captains can also remove others'. | `[db]` |
 | **Reply** quotes the message above yours ("Replying to Jordan R." while typing, Esc or ✕ cancels). Tapping the quote jumps to the original and flashes it. If the original was deleted, the quote says "Original message was deleted". | `[browser]` `[db]` |
-| **Copy** copies the text. | `[browser]` |
+| **Copy** copies the text (not on a GIF; see section 8). | `[browser]` |
 | **Delete** (after a confirm) removes the message for everyone, with its reactions. Replies to it stay. Players see Delete only on their own messages; captains on every message, except in private chats, where everyone deletes only their own. The database enforces the same. | `[browser]` `[db]` |
 | **Edit** (your own messages only) puts the text back in the message box to fix; saving changes it for everyone, live, with a small "edited" label. Cancel (✕ or Escape) changes nothing and brings back what you were typing. Only the text can change, never who wrote it or when; captains don't edit other people's messages (they delete); nobody edits in a closed thread; editing never sends a notification. | `[browser]` `[db]` |
 | Editing the latest message also updates the room-list preview, for the sender and live viewers. Older edits do not replace the latest message's preview. | `[browser]` `chat-recovery.spec.js` |
@@ -198,15 +198,33 @@ reminder and posts the winners. The database writes the words and picks who gets
 
 | Expected behavior | Checked by |
 |---|---|
-| Posting a result tells everyone on the team that voting is open, with the score and when it closes. Tapping it opens the game. Captains can turn this off. | `[db]` `[unit]` |
-| A set time before voting closes (3 hours unless changed, or off), players who played and haven't cast every vote are reminded how long is left. | `[db]` |
+| Posting a result tells everyone on the team that voting is open, with the score and when it closes: "🏆 Player of the Match / We beat Ball Busters 5–3. Vote by Sat 9:30 PM." (or "We lost 5–3 to Ball Busters", "We tied Ball Busters 3–3"). Tapping it opens the game. Captains can turn this off. | `[db]` `[unit]` |
+| A set time before voting closes (3 hours unless changed, or off), players who played and haven't cast every vote are reminded how long is left ("🏆 Voting closes in 3 hours"): "You haven't voted for the Ball Busters game yet.", or "You still have a vote left for the Ball Busters game." for someone who picked a man but not a woman (or the other way round). | `[db]` |
 | Each goes out once; correcting the score doesn't send it again. | `[db]` |
-| Game reminders ("Are you in?", "We need subs") and "Playing session N?" use the same devices and the **Game alerts** switch; their rules are in `docs/games.md` sections 5 and 6. | `[db]` |
-| When voting closes, the winners are posted in Team Chat by "Scoreboard" (ties and roster names included), which notifies like any Team Chat message. Captains can turn this off. | `[db]` `[browser]` |
+| Game reminders ("Are you in?", "Can you sub?") and "Playing session N?" use the same devices and the **Game alerts** switch; their rules are in `docs/games.md` sections 5 and 6. | `[db]` |
+| When voting closes, the winners are posted in Team Chat by "Scoreboard" (ties and roster names included): "🏆 Votes are in: 5–3 win over Ball Busters", then a line per award ("Man of the Match: Lee, Mike and Pat (tied, 1 vote each)"). It notifies like any Team Chat message. Captains can turn this off. | `[db]` `[browser]` |
 
 The sending keys (VAPID) are created once by `.github/workflows/functions.yml` and kept as Supabase function
 secrets. They're never in the code. Never replace them: every phone that turned notifications on would
 stop getting them until the player turns them on again.
+
+## 8. GIFs
+
+The **GIF** button beside the emoji button in the message box searches GIFs from KLIPY (Tenor, Google's
+free GIF service, shut down for apps in June 2026; GIPHY's free plan is for testing only). The search goes
+through the chat's Supabase function (`notify-chat`, `{ action: 'gifs' }`, `supabase/functions/_shared/gifs.js`),
+so the KLIPY key stays on the server as the `KLIPY_API_KEY` function secret. KLIPY's partner panel sets what
+it shows: PG-13. Previews find a few pretend GIFs (`public/demo-gifs/`, `DEMO_GIFS` in `src/api/demo.js`).
+
+| Expected behavior | Checked by |
+|---|---|
+| Opening the GIF search shows what's trending; typing searches (after a short pause), with **More GIFs** while there are more. It says "Powered by KLIPY". Close (✕ or Escape) sends nothing. The GIF button is hidden while editing a message. | `[browser]` `chat-gifs.spec.js` |
+| Tapping a GIF sends it right away, as a reply when you were replying. It shows in the chat about 240px wide at most, keeping its shape. | `[browser]` `chat-gifs.spec.js` |
+| A GIF message says "GIF": the room list, reply quotes, search and its notification ("Jordan R.: GIF") show that. | `[unit]` |
+| A GIF can be replied to, reacted to and deleted like any message, but not edited or copied, and the GIF can't be swapped after it's sent. | `[browser]` `[db]` `[unit]` |
+| Only one GIF per message, only from KLIPY's servers (`https://*.klipy.com/`), with its size: the database refuses anything else (`chat_attachments_ok()`), so a message can't make phones load from another site. `public/_headers` lets pages show images from `*.klipy.com`. | `[db]` `[unit]` |
+| Only signed-in teammates can search. Nothing about the player goes to KLIPY with a search; showing a GIF loads it from KLIPY's servers. | `[unit]` `tests/unit/gifs.test.js` |
+| Until a co-owner adds the KLIPY key, the search says "GIF search isn't turned on yet." If KLIPY can't be reached it says "Couldn't load GIFs. Check your signal and try again." with **Try again**. | `[unit]` `[browser]` |
 
 ## What automation can't check (try these by hand before relying on a big chat change)
 
@@ -247,6 +265,9 @@ devices signed in as different players:
    up on the other device without a refresh, with a lock, and their phone gets a notification for its first
    message. A third player (or a captain) who isn't in it doesn't see it. Leave it on one device: it disappears
    there, and the other still sees the messages.
+11. GIFs (after a change to them, and once after the KLIPY key is added): tap **GIF**, search for something and
+   send one. It shows on the other device without a refresh and plays there too, and the notification says
+   "GIF".
 
 ## Running the tests
 

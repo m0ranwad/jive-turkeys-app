@@ -25,15 +25,15 @@ test('a captain calls for subs in Team Chat, naming the available subs', async (
   await page.getByRole('button', { name: 'Call for subs' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Call for subs' });
-  await expect(dialog.getByTestId('post-preview')).toContainText('Available to sub: @Drew P.');
+  await expect(dialog.getByTestId('post-preview')).toContainText('@Drew P., can you play?');
   await expect(dialog).toContainText('1 teammate gets a buzz: Drew P.');
   await dialog.getByRole('button', { name: 'Post in Team Chat' }).click();
   await expect(page.getByText('Posted in Team Chat')).toBeVisible();
   await expect(dialog).toHaveCount(0);
 
-  expect(await savedMessage(page, 'subs needed')).toEqual({ thread: null, mentions: ['Drew Patel'], team: false });
+  expect(await savedMessage(page, 'Subs needed:')).toEqual({ thread: null, mentions: ['Drew Patel'], team: false });
   await page.goto('/banter?room=team');
-  await expect(page.getByText(/subs needed for/).last()).toBeVisible();
+  await expect(page.getByText(/Subs needed: .* vs Goal Diggers/).last()).toBeVisible();
 });
 
 test("the game reminder names whoever hasn't answered, and roster names get a note", async ({ page, context }) => {
@@ -51,7 +51,9 @@ test("the game reminder names whoever hasn't answered, and roster names get a no
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain('Jordan Rivera');
   expect(copied).not.toContain('@');
-  expect(await savedMessage(page, 'vs FC Lightning · Field')).toBeUndefined();
+  // No field number: there are only two.
+  expect(copied).not.toContain('Field');
+  expect(await savedMessage(page, 'Still to RSVP:')).toBeUndefined();
 });
 
 test('anyone can post who still owes in Team Chat', async ({ page }) => {

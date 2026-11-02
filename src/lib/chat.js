@@ -144,6 +144,27 @@ export function summarizeReactions(rows, me) {
 /** Rooms are keyed by thread id; the main Team Chat is null. */
 export const roomOf = (message) => message.thread_id ?? null;
 
+/**
+ * GIFs (docs/chat.md section 8). A GIF message says "GIF" (what the room list,
+ * replies, search and notifications show) and keeps the GIF in `attachments`.
+ */
+export const GIF_BODY = 'GIF';
+
+/** A message's GIF ({ url, width, height, title }), or null if it isn't one. */
+export function gifOf(message) {
+  const gif = Array.isArray(message?.attachments) ? message.attachments[0] : null;
+  return gif?.type === 'gif' && typeof gif.url === 'string' && gif.width > 0 && gif.height > 0 ? gif : null;
+}
+
+/** What the chat sends for a GIF picked in the GIF search (the database checks the same shape). */
+export function gifMessage(gif) {
+  const title = (gif.title || '').trim().slice(0, 120);
+  return {
+    body: GIF_BODY,
+    attachments: [{ type: 'gif', url: gif.url, width: gif.width, height: gif.height, ...(title && { title }) }],
+  };
+}
+
 /** Fired after a room is marked read, so the unread badge refreshes. */
 export const CHAT_READ_EVENT = 'jt:chat-read';
 

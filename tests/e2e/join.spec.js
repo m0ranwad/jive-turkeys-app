@@ -294,7 +294,7 @@ test("captains get a heads-up in their Lounge when someone new joins as Playing,
   await openRoom(page, "Captains' Lounge");
   const headsUp = message(page, 'Newbie Nguyen just joined');
   await expect(headsUp).toContainText(
-    /Newbie Nguyen just joined and said they're Playing, so they now split session \d's dues\. If they're not playing, change their status on the Team page before people pay\./,
+    /Newbie Nguyen just joined as Playing, so session \d's dues are now split one more way\. If that's wrong, change their status on the Team page before people pay\./,
   );
   await expect(messageRow(page, 'Newbie Nguyen just joined')).toContainText('Roster');
   await expect(message(page, 'Mike Russo just joined')).toHaveCount(0);

@@ -302,8 +302,9 @@ test('a captain edits the fee and copies a reminder', async ({ page, context }) 
   await page.getByRole('dialog', { name: 'Remind who owes' }).getByRole('button', { name: 'Copy instead' }).click();
   await expect(page.getByText('Copied', { exact: true })).toBeVisible();
   const reminder = await page.evaluate(() => navigator.clipboard.readText());
-  expect(reminder).toContain('Session 2 dues: $61 each');
-  expect(reminder).toContain("That's the $595 league fee plus $18 refs × 7 games = $721, split across 12 players.");
+  expect(reminder).toContain('Session 2 dues are $61 each.');
+  // How the fee adds up is on the Dues page, not in the reminder.
+  expect(reminder).not.toContain('league fee');
   expect(reminder).toContain('Still to pay: Alex Chen & Riley Novak ($122), Casey Captain, Chris Dunn, Kelly Moss, Mike Russo, Morgan Lee ($31 more), Sam Okafor ($11 more)');
 
   await page.getByRole('button', { name: 'Edit fee' }).click();

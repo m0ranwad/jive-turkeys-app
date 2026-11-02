@@ -301,6 +301,17 @@ export function createSupabaseBackend(url, key) {
   }
 
   const chat = {
+    /**
+     * GIF search (the GIF button), through the chat's Supabase function so the KLIPY key
+     * stays on the server: { ready, gifs: [{ id, title, url, width, height, preview }], more }.
+     * No words: what's trending. `ready` is false until a co-owner adds the key.
+     */
+    async gifs(q = '', { page = 1 } = {}) {
+      const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action: 'gifs', q, page } });
+      if (error || !data) throw new Error("Couldn't load GIFs. Check your signal and try again.");
+      return data;
+    },
+
     /** Up to `limit` messages in a room (null = Team Chat) before `before`, oldest first. */
     async history(threadId, { before, limit = 60 } = {}) {
       let query = supabase.from('messages').select('*');

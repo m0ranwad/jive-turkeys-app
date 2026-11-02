@@ -12,6 +12,8 @@ import {
   catchUpMessages,
   dayLabel,
   directChat,
+  gifMessage,
+  gifOf,
   insertMessage,
   isAfter,
   isEmojiOnly,
@@ -528,5 +530,26 @@ describe('rooms and unread', () => {
     ]);
     expect(upsertThread(list, { id: 'c', title: 'C' })[0].id).toBe('c');
     expect(upsertThread(null, { id: 'c' })).toBeNull();
+  });
+});
+
+describe('GIFs', () => {
+  const gif = { id: 'g', title: '  Goal!  ', url: 'https://static.klipy.com/ii/a.webp', width: 300, height: 200, preview: { url: 'x' } };
+
+  it('sends a GIF as "GIF" with the GIF kept (the shape the database checks)', () => {
+    expect(gifMessage(gif)).toEqual({
+      body: 'GIF',
+      attachments: [{ type: 'gif', url: 'https://static.klipy.com/ii/a.webp', width: 300, height: 200, title: 'Goal!' }],
+    });
+    expect(gifMessage({ ...gif, title: '' }).attachments[0]).not.toHaveProperty('title');
+    expect(gifMessage({ ...gif, title: 'x'.repeat(300) }).attachments[0].title).toHaveLength(120);
+  });
+
+  it("tells a GIF message from any other", () => {
+    expect(gifOf({ body: 'GIF', ...gifMessage(gif) })).toMatchObject({ url: gif.url, width: 300 });
+    expect(gifOf({ body: 'GIF' })).toBeNull();
+    expect(gifOf({ body: 'hi', attachments: null })).toBeNull();
+    expect(gifOf({ attachments: [{ type: 'image', url: 'x', width: 1, height: 1 }] })).toBeNull();
+    expect(gifOf({ attachments: [{ type: 'gif', url: 'x', width: 0, height: 1 }] })).toBeNull();
   });
 });

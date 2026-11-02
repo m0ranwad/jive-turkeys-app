@@ -26,7 +26,7 @@ test('anyone can copy an invite from the Team page, even once everyone has joine
   await page.getByRole('button', { name: 'Copy invite' }).first().click();
   await expect(page.getByText('Invite copied')).toBeVisible();
   const invite = await page.evaluate(() => navigator.clipboard.readText());
-  expect(invite).toContain('enter the team code TURKEY');
+  expect(invite).toContain('enter team code TURKEY');
   expect(invite).toContain('Still to join: Dana Wells, Mike Russo');
 });
 

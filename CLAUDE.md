@@ -46,8 +46,8 @@ README.md has the service inventory and the current setup status.
   function secrets) once. Never replace them: everyone's notifications would stop until they turn them on
   again. Previews only show a sample notification. Rules: section 7 of `docs/chat.md`.
 - `public/_headers` sets the site's security headers. Its Content-Security-Policy (report-only until it's
-  checked on the live site) lists the only outside sites the pages may load from: the Supabase project and
-  Google Fonts. Anything new from another site (a script, font, image or API) has to be added there, or it
+  checked on the live site) lists the only outside sites the pages may load from: the Supabase project,
+  Google Fonts and chat GIFs from KLIPY (`*.klipy.com`). Anything new from another site (a script, font, image or API) has to be added there, or it
   will break once the policy is enforced. Plain links (pay, maps, calendar) aren't affected. The live build
   stops if the Supabase settings are missing, so the site never goes live on sample data (`vite.config.js`).
 
@@ -198,6 +198,9 @@ manages the GitHub, Cloudflare and Supabase accounts.
   buttons (`src/components/AuthShell.jsx`). The demo password for every sample account is `demo1234`.
 - Chat: `src/pages/ChatPage.jsx`, `src/components/chat/`, `src/lib/chat.js`, `src/lib/mentions.js` (@mentions), and
   `src/hooks/useChatUnread.js` (the Chat tab badge and its @ count). `docs/chat.md` is the expected behavior.
+  GIFs (section 8 there): `GifPicker.jsx`, searched through `notify-chat` (`supabase/functions/_shared/gifs.js`) with
+  the `KLIPY_API_KEY` function secret, and kept in `messages.attachments` (body "GIF"; only `*.klipy.com` files,
+  `chat_attachments_ok()`). Previews find the pretend GIFs in `public/demo-gifs/`.
   Private chats and the Captains' Lounge are threads with `chat_threads.visibility` `private` / `captains`; who's in a
   private chat is `chat_thread_members` (started and added to only through `chat_start_private()` /
   `chat_add_members()`). Captains can't read private chats they aren't in; the policies, `chat_can_read()` (for
