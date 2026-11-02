@@ -63,7 +63,7 @@ async function comeBack(page) {
   });
 }
 
-const paymentCheck = (page, amount) => page.getByRole('dialog', { name: `Did your $${amount} go through?` });
+const paymentCheck = (page, amount, service) => page.getByRole('dialog', { name: `Sent $${amount} on ${service}?` });
 
 async function expectRemaining(page, amount) {
   await expect(page.getByRole('link', { name: `Pay $${amount} with Venmo` })).toHaveAttribute('href', new RegExp(`amount=${amount}&`));
@@ -136,8 +136,8 @@ test('opening PayPal leaves the dues unpaid until a teammate records the payment
 
   // Closing the site after paying: it asks on the next visit. "Not yet" changes nothing, and it doesn't ask again.
   await page.reload();
-  const check = paymentCheck(page, 122);
-  await expect(check).toContainText('You opened PayPal to pay $122 for you and Riley.');
+  const check = paymentCheck(page, 122, 'PayPal');
+  await expect(check).toContainText('For you and Riley');
   await check.getByRole('button', { name: 'Not yet' }).click();
   await expect(check).toHaveCount(0);
   const card = page.getByTestId('my-dues');
@@ -159,9 +159,9 @@ test('coming back from Venmo asks whether the payment went through, and Yes mark
   await openPayment(page, context, 'Pay $122 with Venmo');
   await comeBack(page);
 
-  const check = paymentCheck(page, 122);
-  await expect(check).toContainText('You opened Venmo to pay $122 for you and Riley.');
-  await check.getByRole('button', { name: 'Yes, mark us paid' }).click();
+  const check = paymentCheck(page, 122, 'Venmo');
+  await expect(check).toContainText('For you and Riley');
+  await check.getByRole('button', { name: 'Yes, mark paid' }).click();
   await expect(page.getByText('Marked paid. Thanks!')).toBeVisible();
   await expect(check).toHaveCount(0);
   await expect(page.getByText("You're both paid up")).toBeVisible();
@@ -181,13 +181,15 @@ test('the question can record a different amount, and keeps the answer on screen
   await openPayment(page, context, 'Pay $122 with PayPal');
   await comeBack(page);
 
-  const check = paymentCheck(page, 122);
+  const check = paymentCheck(page, 122, 'PayPal');
   await page.evaluate(() => localStorage.setItem('jt_demo_offline', '1'));
-  await check.getByRole('button', { name: 'Yes, mark us paid' }).click();
+  await check.getByRole('button', { name: 'Yes, mark paid' }).click();
   await expect(page.getByText("That didn't save", { exact: true })).toBeVisible();
   await expect(check).toBeVisible();
 
-  await check.getByRole('button', { name: 'Paid a different amount?' }).click();
+  await check.getByRole('button', { name: 'Sent a different amount' }).click();
+  // Its Save is then the only way to mark it paid.
+  await expect(check.getByRole('button', { name: 'Yes, mark paid' })).toHaveCount(0);
   await check.getByLabel('Amount paid for both').fill('100');
   await check.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText("That didn't save", { exact: true }).first()).toBeVisible();
@@ -209,7 +211,6 @@ test("the question is only for whoever tapped, and not once a teammate marked th
   await switchPlayer(page, 'kelly@demo.test');
   await expect(page.getByTestId('my-dues')).toContainText('$61');
   await comeBack(page);
-  await expect(paymentCheck(page, 122)).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await page.getByRole('button', { name: 'Mark paid for Riley Novak' }).click();
@@ -219,7 +220,7 @@ test("the question is only for whoever tapped, and not once a teammate marked th
   await switchPlayer(page, ALEX);
   await expect(page.getByText("You're both paid up")).toBeVisible();
   await comeBack(page);
-  await expect(paymentCheck(page, 122)).toHaveCount(0);
+  await expect(paymentCheck(page, 122, 'Venmo')).toHaveCount(0);
 });
 
 test('marking yourself paid is one tap; marking not paid asks first and stays in your history', async ({ page }) => {

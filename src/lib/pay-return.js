@@ -1,4 +1,4 @@
-// "Did your $61 go through?" Venmo, PayPal and Cash App don't tell the site
+// "Sent $61 on Venmo?" Venmo, PayPal and Cash App don't tell the site
 // when someone pays, so tapping one of their pay buttons is remembered on this
 // device, and My dues asks when the player comes back (docs/dues.md, section 10).
 // Nothing here marks anyone paid: only the player's answer does.

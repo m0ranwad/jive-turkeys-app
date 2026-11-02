@@ -322,9 +322,9 @@ export function PartPayment({ max, both, busy, onSave, defaultOpen = false, id =
 }
 
 /**
- * "Did your $61 go through?" when a player comes back from Venmo, PayPal or
- * Cash App (`opened`: which one, and the amount it was opened with). Yes marks
- * it paid; **Paid a different amount?** records what they sent instead, up to
+ * "Sent $61 on Venmo?" when a player comes back from Venmo, PayPal or Cash
+ * App (`opened`: which one, and the amount it was opened with). Yes marks it
+ * paid; **Sent a different amount** records what they sent instead, up to
  * `owed`; Not yet, or closing it, changes nothing. `partner` is the name of
  * whoever they pay with.
  */
@@ -336,12 +336,11 @@ export function PaymentCheck({ open, opened, partner, owed, busy, onYes, onPart,
     <Dialog open={open} onOpenChange={(next) => !next && onNotYet()}>
       <DialogContent className={DIALOG}>
         <DialogHeader className="text-left">
-          <DialogTitle className={DIALOG_TITLE}>Did your {dollars(opened.amount)} go through?</DialogTitle>
+          <DialogTitle className={DIALOG_TITLE}>
+            Sent {dollars(opened.amount)} on {opened.label}?
+          </DialogTitle>
+          {both && <p className="text-sm font-medium text-zinc-500">For you and {partner.split(' ')[0]}</p>}
         </DialogHeader>
-        <p className="text-sm text-zinc-600">
-          You opened {opened.label} to pay {dollars(opened.amount)}
-          {both ? ` for you and ${partner.split(' ')[0]}` : ''}. If it went through, mark it paid so your captains know.
-        </p>
         {part ? (
           <PartPayment id="paid-check-amount" defaultOpen max={owed} both={both} busy={busy} onSave={onPart} />
         ) : (
@@ -350,16 +349,19 @@ export function PaymentCheck({ open, opened, partner, owed, busy, onYes, onPart,
             onClick={() => setPart(true)}
             className="justify-self-start text-left text-xs font-bold text-zinc-500 underline underline-offset-2 hover:text-zinc-800"
           >
-            Paid a different amount?
+            Sent a different amount
           </button>
         )}
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={onNotYet} disabled={busy} className="h-11 rounded-xl font-bold">
             Not yet
           </Button>
-          <Button onClick={onYes} disabled={busy} className="h-11 rounded-xl bg-lime-400 font-bold text-black hover:bg-lime-300">
-            {busy ? 'Saving…' : both ? 'Yes, mark us paid' : 'Yes, mark me paid'}
-          </Button>
+          {/* Typing an amount: its Save is the one way to mark it paid. */}
+          {!part && (
+            <Button onClick={onYes} disabled={busy} className="h-11 rounded-xl bg-lime-400 font-bold text-black hover:bg-lime-300">
+              {busy ? 'Saving…' : 'Yes, mark paid'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

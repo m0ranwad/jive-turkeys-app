@@ -1,4 +1,4 @@
-// "Did your $61 go through?": which pay button a player tapped is remembered on
+// "Sent $61 on Venmo?": which pay button a player tapped is remembered on
 // their device for a day, so My dues can ask when they come back. Expected
 // behavior: docs/dues.md, section 10.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

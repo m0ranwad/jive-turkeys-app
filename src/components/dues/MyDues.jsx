@@ -228,7 +228,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
   const mine = myShare(data, period, user.id);
 
-  // "Did your $61 go through?": the pay button tapped in the last day, asked about on coming back to the
+  // "Sent $61 on Venmo?": the pay button tapped in the last day, asked about on coming back to the
   // site, or straight away on the next visit (docs/dues.md, section 10).
   const [opened, setOpened] = useState(() => payOpened(user.id));
   const [asking, setAsking] = useState(() => !!opened);
