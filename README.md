@@ -71,7 +71,8 @@ Local-only reference copies of keys live in `.env.local`, which git ignores. Nev
 - [x] Privacy and terms pages live (required by Google)
 - [x] Google sign-in: Branding filled in, app published, client ID and secret in Supabase
 - [x] Claim captain: the owner signed up first at https://jiveturkeys.app
-- [ ] Nightly backups: the owners' backup key and the `BACKUP_AGE_RECIPIENT` variable (see [Backups](#backups))
+- [x] Nightly backups: the owners' backup key and the `BACKUP_AGE_RECIPIENT` variable, November 2 (where the
+      key is kept: [Backups](#backups))
 - [x] Phone notifications for chat: `SUPABASE_ACCESS_TOKEN` secret added. The function and its keys are set
       up automatically the first time the notifications change reaches `main`
 - [ ] Chat GIFs: a KLIPY partner account and API key, saved as the Supabase function secret `KLIPY_API_KEY`
@@ -164,19 +165,43 @@ data, chat), checks the copy restores into a scratch database with every row
 ([scripts/backup-check.sh](scripts/backup-check.sh)), encrypts it, and keeps it as a download on that night's
 run for 90 days. The repo is public, so only the encrypted file is stored.
 
-**One-time setup (an owner, 5 minutes):**
-1. Install [age](https://github.com/FiloSottile/age) (`brew install age`, `winget install FiloSottile.age`) and
-   run `age-keygen -o jive-turkeys-backup.key`.
-2. Put that file in the owners' password manager. It's the only way to open a backup: don't commit it, email it
-   or paste it anywhere else, and don't lose it.
-3. Copy the line it printed, `Public key: age1...`, and add the `age1...` part as a repository **variable**
-   (not a secret) named `BACKUP_AGE_RECIPIENT`: Settings → Secrets and variables → Actions → Variables.
-4. Actions → Nightly backup → Run workflow, to check it works.
+**Where the backup key is (set up November 2, 2026).** Backups are locked with an
+[age](https://github.com/FiloSottile/age) key. Its private half is the only way to open them, and it's kept in
+two places:
+- an owner's **Google Password Manager**, as **Jive Turkeys backup key** (site `example.com`, a placeholder so
+  Chrome never offers it on a real site). The password is the key's `AGE-SECRET-KEY-1...` line;
+- that owner's Windows laptop: `jive-turkeys-backup.key` in the `jt-backup-key` folder of their user folder
+  (`%USERPROFILE%`).
+
+Its public half (`age1...`) is the `BACKUP_AGE_RECIPIENT` repository **variable** (Settings → Secrets and
+variables → Actions → Variables). The public half can only lock backups. Never commit, email or paste the private
+half anywhere else.
+
+**Making a new key** (only if the private half is lost, or might have leaked). Windows PowerShell shown; on a
+Mac, `brew install age`, and in steps 3 and 4 copy with `grep '^AGE-SECRET-KEY' jive-turkeys-backup.key | pbcopy`
+and `age-keygen -y jive-turkeys-backup.key | pbcopy`.
+1. `winget install FiloSottile.age`, then close PowerShell and open a new one.
+2. `mkdir $HOME\jt-backup-key; cd $HOME\jt-backup-key; age-keygen -o jive-turkeys-backup.key`
+3. `(Select-String -Path jive-turkeys-backup.key -Pattern '^AGE-SECRET-KEY').Line | Set-Clipboard`, then
+   passwords.google.com → the **Jive Turkeys backup key** entry (or **Add**, as above) → paste as the password.
+4. `age-keygen -y jive-turkeys-backup.key | Set-Clipboard`, and paste it as the new value of `BACKUP_AGE_RECIPIENT`.
+5. Actions → Nightly backup → Run workflow, and check it passes.
+
+Backups made before the change still need the old key. If it was lost, they can't be opened, and new ones start
+from the next run. If it leaked, delete the older downloads from their runs (they're public).
 
 **Restoring:**
-1. Actions → Nightly backup → the night you want → download the `.tar.gz.age` file.
-2. `age -d -i jive-turkeys-backup.key -o backup.tar.gz <file>.tar.gz.age && tar -xzf backup.tar.gz`
-3. Into a new Supabase project (or the same one, after checking with the other owner what will be replaced),
+1. Actions → Nightly backup → the night you want → download the backup. GitHub wraps it in a `.zip`: unzip it to
+   get the `.tar.gz.age` file.
+2. If the key file isn't on hand, rebuild it from Google Password Manager: copy the entry's password, then in
+   PowerShell run `Get-Clipboard | Set-Content -Encoding ascii jive-turkeys-backup.key` (on a Mac,
+   `pbpaste > jive-turkeys-backup.key`). Pasting it this way keeps the key out of the command history.
+3. Unlock and unpack it (PowerShell, or Terminal on a Mac):
+   ```
+   age -d -i jive-turkeys-backup.key -o backup.tar.gz <file>.tar.gz.age
+   tar -xzf backup.tar.gz
+   ```
+4. Into a new Supabase project (or the same one, after checking with the other owner what will be replaced),
    with its Session pooler connection string as `$DB`:
    ```
    psql "$DB" -f roles.sql
@@ -185,7 +210,7 @@ run for 90 days. The repo is public, so only the encrypted file is stored.
    ```
    The last line loads rows exactly as they were, with the database's own triggers (new accounts, session
    lists) paused, so nothing is added twice.
-4. Point the site at it if it's a new project (Cloudflare build variables, and the Supabase address in
+5. Point the site at it if it's a new project (Cloudflare build variables, and the Supabase address in
    [public/_headers](public/_headers)) and publish.
 
 GitHub turns scheduled runs off in a public repo after 60 days without a change pushed to it, and emails a

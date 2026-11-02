@@ -402,5 +402,7 @@ a test to get a check green: fix the code, or, if the behavior changed on purpos
   changes to it never take effect.
 - Touch the backup key. `.github/workflows/backup.yml` encrypts each nightly backup to the
   `BACKUP_AGE_RECIPIENT` variable; the private key stays with the owners. Never print, store or ask for it.
+  Where they keep it, and how to restore a backup or make a new key: README, "Backups". If an owner asks, point
+  them there and walk them through it on their own computer.
 - Update `vendor/xlsx-*.tgz` from the network. It's vendored because cloud sessions can't reach
   cdn.sheetjs.com.
