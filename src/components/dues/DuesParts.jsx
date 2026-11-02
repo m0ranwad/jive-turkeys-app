@@ -175,8 +175,12 @@ const BRAND = {
   zelle: { letter: 'Z', className: 'bg-[#6D1ED4] text-white' },
 };
 
-/** A row per way to pay. Venmo, PayPal.Me and Cash App open with the amount filled in. */
-export function PayButtons({ amount, note, settings }) {
+/**
+ * A row per way to pay. Venmo, PayPal.Me and Cash App open with the amount
+ * filled in; `onOpen(option)` hears which one was tapped, so My dues can ask
+ * whether it went through.
+ */
+export function PayButtons({ amount, note, settings, onOpen }) {
   const { toast } = useToast();
   const options = payOptions(settings, amount, note);
   const extra = (settings?.pay_note || '').trim();
@@ -228,6 +232,7 @@ export function PayButtons({ amount, note, settings }) {
             href={option.href}
             target="_blank"
             rel="noreferrer"
+            onClick={() => onOpen?.(option)}
             className="flex items-center gap-3 rounded-2xl border border-zinc-200 p-2.5 pr-3 transition hover:border-zinc-900"
           >
             {/* Heard as "Pay $122 with Venmo": the words on its button, then which app. */}
@@ -256,7 +261,7 @@ export function PayButtons({ amount, note, settings }) {
  * later). Anyone can, for anyone. `max` is what's still owed (for both, when
  * `both`); `onSave(amount)` resolves true once it's saved.
  */
-export function PartPayment({ max, both, busy, onSave, defaultOpen = false }) {
+export function PartPayment({ max, both, busy, onSave, defaultOpen = false, id = 'part-amount' }) {
   const [open, setOpen] = useState(defaultOpen);
   const [value, setValue] = useState('');
   const amount = Number(value);
@@ -286,14 +291,14 @@ export function PartPayment({ max, both, busy, onSave, defaultOpen = false }) {
 
   return (
     <form onSubmit={save} className="space-y-2 rounded-2xl bg-zinc-50 p-3">
-      <Label htmlFor="part-amount" className={cn(EYEBROW, 'block text-zinc-500')}>
+      <Label htmlFor={id} className={cn(EYEBROW, 'block text-zinc-500')}>
         Amount paid{both ? ' for both' : ''}
       </Label>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
           <Input
-            id="part-amount"
+            id={id}
             type="number"
             inputMode="decimal"
             autoFocus
@@ -313,6 +318,51 @@ export function PartPayment({ max, both, busy, onSave, defaultOpen = false }) {
           : `${both ? "Split by each one's share. " : ''}The rest stays on the list to pay.`}
       </p>
     </form>
+  );
+}
+
+/**
+ * "Did your $61 go through?" when a player comes back from Venmo, PayPal or
+ * Cash App (`opened`: which one, and the amount it was opened with). Yes marks
+ * it paid; **Paid a different amount?** records what they sent instead, up to
+ * `owed`; Not yet, or closing it, changes nothing. `partner` is the name of
+ * whoever they pay with.
+ */
+export function PaymentCheck({ open, opened, partner, owed, busy, onYes, onPart, onNotYet }) {
+  const [part, setPart] = useState(false);
+  if (!opened) return null;
+  const both = !!partner;
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onNotYet()}>
+      <DialogContent className={DIALOG}>
+        <DialogHeader className="text-left">
+          <DialogTitle className={DIALOG_TITLE}>Did your {dollars(opened.amount)} go through?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-zinc-600">
+          You opened {opened.label} to pay {dollars(opened.amount)}
+          {both ? ` for you and ${partner.split(' ')[0]}` : ''}. If it went through, mark it paid so your captains know.
+        </p>
+        {part ? (
+          <PartPayment id="paid-check-amount" defaultOpen max={owed} both={both} busy={busy} onSave={onPart} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPart(true)}
+            className="justify-self-start text-left text-xs font-bold text-zinc-500 underline underline-offset-2 hover:text-zinc-800"
+          >
+            Paid a different amount?
+          </button>
+        )}
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={onNotYet} disabled={busy} className="h-11 rounded-xl font-bold">
+            Not yet
+          </Button>
+          <Button onClick={onYes} disabled={busy} className="h-11 rounded-xl bg-lime-400 font-bold text-black hover:bg-lime-300">
+            {busy ? 'Saving…' : both ? 'Yes, mark us paid' : 'Yes, mark me paid'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

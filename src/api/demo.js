@@ -1718,6 +1718,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   const dues = {
     async markPaid({ year, session, userIds, paid, paidDate, amounts }) {
       requireUser();
+      failIfOffline();
       const me = currentUser().id;
       if (amounts && amounts.length !== userIds.length) throw new Error('Each player needs an amount');
       if (amounts?.some((a) => a != null && a < 0)) throw new Error("An amount can't be less than $0");

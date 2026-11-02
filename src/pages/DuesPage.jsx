@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHeader, PageSpinner } from '@/components/PageSpinner';
 import { SessionStepper } from '@/components/dues/DuesParts';
 import { MyDues } from '@/components/dues/MyDues';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CARD } from '@/lib/constants';
 import { currentSession, openSession, stepSession } from '@/lib/dues';
 import { today } from '@/lib/format';
+import { payOpened } from '@/lib/pay-return';
 import { useDues } from '@/hooks/useDues';
 import { useTeam } from '@/hooks/useTeam';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,10 @@ export function DuesPage() {
   const [picked, setPicked] = useState(null);
   const [period, setPeriod] = useState(null);
   const [retrying, setRetrying] = useState(false);
+  // Back after tapping Venmo or PayPal: open on My dues, which asks whether it went through (captains too).
+  useEffect(() => {
+    if (user && payOpened(user.id)) setPicked((p) => p ?? 'mine');
+  }, [user]);
 
   if (teamLoading || dues.loading || !user) return <PageSpinner />;
   if (dues.failed) {
