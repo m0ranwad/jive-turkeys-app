@@ -126,6 +126,19 @@ test("the captain's screens", async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Pay together', exact: true })).toBeVisible();
   await expectAccessible(page, 'Pay together from My dues');
   await page.keyboard.press('Escape');
+  // Back from Venmo: "Sent $61 on Venmo?" (the payment site stays local to the test).
+  await page.context().route('https://venmo.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<h1>Venmo</h1>' }));
+  const venmo = page.context().waitForEvent('page');
+  await page.getByRole('link', { name: /with Venmo$/ }).click();
+  await (await venmo).close();
+  await page.reload();
+  const check = page.getByRole('dialog', { name: /^Sent \$\d+ on Venmo\?$/ });
+  await expect(check).toBeVisible();
+  await expectAccessible(page, 'Sent your payment?');
+  await check.getByRole('button', { name: 'Sent a different amount' }).click();
+  await expectAccessible(page, 'Sent your payment? A different amount');
+  await check.getByRole('button', { name: 'Not yet' }).click();
+  await expect(check).toHaveCount(0);
   await page.getByRole('tab', { name: 'Team dues' }).click();
   await expectAccessible(page, 'Team dues');
   await page.getByRole('button', { name: 'Details for Sam Okafor' }).click();

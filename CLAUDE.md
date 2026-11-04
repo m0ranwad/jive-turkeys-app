@@ -222,6 +222,8 @@ manages the GitHub, Cloudflare and Supabase accounts.
   one form at a time. History is shown on request only when there are events; roster-name explanations aren't
   part of the payment sheet. My dues asks a player who pays alone and hasn't paid **Paying for two?** with a Pay together button at the top of the Pay card; otherwise Pay together is a small secondary link below the payment actions. The couples migration also fills `moved_partners`
   for existing roster-name picks, so undo restores past couples (`scripts/test-couples-upgrade.sh`).
+  Tapping a Venmo, PayPal or Cash App button is remembered on the device for a day (`src/lib/pay-return.js`), and My dues
+  asks **Sent $X on Venmo?** when the player comes back (`PaymentCheck` in `DuesParts.jsx`); only their Yes marks paid.
   Only captains set fees, custom amounts and payment links. Neither can be below $0 (database checks,
   and `feeProblem()` in the fee box); the fee box asks before saving $0 or more than double the fee before it
   (`feeWarning()`). Marking paid records the share at that

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronRight, Users } from 'lucide-react';
 import { api } from '@/api';
 import { Button } from '@/components/ui/button';
@@ -6,13 +6,52 @@ import { useToast } from '@/components/ui/toast';
 import { sessionSlice } from '@/hooks/useDues';
 import { CARD, EYEBROW } from '@/lib/constants';
 import { changeLine, dollars, feeParts, feeTotal, partPayment, payNote, shareChanges, teamDues, topUps } from '@/lib/dues';
+import { saveFailedToast } from '@/lib/errors';
 import { seasonName, today } from '@/lib/format';
+import { forgetPayOpened, payOpened, rememberPayOpened } from '@/lib/pay-return';
 import { cn } from '@/lib/utils';
 import { isEarlier } from '@/lib/roster';
 import { PayTogetherDialog } from './DuesDialogs';
-import { ConfirmNotPaid, HEADING, HistoryList, PartPayment, PayButtons, StatusChip } from './DuesParts';
+import { ConfirmNotPaid, HEADING, HistoryList, PartPayment, PayButtons, PaymentCheck, StatusChip } from './DuesParts';
 
 const round = (value) => Math.round(value * 100) / 100;
+
+/**
+ * Calls `onBack` when the player comes back to the site after leaving it: from
+ * the Venmo app on a phone, or from another tab on a computer.
+ */
+function useCameBack(onBack) {
+  const latest = useRef(onBack);
+  latest.current = onBack;
+  useEffect(() => {
+    let away = false;
+    const leave = () => {
+      away = true;
+    };
+    const back = () => {
+      if (document.visibilityState === 'hidden') return leave();
+      if (!away) return;
+      away = false;
+      latest.current();
+    };
+    // Some phones keep the page as it was and show it again without reloading.
+    const restored = (e) => {
+      if (!e.persisted) return;
+      away = true;
+      back();
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('blur', leave);
+    window.addEventListener('focus', back);
+    window.addEventListener('pageshow', restored);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('blur', leave);
+      window.removeEventListener('focus', back);
+      window.removeEventListener('pageshow', restored);
+    };
+  }, []);
+}
 
 /**
  * The signed-in player's share of one session: amount, paid or not (and how
@@ -188,6 +227,34 @@ export function MyDues({ data, period, current, over = false, user, settings, on
 
   const nameOf = (userId) => data.profiles.find((p) => p.user_id === userId)?.display_name || '';
   const mine = myShare(data, period, user.id);
+
+  // "Sent $61 on Venmo?": the pay button tapped in the last day, asked about on coming back to the
+  // site, or straight away on the next visit (docs/dues.md, section 10).
+  const [opened, setOpened] = useState(() => payOpened(user.id));
+  const [asking, setAsking] = useState(() => !!opened);
+  useCameBack(() => {
+    const again = payOpened(user.id);
+    setOpened(again);
+    if (again) setAsking(true);
+  });
+  const openedHere = !!opened && opened.year === Number(period.year) && opened.session === Number(period.session);
+  const allPaid = openedHere && !!mine.row && mine.balance === 0;
+  // Someone else marked it paid meanwhile: nothing left to ask about.
+  useEffect(() => {
+    if (!allPaid) return;
+    forgetPayOpened();
+    setOpened(null);
+  }, [allPaid]);
+  const checking = asking && openedHere && !!mine.share && mine.balance > 0;
+  const onPayOpen = (option) => {
+    setOpened(rememberPayOpened({ userId: user.id, year: period.year, session: period.session, amount: mine.balance, label: option.label }));
+    setAsking(false);
+  };
+  const doneChecking = () => {
+    forgetPayOpened();
+    setOpened(null);
+    setAsking(false);
+  };
   const me = data.profiles.find((p) => p.user_id === user.id);
   const partnerNow = data.profiles.find((p) => p.user_id === me?.pays_with);
   const pairingPlayers = over ? data.profiles : sessionSlice(data, current).members;
@@ -243,8 +310,10 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       });
       await onChanged();
       toast({ title: paid ? 'Marked paid. Thanks!' : 'Marked not paid' });
+      return true;
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -260,11 +329,22 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       toast({ title: `${dollars(amount)} marked paid. Thanks!` });
       return true;
     } catch (err) {
-      toast({ title: "That didn't save", description: err.message });
+      toast(saveFailedToast(err));
       return false;
     } finally {
       setBusy(false);
     }
+  };
+  // Yes: what the button asked for, which is all of it unless someone recorded part of it meanwhile.
+  const checkYes = async () => {
+    const amount = Math.min(opened.amount, mine.balance);
+    const saved = Math.round(amount * 100) >= Math.round(mine.balance * 100) ? await mark(true) : await payPart(amount);
+    if (saved) doneChecking();
+  };
+  const checkPart = async (amount) => {
+    const saved = await payPart(amount);
+    if (saved) doneChecking();
+    return saved;
   };
   const partPaymentLink = mine.balance > 0 && (
     <PartPayment max={mine.balance} both={mine.owing.length > 1} busy={busy} onSave={payPart} />
@@ -346,7 +426,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
               </Button>
             </div>
           )}
-          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
+          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} onOpen={onPayOpen} />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
             <span className="text-sm font-semibold text-zinc-500">Already paid?</span>
             <Button onClick={() => mark(true)} disabled={busy} className="h-11 rounded-xl bg-lime-400 px-5 font-bold text-black hover:bg-lime-300">
@@ -360,7 +440,7 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       {mine.share && mine.hasPayment && mine.balance > 0 && (
         <section className={cn(CARD, 'space-y-4')} data-testid="pay-difference">
           <h3 className={HEADING}>Pay the rest</h3>
-          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} />
+          <PayButtons amount={mine.balance} note={payNote(period.year, period.session, names)} settings={settings} onOpen={onPayOpen} />
           <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
             <span className="text-sm font-semibold text-zinc-500">Already paid it?</span>
             <Button onClick={() => mark(true)} disabled={busy} className="h-11 rounded-xl bg-lime-400 px-5 font-bold text-black hover:bg-lime-300">
@@ -431,6 +511,17 @@ export function MyDues({ data, period, current, over = false, user, settings, on
       {otherSessions}
 
       <ConfirmNotPaid open={confirming} onOpenChange={setConfirming} names={names} onConfirm={() => mark(false)} />
+      <PaymentCheck
+        key={opened?.at}
+        open={checking}
+        opened={opened}
+        partner={mine.partner?.display_name}
+        owed={mine.balance}
+        busy={busy}
+        onYes={checkYes}
+        onPart={checkPart}
+        onNotYet={doneChecking}
+      />
     </div>
   );
 }
