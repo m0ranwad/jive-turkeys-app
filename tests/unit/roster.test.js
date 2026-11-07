@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
-import { sessionAsk } from '@/components/SessionPrompt';
+import { sessionAsk, sessionTally } from '@/components/SessionPrompt';
 import { seasonLabel, seasonName, seasonOf, sessionOf, today } from '@/lib/format';
 import { headcount } from '@/lib/team-logic';
 import {
@@ -317,6 +317,29 @@ describe('a session that is over', () => {
     await api.entities.PlayerProfile.update(sam.id, { status: 'on_break' });
     expect(await rosterOf(api, 3, sam.user_id)).toMatchObject({ status: 'on_break' });
     expect(await rosterOf(api, 2, sam.user_id)).toMatchObject({ status: 'active' });
+  });
+});
+
+describe("how a session's answers are coming in", () => {
+  // As on the live team in session 1: its list started before players joined, so Jordan's roster
+  // name kept its entry (Playing) after he picked it, and his account says Available to sub.
+  const players = [
+    { user_id: 'ana', gender: 'F', status: 'active' },
+    { user_id: 'jordan', gender: 'M', status: 'sub_pool' },
+    guestAsPlayer({ id: 'tyler', display_name: 'Tyler B', gender: 'M', status: 'active' }),
+    { user_id: 'cal', gender: 'M', status: 'active' },
+  ];
+  const rows = [
+    entry(S1, { user_id: 'ana' }, 'active'),
+    entry(S1, { user_id: 'jordan' }, 'sub_pool'),
+    entry(S1, { guest_id: 'jordan-name' }, 'active'),
+    entry(S1, { guest_id: 'tyler' }, 'active'),
+    entry(S1, { user_id: 'cal' }, 'active', false),
+    entry(S1, { user_id: 'gone' }, 'off'),
+  ];
+
+  it('counts each player once: a roster name someone picked counts as their account', () => {
+    expect(sessionTally(rows, S1, players)).toEqual({ in: 2, women: 1, subs: 1, out: 0, waiting: 1 });
   });
 });
 
