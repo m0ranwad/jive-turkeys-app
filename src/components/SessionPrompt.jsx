@@ -109,11 +109,16 @@ function SessionAnswers({ question, onAnswered, compact = false, selected }) {
   );
 }
 
-/** How the answers for a session are coming in: playing (and how many women), available to sub, unavailable, still to answer. */
+/**
+ * How the answers for a session are coming in: playing (and how many women), available to sub, unavailable, still to
+ * answer. `players` is useSeasonData()'s: accounts and roster names nobody has picked. Each person counts once: a roster
+ * name someone picked keeps its entry on the list (so Unlink can give it back), but their account's entry is the one that
+ * counts, as in membersForSession() and dues_shares().
+ */
 export function sessionTally(rows, period, players) {
-  const list = sessionRows(rows, period).filter((r) => r.status !== 'off');
-  const answered = list.filter((r) => r.answered_at);
   const gender = new Map(players.map((p) => [p.user_id, p.gender]));
+  const list = sessionRows(rows, period).filter((r) => r.status !== 'off' && gender.has(r.user_id ?? r.guest_id));
+  const answered = list.filter((r) => r.answered_at);
   const inRows = answered.filter((r) => r.status === 'active');
   return {
     in: inRows.length,

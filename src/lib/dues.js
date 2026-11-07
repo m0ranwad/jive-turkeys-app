@@ -3,7 +3,7 @@
 // together, and the links players pay with.
 
 import { SESSIONS } from './constants';
-import { seasonName, sessionOf, shortName } from './format';
+import { daysBetween, seasonName, sessionMonths, sessionOf, shortName } from './format';
 
 export const DUES_DEFAULTS = { league_fee: 595, ref_fee: 18, game_count: 7 };
 
@@ -514,18 +514,38 @@ export function currentSession(games, today, asks = []) {
   return latest ? { year: latest.season_year, session: latest.session } : sessionOf(today);
 }
 
+/** A session whose games cover this many days (four weekly games) or more has run its course once they're played. */
+export const SESSION_RUNS_DAYS = 21;
+
+/**
+ * Whether a session has run its course once nothing else is on the schedule:
+ * its games cover three weeks or more, it had a game in its last month
+ * (December for session 1), or the calendar has moved past it. Until then, an
+ * empty schedule means the league hasn't posted the rest of its games yet. Same
+ * as the database's roster_open_session().
+ */
+export function sessionRanItsCourse(period, games, today) {
+  const { lastMonth, ends } = sessionMonths(period);
+  const same = (g) => Number(g.season_year) === Number(period.year) && Number(g.session) === Number(period.session);
+  const dates = games.filter(same).map((g) => g.date).sort();
+  if (today >= ends) return true;
+  if (!dates.length) return false;
+  return dates.at(-1) >= lastMonth || daysBetween(dates[0], dates.at(-1)) >= SESSION_RUNS_DAYS;
+}
+
 /**
  * The session status changes count for: the current session, unless it's over
- * (its games have all been played, nothing else is on the schedule and captains
- * haven't asked about the next one), then null. A session that's over keeps its
- * list; the next one starts from everyone's status. Same as the database's
- * roster_open_session().
+ * (its games have all been played, nothing else is on the schedule, it has run
+ * its course and captains haven't asked about the next one), then null. A
+ * session that's over keeps its list; the next one starts from everyone's
+ * status. Same as the database's roster_open_session().
  */
 export function openSession(games, today, asks = []) {
   const cur = currentSession(games, today, asks);
   const over =
     games.some((g) => Number(g.season_year) === Number(cur.year) && Number(g.session) === Number(cur.session)) &&
-    !games.some((g) => g.date >= today);
+    !games.some((g) => g.date >= today) &&
+    sessionRanItsCourse(cur, games, today);
   return over ? null : cur;
 }
 

@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, createDemoBackend } from '@/api/demo';
 import { sessionSlice } from '@/hooks/useDues';
 import { duesMembers, guestAsPlayer, teamDues } from '@/lib/dues';
-import { sessionAsk } from '@/components/SessionPrompt';
-import { seasonLabel, seasonName, seasonOf, sessionOf } from '@/lib/format';
+import { sessionAsk, sessionTally } from '@/components/SessionPrompt';
+import { seasonLabel, seasonName, seasonOf, sessionOf, today } from '@/lib/format';
 import { headcount } from '@/lib/team-logic';
 import {
   askFor,
@@ -15,7 +15,9 @@ import {
   entryFor,
   isEarlier,
   membersForSession,
+  played,
   sessionForNewGames,
+  sessionStarted,
   stillAsking,
   unanswered,
 } from '@/lib/roster';
@@ -83,6 +85,14 @@ describe('the team in one session', () => {
     expect(beforeFirstGame(games, S2, '2026-10-15')).toBe(true);
     expect(beforeFirstGame(games, S2, '2026-10-16')).toBe(false);
     expect(beforeFirstGame(games, S1, '2026-10-14')).toBe(false);
+    // On game day, once its score is posted, it's been played.
+    const scored = [{ ...games[0], has_result: true }, games[1]];
+    expect(beforeFirstGame(scored, S2, '2026-10-15')).toBe(false);
+    expect(stillAsking(scored, S2, '2026-10-15')).toBe(false);
+    expect(stillAsking(scored, S2, '2026-10-15', '2026-10-15')).toBe(false);
+    expect(sessionStarted(scored, S2, '2026-10-15')).toBe(true);
+    expect(sessionStarted(games, S2, '2026-10-15')).toBe(false);
+    expect(played(games[0], '2026-10-16')).toBe(true);
   });
 
   it('orders sessions', () => {
@@ -310,6 +320,29 @@ describe('a session that is over', () => {
   });
 });
 
+describe("how a session's answers are coming in", () => {
+  // As on the live team in session 1: its list started before players joined, so Jordan's roster
+  // name kept its entry (Playing) after he picked it, and his account says Available to sub.
+  const players = [
+    { user_id: 'ana', gender: 'F', status: 'active' },
+    { user_id: 'jordan', gender: 'M', status: 'sub_pool' },
+    guestAsPlayer({ id: 'tyler', display_name: 'Tyler B', gender: 'M', status: 'active' }),
+    { user_id: 'cal', gender: 'M', status: 'active' },
+  ];
+  const rows = [
+    entry(S1, { user_id: 'ana' }, 'active'),
+    entry(S1, { user_id: 'jordan' }, 'sub_pool'),
+    entry(S1, { guest_id: 'jordan-name' }, 'active'),
+    entry(S1, { guest_id: 'tyler' }, 'active'),
+    entry(S1, { user_id: 'cal' }, 'active', false),
+    entry(S1, { user_id: 'gone' }, 'off'),
+  ];
+
+  it('counts each player once: a roster name someone picked counts as their account', () => {
+    expect(sessionTally(rows, S1, players)).toEqual({ in: 2, women: 1, subs: 1, out: 0, waiting: 1 });
+  });
+});
+
 describe('"Playing session N?" asked ahead', () => {
   const games = [
     { id: 'g1', date: '2026-12-10', season_year: 2026, session: 1 },
@@ -349,11 +382,44 @@ describe('"Playing session N?" asked ahead', () => {
     expect(sessionAsk({ profile, roster: first, games: early })).toMatchObject({ period: S2, isCurrent: false });
   });
 
+  describe('on the day of the first game', () => {
+    afterEach(() => vi.useRealTimers());
+    // Session 1's first game is today, Saturday, November 7; nothing else is on the schedule yet.
+    const profile = { user_id: 'ana', status: 'active' };
+    const roster = { current: S1, rows: [entry(S1, { user_id: 'ana' }, 'active', false)], asks: [] };
+    const game = { id: 'g1', date: '2026-11-07', season_year: 2026, session: 1 };
+
+    it('asks before the score is posted, and stops once it is', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-07T14:15:00'));
+      expect(sessionAsk({ profile, roster, games: [game] })).toMatchObject({ period: S1, isCurrent: true });
+      expect(sessionAsk({ profile, roster, games: [{ ...game, has_result: true }] })).toBeNull();
+      // The day after, either way.
+      vi.setSystemTime(new Date('2026-11-08T09:00:00'));
+      expect(sessionAsk({ profile, roster, games: [game] })).toBeNull();
+    });
+  });
+
   describe('in the demo backend', () => {
     const asPlayer = async (api, email) => {
       await api.auth.signIn(email, 'demo1234');
       return api;
     };
+
+    it("refuses answers for the current session once its first game's score is posted that day", async () => {
+      const api = await signedIn();
+      const year = (await api.entities.SessionDues.list())[0].season_year;
+      // Session 2's first game is today.
+      const [first] = (await api.entities.Game.list('date')).filter((g) => g.season_year === year && g.session === 2);
+      await api.entities.Game.update(first.id, { date: today() });
+      await asPlayer(api, 'jordan@demo.test');
+      await api.roster.answer({ year, session: 2, status: 'active' });
+      await api.auth.signIn(DEMO_LOGIN.email, DEMO_LOGIN.password);
+      await api.entities.Game.update(first.id, { has_result: true, score_us: 3, score_them: 1 });
+      await asPlayer(api, 'jordan@demo.test');
+      await expect(api.roster.answer({ year, session: 2, status: 'on_break' })).rejects.toThrow('That session has already started');
+      expect(await profileOf(api, 'Jordan Rivera')).toMatchObject({ status: 'active' });
+    });
 
     it("counts a player's answer for the session asked about only", async () => {
       const api = await signedIn();
@@ -617,6 +683,17 @@ describe('which session new games go in', () => {
     expect(sessionForNewGames([...session1, game(S2, '2027-01-02')], '2026-12-15', askedS2)).toEqual(S2);
     // After session 3 comes the next season's first.
     expect(sessionForNewGames([game({ year: 2026, session: 3 }, '2027-04-24')], '2027-05-10', [])).toEqual({ year: 2027, session: 1 });
+  });
+
+  it("stays this session after its first game while the rest of its games aren't up", () => {
+    // Session 1's first game was Saturday, November 7, and the league hasn't posted the rest yet.
+    const first = [game(S1, '2026-11-07')];
+    expect(sessionForNewGames(first, '2026-11-08', [])).toEqual(S1);
+    expect(sessionForNewGames(first, '2026-12-20', [])).toEqual(S1);
+    expect(sessionForNewGames(first, '2027-01-02', [])).toEqual(S2);
+    // Three weeks of games, or one in December: the next session's.
+    expect(sessionForNewGames([...first, game(S1, '2026-11-28')], '2026-11-29', [])).toEqual(S2);
+    expect(sessionForNewGames([game(S1, '2026-12-05')], '2026-12-06', [])).toEqual(S2);
   });
 
   it('is the session today is in when there are no games yet', () => {

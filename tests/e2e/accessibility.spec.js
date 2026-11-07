@@ -289,7 +289,9 @@ test('captains asking who\'s playing, and between sessions', async ({ page }) =>
     const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
     const db = JSON.parse(localStorage.getItem(key));
     const year = new Date().getFullYear();
-    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-10-0${i + 2}`));
+    // Weekly, three weeks from first to last, like a real session: it has run its course.
+    const weekly = ['09-14', '09-21', '09-28', '10-05'];
+    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-${weekly[i]}`));
     localStorage.setItem(key, JSON.stringify(db));
   });
   await visit(page, '/', 'Schedule');

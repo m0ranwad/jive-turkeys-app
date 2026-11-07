@@ -247,7 +247,9 @@ select couples_test.ok(couples_test.partner('pat', 1) = 'nobody' and couples_tes
 -- next session; session 2 keeps who paid together.
 -- ---------------------------------------------------------------------------
 
-update public.games set date = couples_test.today() - 2 where opponent in ('Goal Diggers', 'Ball Busters');
+-- Three weeks of games: it has run its course.
+update public.games set date = couples_test.today() - 23 where opponent = 'Goal Diggers';
+update public.games set date = couples_test.today() - 2 where opponent = 'Ball Busters';
 select couples_test.sign_in('kim');
 select public.roster_ask(couples_test.year(), 3, null);
 reset role;

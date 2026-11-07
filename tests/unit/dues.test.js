@@ -21,6 +21,7 @@ import {
   payOptions,
   profileAsPlayer,
   reminderText,
+  sessionRanItsCourse,
   shareChanges,
   shareWhenPaid,
   splitDues,
@@ -28,7 +29,10 @@ import {
   stepSession,
   teamDues,
 } from '@/lib/dues';
+import { sessionMonths, sessionOf } from '@/lib/format';
 import { membersForSession, sessionForNewGames } from '@/lib/roster';
+
+const S1 = { year: 2026, session: 1 };
 
 describe('the session fee', () => {
   it('is the league fee plus the ref fee for every game: $595 + 7 × $18 = $721', () => {
@@ -731,8 +735,11 @@ describe('which session the captains see first', () => {
 });
 
 describe('which session status changes count for', () => {
+  // Session 2 is four weekly games: three weeks from its first to its last.
   const games = [
     { date: '2026-09-01', season_year: 2026, session: 1 },
+    { date: '2026-10-01', season_year: 2026, session: 2 },
+    { date: '2026-10-08', season_year: 2026, session: 2 },
     { date: '2026-10-15', season_year: 2026, session: 2 },
     { date: '2026-10-22', season_year: 2026, session: 2 },
   ];
@@ -758,5 +765,32 @@ describe('which session status changes count for', () => {
 
   it("is this year's first with no games yet: there's nothing to keep", () => {
     expect(openSession([], '2026-10-01')).toEqual({ year: 2026, session: 1 });
+  });
+
+  it("is still the session after its first game while the rest of its games aren't up (same as roster_open_session())", () => {
+    // Session 1's first game was Saturday, November 7, and the league hasn't posted the rest yet.
+    const first = [{ date: '2026-11-07', season_year: 2026, session: 1 }];
+    for (const day of ['2026-11-08', '2026-11-27', '2026-12-31']) {
+      expect(openSession(first, day)).toEqual({ year: 2026, session: 1 });
+      expect(sessionRanItsCourse(S1, first, day)).toBe(false);
+    }
+    // Once the calendar moves past it (January is session 2's), it's over.
+    expect(openSession(first, '2027-01-01')).toBeNull();
+    // Three weeks of games, or a game in its last month (December for session 1): it ran its course.
+    const threeWeeks = [...first, { date: '2026-11-28', season_year: 2026, session: 1 }];
+    expect(openSession(threeWeeks, '2026-11-29')).toBeNull();
+    expect(openSession([...first, { date: '2026-11-27', season_year: 2026, session: 1 }], '2026-11-29')).toEqual(S1);
+    expect(openSession([{ date: '2026-12-05', season_year: 2026, session: 1 }], '2026-12-06')).toBeNull();
+    // With a game coming up it's the current session either way.
+    expect(openSession([...threeWeeks, { date: '2026-12-05', season_year: 2026, session: 1 }], '2026-11-29')).toEqual(S1);
+  });
+
+  it("knows each session's months (same as roster_session_months())", () => {
+    expect(sessionMonths(S1)).toEqual({ lastMonth: '2026-12-01', ends: '2027-01-01' });
+    expect(sessionMonths({ year: 2026, session: 2 })).toEqual({ lastMonth: '2027-02-01', ends: '2027-03-01' });
+    expect(sessionMonths({ year: 2026, session: 3 })).toEqual({ lastMonth: '2027-04-01', ends: '2027-05-01' });
+    // Session 3 ends when the coming season's first begins, as sessionOf() files the months.
+    expect(sessionOf('2027-05-01')).toEqual({ year: 2027, session: 1 });
+    expect(sessionOf('2027-04-30')).toEqual({ year: 2026, session: 3 });
   });
 });

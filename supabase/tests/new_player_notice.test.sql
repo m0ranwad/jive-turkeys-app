@@ -184,7 +184,10 @@ select heads_up_test.ok((select count(*) from heads_up_test.posts()) = 1, 'and n
 -- counts for no session's dues yet: nothing to fix, nothing posted.
 -- ---------------------------------------------------------------------------
 
+-- Three weeks of session 2's games: it has run its course.
 update public.games set date = heads_up_test.today() - 3 where id = heads_up_test.id('g2');
+insert into public.games (season_year, session, date, opponent) values
+  (heads_up_test.year(), 2, heads_up_test.today() - 24, 'Ball Busters');
 select heads_up_test.join_as('late', 'Lou Late', 'active');
 select heads_up_test.sign_in('late');
 select public.tell_captains_new_player();

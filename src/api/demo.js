@@ -4,7 +4,7 @@
 import dayjs from 'dayjs';
 import { canManageRoom } from '@/lib/chat';
 import { currentSession, openSession } from '@/lib/dues';
-import { isEarlier } from '@/lib/roster';
+import { isEarlier, sessionStarted } from '@/lib/roster';
 import { seasonOf, today } from '@/lib/format';
 import { JOIN_ERRORS } from '@/lib/team-code';
 import {
@@ -757,7 +757,8 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   // Same as the database's roster_open_session(): the current session, unless it's over.
   const open = () => openSession(db.games, today(), db.session_asks);
   const samePeriod = (a, b) => Number(a.year) === Number(b.year) && Number(a.session) === Number(b.session);
-  const started = (period) => db.games.some((g) => samePeriod({ year: g.season_year, session: g.session }, period) && g.date < today());
+  // Same as the database's roster_session_started(): one of its games has been played (score posted, or its day is over).
+  const started = (period) => sessionStarted(db.games, period, today());
 
   // Same as the database's roster_follows_couples(): the session status changes count for
   // and any later one follow who pays together now. Not a session that's over, or before.

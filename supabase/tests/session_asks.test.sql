@@ -397,12 +397,32 @@ reset role;
 select ask_test.ok(ask_test.current() = ask_test.session(2), 'and asking again brings session 2 back');
 
 -- ---------------------------------------------------------------------------
--- Session 2's schedule comes out, and its first game is played.
+-- Session 2's schedule comes out, and its first game is today. The question
+-- stays open until its score is posted, then stops the same day.
 -- ---------------------------------------------------------------------------
 
 insert into public.games (season_year, session, date, opponent) values
-  (ask_test.year(), 2, ask_test.today() - 1, 'Ball Busters'),
-  (ask_test.year(), 2, ask_test.today() + 6, 'Grass Kickers');
+  (ask_test.year(), 2, ask_test.today(), 'Ball Busters'),
+  (ask_test.year(), 2, ask_test.today() + 7, 'Grass Kickers');
+select ask_test.ok(exists (select 1 from public.session_questions() where session = 2),
+  'on its first game''s day the question is open until the score is posted');
+create temp table pat_before as select ask_test.profile('pat') as status;
+update public.games set has_result = true, score_us = 3, score_them = 2 where session = 2 and opponent = 'Ball Busters';
+select ask_test.ok(not exists (select 1 from public.session_questions() where session = 2), 'then it closes');
+select ask_test.sign_in('pat');
+select ask_test.refused($$select public.roster_answer(ask_test.year(), 2, 'on_break')$$,
+  'answers stop once the first game''s score is posted');
+reset role;
+select ask_test.sign_in('kim');
+select ask_test.refused($$select public.roster_ask(ask_test.year(), 2, ask_test.today() + 30)$$,
+  'and captains can''t ask about it anymore');
+reset role;
+select ask_test.ok(ask_test.profile('pat') = (select status from pat_before), 'Pat''s status didn''t change');
+
+-- The day after, without the score.
+update public.games set has_result = false, score_us = null, score_them = null, date = ask_test.today() - 1
+  where session = 2 and opponent = 'Ball Busters';
+update public.games set date = ask_test.today() + 6 where session = 2 and opponent = 'Grass Kickers';
 select ask_test.sign_in('pat');
 select ask_test.refused($$select public.roster_answer(ask_test.year(), 2, 'active')$$,
   'answers stop once the session''s first game is played');
