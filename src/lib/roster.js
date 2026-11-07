@@ -3,7 +3,7 @@
 // or headcounts. A session's list starts as a copy of everyone's status when it
 // becomes the current one (the next game's session), and follows status changes
 // while it's current. A session that hasn't started yet uses today's statuses.
-import { stepSession } from './dues';
+import { sessionRanItsCourse, stepSession } from './dues';
 import { sessionOf } from './format';
 
 const sameSession = (row, period) => row.season_year === Number(period.year) && row.session === Number(period.session);
@@ -47,20 +47,25 @@ export const unanswered = (rows, period) => sessionRows(rows, period).filter((r)
 export const sessionGames = (games, period) =>
   (games || []).filter((g) => sameSession(g, period)).sort((a, b) => a.date.localeCompare(b.date));
 
+/** A game has been played once its score is posted, or once its day is over. */
+export const played = (game, today) => !!game.has_result || game.date < today;
+
+/** A session has started once one of its games has been played. Same as the database's roster_session_started(). */
+export const sessionStarted = (games, period, today) => sessionGames(games, period).some((g) => played(g, today));
+
 /** None of the session's games has been played yet: the time to ask "Playing session N?". */
 export function beforeFirstGame(games, period, today) {
-  const list = sessionGames(games, period);
-  return list.length > 0 && list[0].date >= today;
+  return sessionGames(games, period).length > 0 && !sessionStarted(games, period, today);
 }
 
 /**
  * Whether "Playing session N?" is still being asked of a session: none of its
- * games has been played, and either its schedule is up or captains asked about
- * it ahead with a start date (`startsOn`, from session_asks).
+ * games has been played (game day counts as played once the score is posted),
+ * and either its schedule is up or captains asked about it ahead with a start
+ * date (`startsOn`, from session_asks).
  */
 export function stillAsking(games, period, today, startsOn) {
-  const list = sessionGames(games, period);
-  return list.length > 0 ? list[0].date >= today : !!startsOn;
+  return sessionGames(games, period).length > 0 ? !sessionStarted(games, period, today) : !!startsOn;
 }
 
 /** The session_asks row captains made for a session, if they're asking about it (it has a start date). */
@@ -74,8 +79,10 @@ export const isEarlier = (a, b) => Number(a.year) < Number(b.year) || (Number(a.
  * The session a captain's new games most likely belong to (Add game, Import): a
  * later session captains are asking about ("Playing session 2?" while this one
  * wraps up, or before its schedule is out); else the newest session on the
- * schedule while it has games to come; else the one after it; else, with no
- * games at all, the session today is in (sessionOf(), like currentSession()).
+ * schedule while it has games to come or hasn't run its course (the league
+ * hasn't posted the rest of its games yet: sessionRanItsCourse()); else the one
+ * after it; else, with no games at all, the session today is in (sessionOf(),
+ * like currentSession()).
  */
 export function sessionForNewGames(games, today, asks) {
   const latest = (games || [])
@@ -88,5 +95,6 @@ export function sessionForNewGames(games, today, asks) {
     .sort((a, b) => (isEarlier(a, b) ? -1 : 1))[0];
   if (asked) return asked;
   if (!latest) return sessionOf(today);
-  return (games || []).some((g) => g.date >= today) ? latest : stepSession(latest, 1);
+  const goingOn = (games || []).some((g) => g.date >= today) || !sessionRanItsCourse(latest, games || [], today);
+  return goingOn ? latest : stepSession(latest, 1);
 }

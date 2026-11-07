@@ -399,7 +399,9 @@ insert into public.games (season_year, session, date, opponent) values (unlink_t
 select unlink_test.sign_in('dee');
 select public.roster_start_current();
 reset role;
+-- Three weeks of session 4's games: it has run its course.
 update public.games set date = unlink_test.today() - 1 where session = 4;
+insert into public.games (season_year, session, date, opponent) values (unlink_test.year(), 4, unlink_test.today() - 22, 'Kick Six');
 select unlink_test.ok(
   exists (select 1 from public.session_roster where session = 4 and user_id = unlink_test.id('dee'))
     and not exists (select 1 from public.session_roster where session = 4 and guest_id = unlink_test.id('dot'))

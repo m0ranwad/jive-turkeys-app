@@ -42,6 +42,20 @@ export const sessionOf = (date) => {
   return { year: seasonOf(date), session: month >= SEASON_TURNS_MONTH ? 1 : month <= 2 ? 2 : 3 };
 };
 
+/**
+ * A session's months on the calendar: when its last month starts (`lastMonth`) and when the next session's begin
+ * (`ends`). Session 1 of 2026–27 is November and December 2026: its last month starts 2026-12-01 and it ends
+ * 2027-01-01. Session 3 ends on May 1, when the coming season's session 1 starts (sessionOf()). Same as the
+ * database's roster_session_months().
+ */
+export const sessionMonths = ({ year, session }) => {
+  const start = dayjs(`${year}-11-01`, 'YYYY-MM-DD').add((Number(session) - 1) * 2, 'month');
+  return { lastMonth: start.add(1, 'month').format('YYYY-MM-DD'), ends: start.add(2, 'month').format('YYYY-MM-DD') };
+};
+
+/** Days from one date (YYYY-MM-DD) to another. */
+export const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+
 /** The calendar year a month (1-12) falls in during a season: November and December are its first year, January to April the next. */
 export const yearInSeason = (season, month) => (month >= SEASON_TURNS_MONTH ? Number(season) : Number(season) + 1);
 

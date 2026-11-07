@@ -235,6 +235,11 @@ select roster_test.ok(roster_test.status('max', 2) = 'active', 'a roster name ad
 
 update public.games set date = roster_test.today() - 2 where session = 2;
 select roster_test.ok(
+  (select open_year = roster_test.year() and open_session = 2 from public.roster_open_session()),
+  'a session played for only a few days isn''t over: the rest of its games may not be up yet');
+-- Three weeks of games: it has run its course.
+update public.games set date = roster_test.today() - 23 where opponent = 'Goal Diggers';
+select roster_test.ok(
   (select cur_year = roster_test.year() and cur_session = 2 from public.roster_current_session()),
   'the session that just ended is still the one the site opens on');
 select roster_test.ok((select open_year is null and open_session is null from public.roster_open_session()),

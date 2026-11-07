@@ -7,7 +7,7 @@
 // Sample data: session 2 starts with the next game; Casey already asked who's
 // playing session 3. Priya, Alex and Jamie said they're in, Riley sub only;
 // Jordan and the rest haven't answered.
-import { expect, PLAYER, rosterRow, signIn, test, playerOptions } from './helpers';
+import { expect, openResult, PLAYER, rosterRow, signIn, test, playerOptions } from './helpers';
 
 async function openTab(page, path, heading) {
   await page.locator(`a[href="${path}"]:visible`).first().click();
@@ -23,11 +23,66 @@ async function endSession2(page) {
     const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
     const db = JSON.parse(localStorage.getItem(key));
     const year = new Date().getFullYear();
-    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-10-0${i + 2}`));
+    // Weekly, three weeks from first to last, like a real session: it has run its course.
+    const weekly = ['09-14', '09-21', '09-28', '10-05'];
+    db.games.filter((g) => g.season_year === year && g.session === 2).forEach((g, i) => (g.date = `${year}-${weekly[i]}`));
     localStorage.setItem(key, JSON.stringify(db));
   });
   await page.reload();
 }
+
+/** Session 2's first game is today, and the league hasn't posted the rest of its games yet. */
+async function firstGameToday(page) {
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('jt_demo_db_'));
+    const db = JSON.parse(localStorage.getItem(key));
+    const year = new Date().getFullYear();
+    const session2 = db.games.filter((g) => g.season_year === year && g.session === 2).sort((a, b) => a.date.localeCompare(b.date));
+    const later = new Set(session2.slice(1).map((g) => g.id));
+    session2[0].date = `${year}-10-08`;
+    db.games = db.games.filter((g) => !later.has(g.id));
+    for (const table of ['rsvps', 'game_stats', 'potm_votes', 'game_fill_ins']) {
+      if (Array.isArray(db[table])) db[table] = db[table].filter((r) => !later.has(r.game_id));
+    }
+    db.session_asks = [];
+    localStorage.setItem(key, JSON.stringify(db));
+  });
+  await page.reload();
+}
+
+test("once the first game's score is posted, the question doesn't come back and the session carries on", async ({ page }) => {
+  await signIn(page);
+  await firstGameToday(page);
+  // Before the game the captain hasn't answered, so the question is under the Next game card.
+  await expect(page.getByTestId('session-prompt')).toContainText('Playing session 2?');
+  await page.getByRole('link', { name: /vs Goal Diggers/ }).click();
+  await expect(page.getByRole('heading', { name: 'vs Goal Diggers' })).toBeVisible();
+  await openResult(page);
+  const result = page.getByRole('dialog', { name: 'Game result' });
+  await result.getByRole('button', { name: 'Add a goal for Jordan Rivera' }).click();
+  await result.getByRole('button', { name: 'Save result' }).click();
+  await expect(result).toHaveCount(0);
+
+  // The same afternoon, nothing else on the schedule: no "Next up · Session 2" asking again.
+  await openTab(page, '/', 'Schedule');
+  await expect(page.getByRole('link', { name: /vs Goal Diggers/ })).toBeVisible();
+  await expect(page.getByTestId('next-session')).toHaveCount(0);
+  await expect(page.getByTestId('session-prompt')).toHaveCount(0);
+  await expect(page.getByText('Playing session 2?')).toHaveCount(0);
+
+  // Captains no longer see who hasn't answered, and a status change still counts for session 2.
+  await openTab(page, '/team', 'Team');
+  await expect(page.getByTestId('session-answers')).toHaveCount(0);
+  const kelly = await playerOptions(page, 'Kelly Moss');
+  await expect(kelly).toContainText('it counts for session 2');
+  await page.keyboard.press('Escape');
+
+  // The rest of session 2's games go in session 2.
+  await openTab(page, '/', 'Schedule');
+  await page.getByRole('button', { name: 'Add game' }).click();
+  const form = page.getByRole('dialog', { name: 'Add game' });
+  await expect(form.getByRole('button', { name: '2', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
 
 test('the session answers fit their buttons on any phone', async ({ page }) => {
   await signIn(page, PLAYER);
