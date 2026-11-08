@@ -11,6 +11,7 @@ import {
   RESET_CLAIM_TIMEOUT_MS, RESET_CODE_USED, RESET_IN_PROGRESS, WRONG_RESET_CODE,
   isResetCode, makeResetCode, normalizeUsername, resetCodeHash, usernameProblem,
 } from '@/lib/username';
+import { newId } from '@/lib/utils';
 import { TABLES, parseSort } from './tables';
 
 const DB_KEY = 'jt_demo_db_v35';
@@ -29,7 +30,7 @@ export const DEMO_PLAYER_LOGIN = { email: 'jordan@demo.test', password: 'demo123
 // on My Profile, and let captains reset Jordan's password from the Team page.
 export const DEMO_USERNAME_LOGIN = { username: 'jordan' };
 
-const uid = () => crypto.randomUUID();
+const uid = () => newId();
 const now = () => new Date().toISOString();
 
 function seed() {

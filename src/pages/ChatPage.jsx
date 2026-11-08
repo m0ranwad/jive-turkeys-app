@@ -53,7 +53,7 @@ import { friendlyError, saveFailedToast } from '@/lib/errors';
 import { chatOutbox, keepOutbox, sendChatMessage } from '@/lib/chat-local';
 import { shortName } from '@/lib/format';
 import { findMentions, mentionPeople, mentionsMe } from '@/lib/mentions';
-import { cn } from '@/lib/utils';
+import { cn, newId } from '@/lib/utils';
 
 const PAGE = 60;
 const TIP_KEY = 'jt_chat_tip_seen';
@@ -720,7 +720,7 @@ export function ChatPage() {
 
   const enqueue = (target, body, replyId, mentioned, attachments = null) => {
     const pending = {
-      id: crypto.randomUUID(), pending: true, user_id: me, author_name: myName, body,
+      id: newId(), pending: true, user_id: me, author_name: myName, body,
       thread_id: target, reply_to_id: replyId ?? null, ...mentioned, ...(attachments && { attachments }),
       created_date: new Date().toISOString(),
     };
