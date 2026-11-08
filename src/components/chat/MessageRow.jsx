@@ -1,10 +1,42 @@
-import { Fragment, useState } from 'react';
-import { Copy, CornerUpLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { Copy, CornerUpLeft, Expand, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
-import { QUICK_REACTIONS, gifOf, isEmojiOnly, linkParts, timeLabel } from '@/lib/chat';
+import {
+  PHOTO_BODY,
+  QUICK_REACTIONS,
+  gifOf,
+  hasAttachment,
+  imageOf,
+  isEmojiOnly,
+  linkParts,
+  timeLabel,
+} from '@/lib/chat';
 import { initials, shortName } from '@/lib/format';
 import { TEAM, mentionParts } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
+
+/** Resolves a chat-media path to a URL the <img> can load (signed or demo). */
+function usePhotoUrl(path, resolvePhotoUrl) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!path || !resolvePhotoUrl) {
+      setUrl(null);
+      return undefined;
+    }
+    let alive = true;
+    resolvePhotoUrl(path)
+      .then((next) => {
+        if (alive) setUrl(next);
+      })
+      .catch(() => {
+        if (alive) setUrl(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [path, resolvePhotoUrl]);
+  return url;
+}
 
 /** The message text: links can be tapped, and the people it @mentions stand out (you most of all). */
 function Body({ message, mine, me, people }) {
@@ -72,10 +104,16 @@ export function MessageRow({
   onRetry,
   onRemoveUnsent,
   onJumpTo,
+  resolvePhotoUrl,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const gif = gifOf(m);
-  const big = !gif && isEmojiOnly(m.body);
+  const image = imageOf(m);
+  const photoUrl = usePhotoUrl(image?.path, resolvePhotoUrl);
+  const caption = image && m.body !== PHOTO_BODY ? m.body : null;
+  const media = !!(gif || image);
+  const big = !media && isEmojiOnly(m.body);
 
   const bubble = cn(
     'rounded-[20px] px-3.5 py-2 text-[15px] font-medium leading-snug md:text-sm',
@@ -83,6 +121,33 @@ export function MessageRow({
     mine ? !first && 'rounded-tr-md' : !first && 'rounded-tl-md',
     mine ? !last && 'rounded-br-md' : !last && 'rounded-bl-md',
   );
+
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
+
+  // On a photo, a tap opens it full screen and a long press shows the message's options.
+  const pressTimer = useRef(null);
+  const longPressed = useRef(false);
+  const cancelPress = () => clearTimeout(pressTimer.current);
+  const startPress = () => {
+    longPressed.current = false;
+    cancelPress();
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      if (!m.pending && !selected) onSelect(m.id);
+    }, 450);
+  };
+  useEffect(() => cancelPress, []);
+  const openOptions = () => {
+    setFullscreen(false);
+    if (!selected) onSelect(m.id);
+  };
 
   return (
     <div data-message-id={m.id} className={first ? 'mt-3' : 'mt-0.5'}>
@@ -139,10 +204,18 @@ export function MessageRow({
               }
             }}
             aria-expanded={selected}
-            aria-label={gif ? `GIF${gif.title ? `: ${gif.title}` : ''}` : undefined}
+            aria-label={
+              gif
+                ? `GIF${gif.title ? `: ${gif.title}` : ''}`
+                : image
+                  ? caption
+                    ? `Photo: ${caption}`
+                    : 'Photo'
+                  : undefined
+            }
             className={cn(
               'max-w-full cursor-pointer text-left outline-none transition focus-visible:ring-2 focus-visible:ring-lime-400',
-              gif ? 'overflow-hidden rounded-[20px] bg-zinc-100' : big ? 'px-1 text-4xl leading-tight' : bubble,
+              media ? 'overflow-hidden rounded-[20px] bg-zinc-100' : big ? 'px-1 text-4xl leading-tight' : bubble,
               selected && (big ? 'rounded-2xl bg-lime-100' : 'ring-2 ring-lime-400 ring-offset-1'),
               highlighted && 'ring-2 ring-amber-300 ring-offset-1',
               m.pending && !m.failed && 'opacity-60',
@@ -162,12 +235,68 @@ export function MessageRow({
                 className="block h-auto max-w-full"
                 style={{ width: `${Math.min(gif.width, 240)}px`, aspectRatio: `${gif.width} / ${gif.height}` }}
               />
+            ) : image ? (
+              <>
+                {photoUrl ? (
+                  <button
+                    type="button"
+                    aria-label="View photo"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (longPressed.current) {
+                        longPressed.current = false;
+                        return;
+                      }
+                      setFullscreen(true);
+                    }}
+                    onPointerDown={startPress}
+                    onPointerUp={cancelPress}
+                    onPointerLeave={cancelPress}
+                    onPointerCancel={cancelPress}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      cancelPress();
+                      if (!m.pending && !selected) onSelect(m.id);
+                    }}
+                    className="block select-none [-webkit-touch-callout:none]"
+                  >
+                    <img
+                      src={photoUrl}
+                      alt=""
+                      width={image.width}
+                      height={image.height}
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      data-photo
+                      className="block h-auto max-w-full"
+                      style={{ width: `${Math.min(image.width, 240)}px`, aspectRatio: `${image.width} / ${image.height}` }}
+                    />
+                  </button>
+                ) : (
+                  <div
+                    className="bg-zinc-200"
+                    style={{ width: `${Math.min(image.width, 240)}px`, aspectRatio: `${image.width} / ${image.height}` }}
+                    aria-hidden
+                  />
+                )}
+                {caption && (
+                  <div
+                    className={cn(
+                      'whitespace-pre-wrap break-words px-3.5 py-2 text-[15px] font-medium leading-snug md:text-sm',
+                      mine ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-900',
+                    )}
+                  >
+                    <Body message={{ ...m, body: caption }} mine={mine} me={me} people={people} />
+                  </div>
+                )}
+              </>
             ) : (
               <span className="whitespace-pre-wrap break-words">
                 <Body message={m} mine={mine && !big} me={me} people={people} />
               </span>
             )}
-            {m.edited_date && !gif && (
+            {m.edited_date && !media && (
               <span className={cn('ml-1.5 align-baseline text-[11px] font-semibold', big ? 'text-zinc-500' : 'opacity-75')}>edited</span>
             )}
           </div>
@@ -211,6 +340,15 @@ export function MessageRow({
             </div>
           )}
         </div>
+        {/* Empty space beside the bubble: same as tapping the message (iMessage-style). */}
+        {!m.pending && (
+          <div
+            aria-hidden="true"
+            data-message-gutter
+            onClick={() => onSelect(m.id)}
+            className="min-h-11 min-w-8 flex-1 cursor-pointer self-stretch"
+          />
+        )}
       </div>
 
       {selected && (
@@ -257,7 +395,8 @@ export function MessageRow({
           )}
           <div className="flex gap-1.5">
             <ActionButton icon={CornerUpLeft} label="Reply" onClick={() => onReply(m)} />
-            {!gif && <ActionButton icon={Copy} label="Copy" onClick={() => onCopy(m)} />}
+            {image && photoUrl && <ActionButton icon={Expand} label="View" onClick={() => setFullscreen(true)} />}
+            {!hasAttachment(m) && <ActionButton icon={Copy} label="Copy" onClick={() => onCopy(m)} />}
             {canEdit && <ActionButton icon={Pencil} label="Edit" onClick={() => onEdit(m)} />}
             {canDelete && <ActionButton icon={Trash2} label="Delete" danger onClick={() => onDelete(m)} />}
           </div>
@@ -269,6 +408,57 @@ export function MessageRow({
                   <span className="min-w-0">{r.userIds.map((id) => shortName(nameOf(id))).join(', ')}</span>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {fullscreen && photoUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setFullscreen(false)}
+        >
+          <button
+            type="button"
+            aria-label="Close photo"
+            onClick={() => setFullscreen(false)}
+            className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={photoUrl}
+            alt={caption || 'Photo'}
+            className="max-h-[calc(100%-5rem)] max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {!m.pending && (
+            <div
+              className="absolute inset-x-0 bottom-0 flex justify-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setFullscreen(false);
+                  onReply(m);
+                }}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
+              >
+                <CornerUpLeft className="h-4 w-4" />
+                Reply
+              </button>
+              <button
+                type="button"
+                onClick={openOptions}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                Options
+              </button>
             </div>
           )}
         </div>

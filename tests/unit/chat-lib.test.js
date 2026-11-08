@@ -14,6 +14,10 @@ import {
   directChat,
   gifMessage,
   gifOf,
+  hasAttachment,
+  imageOf,
+  photoMessage,
+  PHOTO_BODY,
   insertMessage,
   isAfter,
   isEmojiOnly,
@@ -551,5 +555,33 @@ describe('GIFs', () => {
     expect(gifOf({ body: 'hi', attachments: null })).toBeNull();
     expect(gifOf({ attachments: [{ type: 'image', url: 'x', width: 1, height: 1 }] })).toBeNull();
     expect(gifOf({ attachments: [{ type: 'gif', url: 'x', width: 0, height: 1 }] })).toBeNull();
+  });
+});
+
+describe('photos', () => {
+  const photo = {
+    path: '00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.webp',
+    width: 1200,
+    height: 800,
+  };
+
+  it('sends a photo with an optional caption (empty → "Photo")', () => {
+    expect(photoMessage(photo, '  Look!  ')).toEqual({
+      body: 'Look!',
+      attachments: [{ type: 'image', ...photo }],
+    });
+    expect(photoMessage(photo, '   ')).toEqual({
+      body: PHOTO_BODY,
+      attachments: [{ type: 'image', ...photo }],
+    });
+  });
+
+  it("tells a photo message from any other", () => {
+    expect(imageOf({ body: 'Look!', ...photoMessage(photo, 'Look!') })).toMatchObject(photo);
+    expect(imageOf({ body: PHOTO_BODY })).toBeNull();
+    expect(imageOf({ attachments: [{ type: 'gif', url: 'x', width: 1, height: 1 }] })).toBeNull();
+    expect(hasAttachment(gifMessage({ url: 'https://static.klipy.com/a.webp', width: 1, height: 1 }))).toBe(true);
+    expect(hasAttachment(photoMessage(photo))).toBe(true);
+    expect(hasAttachment({ body: 'hi' })).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import {
 import { newId } from '@/lib/utils';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v35';
+const DB_KEY = 'jt_demo_db_v36';
 // A new value on every save, so a tab notices another tab's save without
 // reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
 const REV_KEY = 'jt_demo_rev';
@@ -209,6 +209,13 @@ function seed() {
   // A GIF from the GIF button (docs/chat.md section 8).
   const dance = DEMO_GIFS.find((g) => g.id === 'demo-turkey');
   react(say(null, profiles[3], 'GIF', 1558, null, { attachments: [{ type: 'gif', url: dance.url, width: dance.width, height: dance.height, title: dance.title }] }), '😂', [profiles[1], me]);
+  // A photo from the photo button (docs/chat.md section 9).
+  const standings = DEMO_PHOTOS.find((p) => p.id === 'demo-standings');
+  const standingsPath = `${profiles[1].user_id}/${uid()}.jpg`;
+  const chat_media = { [standingsPath]: standings.url };
+  say(null, profiles[1], 'Look at the board!', 1557, null, {
+    attachments: [{ type: 'image', path: standingsPath, width: standings.width, height: standings.height }],
+  });
   say(null, profiles[2], 'Defense was locked in', 1556);
   // What the site posts when Player of the Match voting closes (potm_tick() in the database).
   const potmGame = games.filter((g) => g.has_result && g.season_year === year).sort((a, b) => (a.date < b.date ? 1 : -1))[1];
@@ -518,6 +525,7 @@ function seed() {
       { id: uid(), code: DEMO_TEAM_CODE, updated_by: captainId, created_date: dayjs().subtract(60, 'day').toISOString(), updated_date: dayjs().subtract(60, 'day').toISOString() },
     ],
     messages,
+    chat_media,
     chat_threads: threads,
     chat_thread_members: members,
     message_reactions: reactions,
@@ -604,19 +612,55 @@ const DEMO_GIFS = [
   { id: 'demo-nooo', title: 'Nooo', url: '/demo-gifs/nooo.gif', width: 260, height: 160, words: ['no', 'nooo', 'sad', 'loss', 'ouch'] },
 ];
 
-/** The preview's chat_attachments_ok(): one GIF, from KLIPY or the pretend ones, as the GIF search sends it. */
-function demoGifOk(attachments) {
+// Sample photos for the preview (public/demo-photos/).
+const DEMO_PHOTOS = [
+  { id: 'demo-standings', url: '/demo-photos/standings.svg', width: 320, height: 240 },
+  { id: 'demo-field', url: '/demo-photos/field.svg', width: 320, height: 200 },
+];
+
+const IMAGE_PATH =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(webp|jpg|jpeg)$/i;
+
+/** The preview's chat_attachments_ok(): one GIF or one photo. */
+function demoAttachmentsOk(attachments, meId) {
   if (!Array.isArray(attachments) || attachments.length !== 1) return false;
-  const [gif] = attachments;
-  const keys = Object.keys(gif || {});
-  return (
-    keys.every((k) => ['type', 'url', 'width', 'height', 'title'].includes(k)) &&
-    gif.type === 'gif' &&
-    (/^https:\/\/([a-z0-9-]+\.)*klipy\.com\/[^\s"'<>]+$/i.test(gif.url) || DEMO_GIFS.some((g) => g.url === gif.url)) &&
-    Number.isInteger(gif.width) && gif.width > 0 && gif.width < 10000 &&
-    Number.isInteger(gif.height) && gif.height > 0 && gif.height < 10000 &&
-    (gif.title === undefined || (typeof gif.title === 'string' && gif.title.length <= 120))
-  );
+  const [item] = attachments;
+  const keys = Object.keys(item || {});
+  const sizeOk =
+    Number.isInteger(item?.width) && item.width > 0 && item.width < 10000 &&
+    Number.isInteger(item?.height) && item.height > 0 && item.height < 10000;
+  if (item?.type === 'gif') {
+    return (
+      keys.every((k) => ['type', 'url', 'width', 'height', 'title'].includes(k)) &&
+      (/^https:\/\/([a-z0-9-]+\.)*klipy\.com\/[^\s"'<>]+$/i.test(item.url) || DEMO_GIFS.some((g) => g.url === item.url)) &&
+      sizeOk &&
+      (item.title === undefined || (typeof item.title === 'string' && item.title.length <= 120))
+    );
+  }
+  if (item?.type === 'image') {
+    return (
+      keys.every((k) => ['type', 'path', 'width', 'height'].includes(k)) &&
+      typeof item.path === 'string' &&
+      IMAGE_PATH.test(item.path) &&
+      item.path.length <= 120 &&
+      (!meId || item.path.startsWith(`${meId}/`)) &&
+      sizeOk
+    );
+  }
+  return false;
+}
+
+async function blobToDataUrl(blob) {
+  if (typeof FileReader === 'undefined') {
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    return `data:${blob.type || 'application/octet-stream'};base64,${buffer.toString('base64')}`;
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("That photo couldn't be saved."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 const delay = (value) => new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), 120));
@@ -942,13 +986,15 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
     if (table === 'messages' && action === 'create') {
       const thread = record.thread_id ? threadOf(record.thread_id) : null;
       if (!canRead(record.thread_id ?? null, me) || thread?.archived) refuse();
-      // Same as the database's chat_attachments_ok(): one GIF, from KLIPY (here, the pretend ones).
-      if (record.attachments != null && !demoGifOk(record.attachments)) refuse();
+      // Same as the database's chat_attachments_ok() + image path check.
+      if (record.attachments != null && !demoAttachmentsOk(record.attachments, me.id)) refuse();
     }
-    // Same as message_gif_fixed() and the update rights: a GIF can't be edited or swapped, only deleted.
+    // Same as message_gif_fixed() and the update rights: a GIF or photo can't be edited or swapped, only deleted.
     if (table === 'messages' && action === 'update') {
       if ('attachments' in patch) refuse();
-      if (record.attachments && 'body' in patch && patch.body !== record.body) throw new Error("A GIF can't be edited. Delete it and send another.");
+      if (record.attachments && 'body' in patch && patch.body !== record.body) {
+        throw new Error("A GIF or photo can't be edited. Delete it and send another.");
+      }
     }
     if (table === 'messages' && action === 'delete') {
       const own = record.user_id === me.id;
@@ -1551,6 +1597,36 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       const found = DEMO_GIFS.filter((g) => words.every((w) => g.words.some((tag) => tag.startsWith(w))));
       const gifs = (page > 1 ? [] : found).map(({ words: _, ...gif }) => ({ ...gif, preview: { url: gif.url, width: gif.width, height: gif.height } }));
       return delay({ ready: true, gifs, more: false });
+    },
+
+    async uploadPhoto(blob, { ext = 'webp', width, height, onProgress } = {}) {
+      requireUser();
+      failIfOffline();
+      const me = currentUser();
+      if (!onTeam(me)) refuse();
+      onProgress?.(0.2);
+      const path = `${me.id}/${uid()}.${ext === 'jpeg' ? 'jpg' : ext}`;
+      const dataUrl = await blobToDataUrl(blob);
+      db.chat_media = { ...(db.chat_media || {}), [path]: dataUrl };
+      persist();
+      onProgress?.(1);
+      return delay({ path, width, height });
+    },
+
+    async photoUrl(path) {
+      requireUser();
+      const url = db.chat_media?.[path] || DEMO_PHOTOS.find((p) => p.url === path)?.url;
+      if (!url) throw new Error("That photo isn't here.");
+      return delay(url);
+    },
+
+    async removePhoto(path) {
+      if (!path || !db.chat_media?.[path]) return delay(null);
+      const next = { ...db.chat_media };
+      delete next[path];
+      db.chat_media = next;
+      persist();
+      return delay(null);
     },
     async history(threadId, { before, limit = 60 } = {}) {
       requireUser();

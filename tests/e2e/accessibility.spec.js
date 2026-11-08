@@ -116,6 +116,12 @@ test("the captain's screens", async ({ page }) => {
   await expectAccessible(page, 'GIF search');
   await page.getByRole('button', { name: 'Close GIF search' }).click();
 
+  const photo = page.locator('[data-message-id]').filter({ has: page.locator('img[data-photo]') }).first();
+  await photo.getByRole('button', { name: 'View photo' }).click();
+  await expect(page.getByRole('dialog', { name: 'Photo' })).toBeVisible();
+  await expectAccessible(page, 'Photo viewer');
+  await page.getByRole('button', { name: 'Close photo' }).click();
+
   await visit(page, '/rules', 'Field Rules');
   await expectAccessible(page, 'Field Rules');
 

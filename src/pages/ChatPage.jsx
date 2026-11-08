@@ -34,7 +34,9 @@ import {
   catchUpMessages,
   directChat,
   gifMessage,
+  imageOf,
   insertMessage,
+  photoMessage,
   isAfter,
   isLounge,
   isPrivate,
@@ -49,6 +51,7 @@ import {
   upsertThread,
   waitingElsewhere,
 } from '@/lib/chat';
+import { resizeChatPhoto } from '@/lib/chat-image';
 import { friendlyError, saveFailedToast } from '@/lib/errors';
 import { chatOutbox, keepOutbox, sendChatMessage } from '@/lib/chat-local';
 import { shortName } from '@/lib/format';
@@ -81,7 +84,7 @@ function ChatTip() {
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-lime-50 py-2.5 pl-3 pr-2 text-xs font-medium leading-relaxed text-lime-900 ring-1 ring-lime-200">
       <span className="flex-1">
-        <b>Tip:</b> in a chat, tap any message to react, reply or copy it. Tap <b>New</b> to start a thread or a
+        <b>Tip:</b> in a chat, tap a message (or beside it) to react, reply or copy it. Tap <b>New</b> to start a thread or a
         private chat.
       </span>
       <button
@@ -744,6 +747,31 @@ export function ChatPage() {
     return enqueue(room, body, replyId, {}, attachments);
   };
 
+  // A photo from the photo button: resize, upload, then send with an optional caption.
+  const sendPhoto = async (file, caption, onProgress) => {
+    if (!me) return false;
+    try {
+      const { blob, width, height, ext } = await resizeChatPhoto(file);
+      onProgress?.(0.35);
+      const uploaded = await api.chat.uploadPhoto(blob, {
+        ext,
+        width,
+        height,
+        onProgress: (p) => onProgress?.(0.35 + p * 0.55),
+      });
+      const { body, attachments } = photoMessage(uploaded, caption);
+      const replyId = replyTo?.id;
+      setReplyTo(null);
+      onProgress?.(1);
+      return enqueue(room, body, replyId, mentionFields(body), attachments);
+    } catch (err) {
+      toast(saveFailedToast(err));
+      return false;
+    }
+  };
+
+  const resolvePhotoUrl = useCallback((path) => api.chat.photoUrl(path), []);
+
   const loadEarlier = async () => {
     if (!loaded?.messages.length) return;
     const target = loaded.room;
@@ -956,7 +984,9 @@ export function ChatPage() {
         showList();
         toast({ title: 'You left the chat' });
       } else {
+        const photo = imageOf(dialog.message);
         await api.entities.Message.delete(dialog.message.id);
+        if (photo?.path) api.chat.removePhoto(photo.path).catch(() => {});
         setLoaded((current) => current && { ...current, messages: current.messages.filter((m) => m.id !== dialog.message.id) });
         refreshOverview();
       }
@@ -1175,6 +1205,7 @@ export function ChatPage() {
                 onEdit={startEdit}
                 onRetry={deliver}
                 onRemoveUnsent={(message) => updateOutbox((list) => list.filter((m) => m.id !== message.id))}
+                resolvePhotoUrl={resolvePhotoUrl}
                 focusId={focusId}
                 onFocused={() => setFocusId(null)}
                 emptyText={
@@ -1204,6 +1235,7 @@ export function ChatPage() {
                   onCancelReply={() => setReplyTo(null)}
                   onSend={send}
                   onSendGif={sendGif}
+                  onSendPhoto={sendPhoto}
                   editing={editing}
                   onCancelEdit={() => setEditing(null)}
                   onSaveEdit={saveEdit}

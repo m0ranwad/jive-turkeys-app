@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { Check, CornerUpLeft, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
+import { Check, CornerUpLeft, ImagePlus, Lock, Pencil, Send, Smile, Users, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
 import { GifPicker } from './GifPicker';
 import { initials } from '@/lib/format';
@@ -13,10 +13,11 @@ const keepTyping = (e) => e.preventDefault();
 /**
  * Message box: grows with the text, Enter sends on a computer, emoji picker,
  * GIF search (with `onSendGif`: tapping a GIF sends it, as a reply if one is
- * being written), reply preview, and a list of teammates to @mention while
- * typing a name after @ (`people`, from mentionPeople(); @team too with
- * `canMentionTeam`). With `editing` (one of your messages), it holds that
- * message's text and saves the change instead of sending.
+ * being written), photo pick (with `onSendPhoto`: optional caption in the box,
+ * upload progress, then send), reply preview, and a list of teammates to
+ * @mention while typing a name after @ (`people`, from mentionPeople(); @team
+ * too with `canMentionTeam`). With `editing` (one of your messages), it holds
+ * that message's text and saves the change instead of sending.
  */
 export const Composer = forwardRef(function Composer(
   {
@@ -27,6 +28,7 @@ export const Composer = forwardRef(function Composer(
     onCancelReply,
     onSend,
     onSendGif,
+    onSendPhoto,
     editing,
     onCancelEdit,
     onSaveEdit,
@@ -39,8 +41,11 @@ export const Composer = forwardRef(function Composer(
   const [draft, setDraft] = useState(() => chatDraft(me, room));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
+  const [photo, setPhoto] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const box = useRef(null);
   const wrap = useRef(null);
+  const fileInput = useRef(null);
 
   // The room above the message box, up to the top of the chat, so the GIF search, emoji picker and @ list
   // open within it. With a phone's keyboard up there can be little, and the GIF search box (at the top of
@@ -74,6 +79,19 @@ export const Composer = forwardRef(function Composer(
   }, [query?.start, query?.query]);
   const trackCaret = (e) => setCaret(document.activeElement === e.target ? e.target.selectionStart : null);
 
+  const clearPhoto = () => {
+    setPhoto((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setUploadProgress(null);
+    if (fileInput.current) fileInput.current.value = '';
+  };
+
+  useEffect(() => () => {
+    if (photo?.previewUrl) URL.revokeObjectURL(photo.previewUrl);
+  }, [photo?.previewUrl]);
+
   const pick = (choice) => {
     if (!query) return;
     const insert = `@${choice.label} `;
@@ -96,6 +114,7 @@ export const Composer = forwardRef(function Composer(
   useEffect(() => {
     if (!editing) return;
     setGifOpen(false);
+    clearPhoto();
     draftBeforeEdit.current = chatDraft(me, room);
     setDraft(editing.body);
     requestAnimationFrame(() => {
@@ -123,15 +142,56 @@ export const Composer = forwardRef(function Composer(
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
   }, [draft]);
 
+  const pickPhoto = (file) => {
+    if (!file) return;
+    setGifOpen(false);
+    setEmojiOpen(false);
+    setPhoto((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+    setUploadProgress(null);
+    box.current?.focus();
+  };
+
+  // A copied photo pasted into the message box (an iPhone's Paste, or Ctrl/Cmd+V) attaches it.
+  const onPaste = (e) => {
+    if (!onSendPhoto || editing || uploadProgress != null) return;
+    const data = e.clipboardData;
+    const fromFiles = Array.from(data?.files || []).find((f) => f.type.startsWith('image/'));
+    const fromItems = Array.from(data?.items || [])
+      .find((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      ?.getAsFile();
+    const file = fromFiles || fromItems;
+    if (!file) return;
+    e.preventDefault();
+    pickPhoto(file.name ? file : new File([file], 'pasted-photo.png', { type: file.type }));
+  };
+
   const submit = async () => {
     const body = draft.trim();
-    if (!body) return;
     if (editing) {
+      if (!body) return;
       if (body === editing.body) return stopEditing();
       const saved = await onSaveEdit(editing, body);
       if (saved) setDraft(draftBeforeEdit.current);
       return undefined;
     }
+    if (photo && onSendPhoto) {
+      const caption = body;
+      setUploadProgress(0);
+      const sent = await onSendPhoto(photo.file, caption, (p) => setUploadProgress(p));
+      if (sent) {
+        setDraft('');
+        keepDraft(me, room, '');
+        clearPhoto();
+        setEmojiOpen(false);
+      } else {
+        setUploadProgress(null);
+      }
+      return undefined;
+    }
+    if (!body) return;
     setDraft('');
     keepDraft(me, room, '');
     setEmojiOpen(false);
@@ -179,6 +239,9 @@ export const Composer = forwardRef(function Composer(
       el.setSelectionRange(caret, caret);
     });
   };
+
+  const canSend = editing ? !!draft.trim() : !!(photo || draft.trim());
+  const uploading = uploadProgress != null;
 
   return (
     <div ref={wrap} className="relative border-t border-black/5 bg-white p-2.5">
@@ -273,10 +336,52 @@ export const Composer = forwardRef(function Composer(
           </button>
         </div>
       )}
+      {photo && !editing && (
+        <div className="mb-2 overflow-hidden rounded-2xl bg-zinc-50 ring-1 ring-black/5">
+          <div className="flex items-start gap-2 p-2">
+            <img
+              src={photo.previewUrl}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded-xl object-cover"
+            />
+            <div className="min-w-0 flex-1 pt-1">
+              <div className="text-[11px] font-black uppercase tracking-[0.1em] text-zinc-600">
+                {uploading ? 'Uploading…' : 'Photo ready'}
+              </div>
+              <p className="mt-0.5 text-xs text-zinc-500">Add a caption below, or send as is.</p>
+              {uploading && (
+                <div
+                  className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round((uploadProgress || 0) * 100)}
+                  aria-label="Upload progress"
+                >
+                  <div
+                    className="h-full rounded-full bg-lime-500 transition-[width] duration-200"
+                    style={{ width: `${Math.max(8, Math.round((uploadProgress || 0) * 100))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            {!uploading && (
+              <button
+                type="button"
+                onClick={clearPhoto}
+                aria-label="Remove photo"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-500 transition hover:bg-zinc-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          submit();
+          if (!uploading) submit();
         }}
         className="flex items-end gap-2"
       >
@@ -289,6 +394,7 @@ export const Composer = forwardRef(function Composer(
           onMouseDown={keepTyping}
           aria-label="Emoji"
           aria-pressed={emojiOpen}
+          disabled={uploading}
           className={cn(
             'grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
             emojiOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700',
@@ -305,6 +411,7 @@ export const Composer = forwardRef(function Composer(
             }}
             aria-label="GIF"
             aria-pressed={gifOpen}
+            disabled={uploading}
             className={cn(
               '-ml-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
               gifOpen ? 'bg-lime-100 text-lime-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700',
@@ -312,6 +419,35 @@ export const Composer = forwardRef(function Composer(
           >
             <span className="rounded-md border-2 border-current px-1 text-[11px] font-black leading-4 tracking-wide">GIF</span>
           </button>
+        )}
+        {onSendPhoto && !editing && (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(e) => {
+                pickPhoto(e.target.files?.[0] || null);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              aria-label="Photo"
+              aria-pressed={!!photo}
+              disabled={uploading}
+              className={cn(
+                '-ml-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full transition',
+                photo ? 'bg-lime-100 text-lime-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700',
+              )}
+            >
+              <ImagePlus className="h-5 w-5" />
+            </button>
+          </>
         )}
         <textarea
           ref={box}
@@ -324,17 +460,19 @@ export const Composer = forwardRef(function Composer(
           onSelect={trackCaret}
           onBlur={() => setCaret(null)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          disabled={uploading}
           aria-autocomplete="list"
           aria-controls={picking ? `mentions-${room}` : undefined}
           aria-activedescendant={picking ? `mention-${room}-${picked.id}` : undefined}
-          placeholder={placeholder}
+          placeholder={photo ? 'Add a caption (optional)' : placeholder}
           maxLength={MAX_LENGTH}
-          aria-label="Message"
-          className="block max-h-36 min-h-11 flex-1 resize-none overscroll-contain rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-500 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 md:text-sm md:leading-[22px]"
+          aria-label={photo ? 'Caption' : 'Message'}
+          className="block max-h-36 min-h-11 flex-1 resize-none overscroll-contain rounded-[22px] border border-black/10 bg-zinc-50 px-4 py-[10px] text-base font-medium leading-snug outline-none transition placeholder:text-zinc-500 focus:border-lime-400 focus:bg-white focus:ring-2 focus:ring-lime-200 disabled:opacity-60 md:text-sm md:leading-[22px]"
         />
         <button
           type="submit"
-          disabled={!draft.trim()}
+          disabled={!canSend || uploading}
           onMouseDown={keepTyping}
           aria-label={editing ? 'Save edit' : 'Send'}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-zinc-950 text-lime-400 transition hover:bg-zinc-800 active:scale-95 disabled:opacity-30"

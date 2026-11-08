@@ -183,7 +183,7 @@ test('emoji-only messages show big', async ({ page }) => {
 test('load earlier messages keeps your place', async ({ page }) => {
   // Give Team Chat a long history (sample data lives in this browser).
   await page.evaluate(() => {
-    const db = JSON.parse(localStorage.getItem('jt_demo_db_v35'));
+    const db = JSON.parse(localStorage.getItem('jt_demo_db_v36'));
     const sam = db.player_profiles[2];
     for (let i = 1; i <= 80; i += 1) {
       const when = new Date(Date.now() - (3000 + i * 3) * 60000).toISOString();
@@ -198,19 +198,19 @@ test('load earlier messages keeps your place', async ({ page }) => {
         updated_date: when,
       });
     }
-    localStorage.setItem('jt_demo_db_v35', JSON.stringify(db));
+    localStorage.setItem('jt_demo_db_v36', JSON.stringify(db));
   });
   await page.reload();
   const log = page.getByRole('log');
   await expect(page.getByText('Paid 💸')).toBeVisible();
   await expect(log.locator('[data-message-id]')).toHaveCount(60);
   await log.evaluate((el) => (el.scrollTop = 0));
-  // The first 60: the 13 sample messages (with the sample GIF) and old messages #34 to #80.
-  const oldestShown = message(page, /^Old message #34$/);
+  // The first 60: the 14 sample messages (with the sample GIF and photo) and old messages #35 to #80.
+  const oldestShown = message(page, /^Old message #35$/);
   await expect(oldestShown).toBeInViewport();
 
   await page.getByRole('button', { name: 'Load earlier messages' }).click();
-  await expect(log.locator('[data-message-id]')).toHaveCount(93);
+  await expect(log.locator('[data-message-id]')).toHaveCount(94);
   await expect(oldestShown).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0);
   await log.evaluate((el) => (el.scrollTop = 0));
@@ -221,7 +221,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
   // Regression: a reaction landing between tapping "Load earlier" and the older
   // messages arriving used to throw the view back to the very top.
   await page.evaluate(() => {
-    const db = JSON.parse(localStorage.getItem('jt_demo_db_v35'));
+    const db = JSON.parse(localStorage.getItem('jt_demo_db_v36'));
     const [sam, alex] = [db.player_profiles[2], db.player_profiles[4]];
     for (let i = 1; i <= 80; i += 1) {
       const when = new Date(Date.now() - (3000 + i * 3) * 60000).toISOString();
@@ -237,7 +237,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
         updated_date: when,
       });
       // The oldest of the first 60 shown.
-      if (81 - i === 34)
+      if (81 - i === 35)
         db.message_reactions.push({
           id: crypto.randomUUID(),
           message_id: id,
@@ -247,11 +247,11 @@ test('load earlier keeps your place even if reactions change while it loads', as
           updated_date: when,
         });
     }
-    localStorage.setItem('jt_demo_db_v35', JSON.stringify(db));
+    localStorage.setItem('jt_demo_db_v36', JSON.stringify(db));
   });
   await page.reload();
   const log = page.getByRole('log');
-  const anchor = messageRow(page, /^Old message #34$/);
+  const anchor = messageRow(page, /^Old message #35$/);
   await expect(anchor.getByRole('button', { name: '👍 1' })).toBeVisible();
   await log.evaluate((el) => (el.scrollTop = 0));
   await expect(anchor).toBeInViewport();
@@ -262,7 +262,7 @@ test('load earlier keeps your place even if reactions change while it loads', as
   await anchor.getByRole('button', { name: '👍 1' }).click();
   await page.clock.runFor(2000);
 
-  await expect(log.locator('[data-message-id]')).toHaveCount(93);
+  await expect(log.locator('[data-message-id]')).toHaveCount(94);
   await expect(anchor).toBeInViewport();
   await page.clock.resume();
 });
@@ -283,12 +283,12 @@ test('the chat fills the screen with the message box above the tab bar', async (
 test('the tip shows once, at the top of the room list, not over the messages', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('jt_chat_tip_seen'));
   await page.reload();
-  await expect(page.getByRole('log', { name: 'Messages' }).getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText(/tap a message/)).toHaveCount(0);
   await showRooms(page);
-  await expect(page.getByText(/tap any message to react, reply or copy it/)).toBeVisible();
+  await expect(page.getByText(/tap a message \(or beside it\) to react, reply or copy it/)).toBeVisible();
   await page.getByRole('button', { name: 'Got it' }).click();
-  await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByText(/tap a message \(or beside it\)/)).toHaveCount(0);
   await page.reload();
   await expect(page.locator('[data-room="team"]')).toBeVisible();
-  await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByText(/tap a message \(or beside it\)/)).toHaveCount(0);
 });
