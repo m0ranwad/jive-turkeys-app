@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, LoaderCircle } from 'lucide-react';
 import { MessageRow } from './MessageRow';
-import { buildTimeline, gifOf, summarizeReactions } from '@/lib/chat';
+import { buildTimeline, hasAttachment, summarizeReactions } from '@/lib/chat';
 import { plural } from '@/lib/format';
 import { scrollBehavior } from '@/lib/utils';
 
@@ -32,6 +32,7 @@ export function Conversation({
   onEdit,
   onRetry,
   onRemoveUnsent,
+  resolvePhotoUrl,
   focusId,
   onFocused,
   emptyText,
@@ -219,8 +220,8 @@ export function Conversation({
               selected={selectedId === m.id}
               highlighted={highlightId === m.id}
               canDelete={!m.pending && (mine || isCaptain)}
-              // A GIF can't be edited, only deleted (message_gif_fixed() in the database).
-              canEdit={mine && !m.pending && !!onEdit && !gifOf(m)}
+              // A GIF or photo can't be edited, only deleted (message_gif_fixed() in the database).
+              canEdit={mine && !m.pending && !!onEdit && !hasAttachment(m)}
               onSelect={(id) => setSelectedId((current) => (current === id ? null : id))}
               onReact={(message, emoji, fromMenu) => {
                 if (fromMenu) setSelectedId(null);
@@ -233,6 +234,7 @@ export function Conversation({
               onRetry={onRetry}
               onRemoveUnsent={onRemoveUnsent}
               onJumpTo={jumpTo}
+              resolvePhotoUrl={resolvePhotoUrl}
             />
           );
         })}

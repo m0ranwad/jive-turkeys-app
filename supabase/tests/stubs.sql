@@ -72,3 +72,47 @@ language sql
 as $$
   insert into net.test_requests (url, body) values (url, body) returning id;
 $$;
+
+-- Minimal Storage stand-in so migrations that create buckets and object
+-- policies can run on plain Postgres. Live Supabase already has the real schema.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false,
+  file_size_limit bigint,
+  allowed_mime_types text[]
+);
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text not null,
+  owner uuid,
+  owner_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_accessed_at timestamptz not null default now(),
+  metadata jsonb
+);
+
+-- Live Supabase already has RLS on; enable it on the stub so policies apply in tests.
+alter table storage.objects enable row level security;
+
+-- First path segments without the file name, matching Supabase's helper.
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select case
+    when name is null or position('/' in name) = 0 then array[]::text[]
+    else string_to_array(left(name, length(name) - length(substring(name from '[^/]+$')) - 1), '/')
+  end;
+$$;
+
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.buckets to authenticated, service_role;
+grant select, insert, update, delete on storage.objects to authenticated, service_role;
+grant execute on function storage.foldername(text) to anon, authenticated, service_role;

@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { JOIN_ERRORS } from '@/lib/team-code';
+import { newId } from '@/lib/utils';
 import { isInternalEmail } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
+
+const CHAT_MEDIA_BUCKET = 'chat-media';
+const PHOTO_URL_SECONDS = 24 * 60 * 60;
 
 const PAGE_SIZE = 1000;
 
@@ -310,6 +314,42 @@ export function createSupabaseBackend(url, key) {
       const { data, error } = await supabase.functions.invoke('notify-chat', { body: { action: 'gifs', q, page } });
       if (error || !data) throw new Error("Couldn't load GIFs. Check your signal and try again.");
       return data;
+    },
+
+    /**
+     * Uploads a resized photo into chat-media under the signed-in player.
+     * Resolves to { path, width, height } for the message attachment.
+     */
+    async uploadPhoto(blob, { ext = 'jpg', width, height, onProgress } = {}) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) fail(sessionError);
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) throw new Error('Sign in to send a photo.');
+      const path = `${userId}/${newId()}.${ext === 'jpeg' ? 'jpg' : ext}`;
+      onProgress?.(0.1);
+      const { error } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(path, blob, {
+        contentType: ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/webp',
+        upsert: false,
+        cacheControl: String(PHOTO_URL_SECONDS),
+      });
+      if (error) fail(error);
+      onProgress?.(1);
+      return { path, width, height };
+    },
+
+    /** Temporary URL to show a chat photo (about a day). */
+    async photoUrl(path) {
+      const { data, error } = await supabase.storage
+        .from(CHAT_MEDIA_BUCKET)
+        .createSignedUrl(path, PHOTO_URL_SECONDS);
+      if (error) fail(error);
+      return data.signedUrl;
+    },
+
+    /** Best-effort remove after a photo message is deleted. */
+    async removePhoto(path) {
+      if (!path) return;
+      await supabase.storage.from(CHAT_MEDIA_BUCKET).remove([path]).catch(() => {});
     },
 
     /** Up to `limit` messages in a room (null = Team Chat) before `before`, oldest first. */

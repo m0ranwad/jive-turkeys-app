@@ -150,10 +150,29 @@ export const roomOf = (message) => message.thread_id ?? null;
  */
 export const GIF_BODY = 'GIF';
 
+/**
+ * Photos (docs/chat.md section 9). A photo message's body is the optional
+ * caption, or "Photo" when there isn't one; the file is in `attachments`.
+ */
+export const PHOTO_BODY = 'Photo';
+
 /** A message's GIF ({ url, width, height, title }), or null if it isn't one. */
 export function gifOf(message) {
   const gif = Array.isArray(message?.attachments) ? message.attachments[0] : null;
   return gif?.type === 'gif' && typeof gif.url === 'string' && gif.width > 0 && gif.height > 0 ? gif : null;
+}
+
+/** A message's photo ({ path, width, height }), or null if it isn't one. */
+export function imageOf(message) {
+  const image = Array.isArray(message?.attachments) ? message.attachments[0] : null;
+  return image?.type === 'image' && typeof image.path === 'string' && image.width > 0 && image.height > 0
+    ? image
+    : null;
+}
+
+/** True when the message carries a GIF or photo (can't edit or copy those). */
+export function hasAttachment(message) {
+  return !!(gifOf(message) || imageOf(message));
 }
 
 /** What the chat sends for a GIF picked in the GIF search (the database checks the same shape). */
@@ -162,6 +181,15 @@ export function gifMessage(gif) {
   return {
     body: GIF_BODY,
     attachments: [{ type: 'gif', url: gif.url, width: gif.width, height: gif.height, ...(title && { title }) }],
+  };
+}
+
+/** What the chat sends after a photo uploads (caption optional; empty → "Photo"). */
+export function photoMessage({ path, width, height }, caption = '') {
+  const body = String(caption || '').trim() || PHOTO_BODY;
+  return {
+    body,
+    attachments: [{ type: 'image', path, width, height }],
   };
 }
 

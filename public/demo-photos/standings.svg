@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240">
+  <rect width="320" height="240" fill="#18181b"/>
+  <rect x="24" y="24" width="272" height="192" rx="12" fill="#27272a"/>
+  <text x="160" y="100" text-anchor="middle" fill="#a3e635" font-family="Archivo,sans-serif" font-size="28" font-weight="800">STANDINGS</text>
+  <text x="160" y="140" text-anchor="middle" fill="#fafafa" font-family="Inter,sans-serif" font-size="16">Jive Turkeys · 1st</text>
+</svg>

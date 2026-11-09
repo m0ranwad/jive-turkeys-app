@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#14532d"/>
+  <rect x="16" y="16" width="288" height="168" fill="none" stroke="#a3e635" stroke-width="3"/>
+  <circle cx="160" cy="100" r="28" fill="none" stroke="#a3e635" stroke-width="3"/>
+  <text x="160" y="106" text-anchor="middle" fill="#ecfccb" font-family="Inter,sans-serif" font-size="14">Field pic</text>
+</svg>

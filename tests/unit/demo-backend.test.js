@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_TEAM_CODE, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v35';
+const DB_KEY = 'jt_demo_db_v37';
 
 async function signedIn() {
   const api = createDemoBackend();
@@ -318,7 +318,7 @@ describe('GIFs (docs/chat.md section 8)', () => {
     ]) {
       await expect(api.entities.Message.create({ user_id: me.id, author_name: 'Casey', body: 'GIF', thread_id: null, attachments: bad })).rejects.toThrow();
     }
-    await expect(api.entities.Message.update(sent.id, { body: 'not a gif' })).rejects.toThrow("A GIF can't be edited");
+    await expect(api.entities.Message.update(sent.id, { body: 'not a gif' })).rejects.toThrow("A GIF or photo can't be edited");
     await expect(api.entities.Message.update(sent.id, { attachments: klipy })).rejects.toThrow();
     await api.entities.Message.delete(sent.id);
     expect((await api.chat.history(null)).some((m) => m.id === sent.id)).toBe(false);

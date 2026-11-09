@@ -97,7 +97,7 @@ select gif_test.refused(
   'or one from a look-alike address');
 select gif_test.refused(
   $$select gif_test.post('[{"type": "image", "url": "https://static.klipy.com/ii/a.gif", "width": 300, "height": 200}]')$$,
-  'only GIFs (photos aren''t part of this)');
+  'a photo needs a path in chat-media, not a url');
 select gif_test.refused(
   $$select gif_test.post('[{"type": "gif", "url": "https://static.klipy.com/ii/a.gif", "width": 300, "height": 200}, {"type": "gif", "url": "https://static.klipy.com/ii/b.gif", "width": 300, "height": 200}]')$$,
   'one GIF per message');
