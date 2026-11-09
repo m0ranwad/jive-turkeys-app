@@ -5,7 +5,7 @@ import { isInternalEmail } from '@/lib/username';
 import { TABLES, parseSort } from './tables';
 
 const CHAT_MEDIA_BUCKET = 'chat-media';
-const PHOTO_URL_SECONDS = 60 * 60;
+const PHOTO_URL_SECONDS = 24 * 60 * 60;
 
 const PAGE_SIZE = 1000;
 
@@ -320,7 +320,7 @@ export function createSupabaseBackend(url, key) {
      * Uploads a resized photo into chat-media under the signed-in player.
      * Resolves to { path, width, height } for the message attachment.
      */
-    async uploadPhoto(blob, { ext = 'webp', width, height, onProgress } = {}) {
+    async uploadPhoto(blob, { ext = 'jpg', width, height, onProgress } = {}) {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) fail(sessionError);
       const userId = sessionData?.session?.user?.id;
@@ -330,13 +330,14 @@ export function createSupabaseBackend(url, key) {
       const { error } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(path, blob, {
         contentType: ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/webp',
         upsert: false,
+        cacheControl: String(PHOTO_URL_SECONDS),
       });
       if (error) fail(error);
       onProgress?.(1);
       return { path, width, height };
     },
 
-    /** Temporary URL to show a chat photo (about an hour). */
+    /** Temporary URL to show a chat photo (about a day). */
     async photoUrl(path) {
       const { data, error } = await supabase.storage
         .from(CHAT_MEDIA_BUCKET)

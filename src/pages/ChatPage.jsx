@@ -52,6 +52,7 @@ import {
   waitingElsewhere,
 } from '@/lib/chat';
 import { resizeChatPhoto } from '@/lib/chat-image';
+import { rememberPhotoUrl } from '@/hooks/usePhotoUrl';
 import { friendlyError, saveFailedToast } from '@/lib/errors';
 import { chatOutbox, keepOutbox, sendChatMessage } from '@/lib/chat-local';
 import { shortName } from '@/lib/format';
@@ -84,7 +85,7 @@ function ChatTip() {
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-lime-50 py-2.5 pl-3 pr-2 text-xs font-medium leading-relaxed text-lime-900 ring-1 ring-lime-200">
       <span className="flex-1">
-        <b>Tip:</b> in a chat, tap a message (or beside it) to react, reply or copy it. Tap <b>New</b> to start a thread or a
+        <b>Tip:</b> in a chat, tap any message to react, reply or copy it. Tap <b>New</b> to start a thread or a
         private chat.
       </span>
       <button
@@ -748,6 +749,9 @@ export function ChatPage() {
   };
 
   // A photo from the photo button: resize, upload, then send with an optional caption.
+  // After a successful upload the outbox owns the message (even if the insert
+  // fails later), so Retry doesn't re-upload and the composer doesn't keep a
+  // duplicate copy of the photo.
   const sendPhoto = async (file, caption, onProgress) => {
     if (!me) return false;
     try {
@@ -759,11 +763,13 @@ export function ChatPage() {
         height,
         onProgress: (p) => onProgress?.(0.35 + p * 0.55),
       });
+      rememberPhotoUrl(uploaded.path, URL.createObjectURL(blob));
       const { body, attachments } = photoMessage(uploaded, caption);
       const replyId = replyTo?.id;
       setReplyTo(null);
       onProgress?.(1);
-      return enqueue(room, body, replyId, mentionFields(body), attachments);
+      enqueue(room, body, replyId, mentionFields(body), attachments);
+      return true;
     } catch (err) {
       toast(saveFailedToast(err));
       return false;

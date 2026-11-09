@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Copy, CornerUpLeft, Expand, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { EmojiPicker } from './EmojiPicker';
 import {
@@ -11,32 +12,10 @@ import {
   linkParts,
   timeLabel,
 } from '@/lib/chat';
+import { usePhotoUrl } from '@/hooks/usePhotoUrl';
 import { initials, shortName } from '@/lib/format';
 import { TEAM, mentionParts } from '@/lib/mentions';
 import { cn } from '@/lib/utils';
-
-/** Resolves a chat-media path to a URL the <img> can load (signed or demo). */
-function usePhotoUrl(path, resolvePhotoUrl) {
-  const [url, setUrl] = useState(null);
-  useEffect(() => {
-    if (!path || !resolvePhotoUrl) {
-      setUrl(null);
-      return undefined;
-    }
-    let alive = true;
-    resolvePhotoUrl(path)
-      .then((next) => {
-        if (alive) setUrl(next);
-      })
-      .catch(() => {
-        if (alive) setUrl(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [path, resolvePhotoUrl]);
-  return url;
-}
 
 /** The message text: links can be tapped, and the people it @mentions stand out (you most of all). */
 function Body({ message, mine, me, people }) {
@@ -121,15 +100,6 @@ export function MessageRow({
     mine ? !first && 'rounded-tr-md' : !first && 'rounded-tl-md',
     mine ? !last && 'rounded-br-md' : !last && 'rounded-bl-md',
   );
-
-  useEffect(() => {
-    if (!fullscreen) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') setFullscreen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [fullscreen]);
 
   // On a photo, a tap opens it full screen and a long press shows the message's options.
   const pressTimer = useRef(null);
@@ -340,15 +310,6 @@ export function MessageRow({
             </div>
           )}
         </div>
-        {/* Empty space beside the bubble: same as tapping the message (iMessage-style). */}
-        {!m.pending && (
-          <div
-            aria-hidden="true"
-            data-message-gutter
-            onClick={() => onSelect(m.id)}
-            className="min-h-11 min-w-8 flex-1 cursor-pointer self-stretch"
-          />
-        )}
       </div>
 
       {selected && (
@@ -413,56 +374,52 @@ export function MessageRow({
         </div>
       )}
 
-      {fullscreen && photoUrl && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Photo"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-          onClick={() => setFullscreen(false)}
-        >
-          <button
-            type="button"
-            aria-label="Close photo"
-            onClick={() => setFullscreen(false)}
-            className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+      <DialogPrimitive.Root open={fullscreen && !!photoUrl} onOpenChange={(open) => !open && setFullscreen(false)}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/90" />
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 text-white outline-none"
+            onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <X className="h-5 w-5" />
-          </button>
-          <img
-            src={photoUrl}
-            alt={caption || 'Photo'}
-            className="max-h-[calc(100%-5rem)] max-w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          {!m.pending && (
-            <div
-              className="absolute inset-x-0 bottom-0 flex justify-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-              onClick={(e) => e.stopPropagation()}
+            <DialogPrimitive.Title className="sr-only">Photo</DialogPrimitive.Title>
+            <DialogPrimitive.Close
+              aria-label="Close photo"
+              className="absolute right-3 top-3 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setFullscreen(false);
-                  onReply(m);
-                }}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
-              >
-                <CornerUpLeft className="h-4 w-4" />
-                Reply
-              </button>
-              <button
-                type="button"
-                onClick={openOptions}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-                Options
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+              <X className="h-5 w-5" />
+            </DialogPrimitive.Close>
+            <img
+              src={photoUrl}
+              alt={caption || 'Photo'}
+              className="max-h-[calc(100%-5rem)] max-w-full object-contain"
+            />
+            {!m.pending && (
+              <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFullscreen(false);
+                    onReply(m);
+                  }}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
+                >
+                  <CornerUpLeft className="h-4 w-4" />
+                  Reply
+                </button>
+                <button
+                  type="button"
+                  onClick={openOptions}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-white/25"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                  Options
+                </button>
+              </div>
+            )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   );
 }

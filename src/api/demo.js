@@ -14,7 +14,33 @@ import {
 import { newId } from '@/lib/utils';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v36';
+const DB_KEY = 'jt_demo_db_v37';
+// Uploaded photo bytes stay in memory (not localStorage): a few data URLs
+// would blow the ~5 MB quota and make every later save fail silently.
+// Sample /demo-photos/ URLs are tiny, so those paths are indexed here across reloads.
+const PHOTO_INDEX_KEY = 'jt_demo_photo_urls_v37';
+let demoPhotos = new Map();
+
+function loadDemoPhotos() {
+  try {
+    demoPhotos = new Map(Object.entries(JSON.parse(localStorage.getItem(PHOTO_INDEX_KEY) || '{}')));
+  } catch {
+    demoPhotos = new Map();
+  }
+}
+
+function rememberDemoPhoto(path, url) {
+  if (!path || !url) return;
+  demoPhotos.set(path, url);
+  if (!String(url).startsWith('/demo-photos/')) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(PHOTO_INDEX_KEY) || '{}');
+    saved[path] = url;
+    localStorage.setItem(PHOTO_INDEX_KEY, JSON.stringify(saved));
+  } catch {
+    /* ignore quota — sample URLs are tiny */
+  }
+}
 // A new value on every save, so a tab notices another tab's save without
 // reading all the data. Not jt_demo_db_*: tests find the data by that prefix.
 const REV_KEY = 'jt_demo_rev';
@@ -212,7 +238,9 @@ function seed() {
   // A photo from the photo button (docs/chat.md section 9).
   const standings = DEMO_PHOTOS.find((p) => p.id === 'demo-standings');
   const standingsPath = `${profiles[1].user_id}/${uid()}.jpg`;
-  const chat_media = { [standingsPath]: standings.url };
+  localStorage.removeItem(PHOTO_INDEX_KEY);
+  demoPhotos = new Map();
+  rememberDemoPhoto(standingsPath, standings.url);
   say(null, profiles[1], 'Look at the board!', 1557, null, {
     attachments: [{ type: 'image', path: standingsPath, width: standings.width, height: standings.height }],
   });
@@ -525,7 +553,6 @@ function seed() {
       { id: uid(), code: DEMO_TEAM_CODE, updated_by: captainId, created_date: dayjs().subtract(60, 'day').toISOString(), updated_date: dayjs().subtract(60, 'day').toISOString() },
     ],
     messages,
-    chat_media,
     chat_threads: threads,
     chat_thread_members: members,
     message_reactions: reactions,
@@ -547,6 +574,7 @@ function load() {
     if (raw) {
       const db = JSON.parse(raw);
       for (const table of Object.values(TABLES)) db[table] = db[table] || [];
+      loadDemoPhotos();
       return db;
     }
   } catch {
@@ -1599,7 +1627,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       return delay({ ready: true, gifs, more: false });
     },
 
-    async uploadPhoto(blob, { ext = 'webp', width, height, onProgress } = {}) {
+    async uploadPhoto(blob, { ext = 'jpg', width, height, onProgress } = {}) {
       requireUser();
       failIfOffline();
       const me = currentUser();
@@ -1607,25 +1635,36 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       onProgress?.(0.2);
       const path = `${me.id}/${uid()}.${ext === 'jpeg' ? 'jpg' : ext}`;
       const dataUrl = await blobToDataUrl(blob);
-      db.chat_media = { ...(db.chat_media || {}), [path]: dataUrl };
-      persist();
+      rememberDemoPhoto(path, dataUrl);
       onProgress?.(1);
       return delay({ path, width, height });
     },
 
     async photoUrl(path) {
       requireUser();
-      const url = db.chat_media?.[path] || DEMO_PHOTOS.find((p) => p.url === path)?.url;
+      const me = currentUser();
+      if (!path || !onTeam(me)) refuse();
+      // Same idea as chat_media_select: own folder, or a message the reader can see.
+      const ownFolder = path.startsWith(`${me.id}/`);
+      const shown = db.messages.some(
+        (m) => m.attachments?.[0]?.path === path && canRead(m.thread_id ?? null, me),
+      );
+      if (!ownFolder && !shown) refuse();
+      const url = demoPhotos.get(path);
       if (!url) throw new Error("That photo isn't here.");
       return delay(url);
     },
 
     async removePhoto(path) {
-      if (!path || !db.chat_media?.[path]) return delay(null);
-      const next = { ...db.chat_media };
-      delete next[path];
-      db.chat_media = next;
-      persist();
+      if (!path || !demoPhotos.has(path)) return delay(null);
+      demoPhotos.delete(path);
+      try {
+        const saved = JSON.parse(localStorage.getItem(PHOTO_INDEX_KEY) || '{}');
+        if (path in saved) {
+          delete saved[path];
+          localStorage.setItem(PHOTO_INDEX_KEY, JSON.stringify(saved));
+        }
+      } catch { /* ignore */ }
       return delay(null);
     },
     async history(threadId, { before, limit = 60 } = {}) {

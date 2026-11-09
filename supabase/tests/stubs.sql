@@ -97,6 +97,9 @@ create table if not exists storage.objects (
   metadata jsonb
 );
 
+-- Live Supabase already has RLS on; enable it on the stub so policies apply in tests.
+alter table storage.objects enable row level security;
+
 -- First path segments without the file name, matching Supabase's helper.
 create or replace function storage.foldername(name text)
 returns text[]

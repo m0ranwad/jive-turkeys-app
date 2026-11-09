@@ -57,7 +57,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 
 ## 3. Message options: react, reply, copy, edit, delete
 
-Tapping (or clicking) a message, or the empty space beside it, shows its options. Tap it again, or press Escape, to close them.
+Tapping (or clicking) a message shows its options. Tap it again, or press Escape, to close them.
 
 | Expected behavior | Checked by |
 |---|---|
@@ -230,19 +230,24 @@ it shows: PG-13. Previews find a few pretend GIFs (`public/demo-gifs/`, `DEMO_GI
 
 The **Photo** button beside the GIF button lets players share one photo per message (a team pic, the
 standings board, a screenshot). The phone's file picker can also offer **Take Photo**. Before upload the
-browser resizes to at most 1600px wide and compresses to WebP (or JPEG) at about 80% quality, then stores
-the file in the private Supabase Storage bucket `chat-media` under the poster's user id. The message keeps
-`{ type: 'image', path, width, height }` in `attachments`. An optional caption is the message body; with
-no caption the body is "Photo" (room list, replies, search, notifications). Previews use
-`public/demo-photos/` and keep uploads as data URLs in the demo store.
+browser scales so the longest side is at most 1600px and compresses to JPEG at about 80% quality (Safari
+can't encode WebP reliably), then stores the file in the private Supabase Storage bucket `chat-media`
+under the poster's user id. The message keeps `{ type: 'image', path, width, height }` in `attachments`.
+An optional caption is the message body; with no caption the body is "Photo" (room list, replies, search,
+notifications). Previews use `public/demo-photos/` and keep uploads in memory (not in the demo's saved
+data). The nightly database backup does not include photo files in Storage.
+
+A teammate can open a photo only when they can read the message that shows it (Team Chat and threads for
+everyone, a private chat only for people in it, the Captains' Lounge only for captains), or when the file
+is in their own folder. Signed links last about a day and are reused while a chat stays open.
 
 | Expected behavior | Checked by |
 |---|---|
 | The Photo button opens the phone's image picker. Pasting a copied photo into the message box (an iPhone's Paste, or Ctrl/Cmd+V) attaches it the same way. A chosen photo shows as a preview with a progress bar while it uploads. The message box is an optional caption. The Photo button is hidden while editing, and pasting a photo then does nothing. | `[browser]` `chat-photos.spec.js` |
-| Sending posts one photo, about 240px wide at most in the thread, keeping its shape. A caption shows under the photo when there is one. Tapping the photo opens it full screen (✕, Esc or a tap outside closes it), with **Reply** and **Options** at the bottom. A long press on the photo, a tap on its caption, or a tap in the empty space beside it, shows the message's options like any message, which include **View**. | `[browser]` `chat-photos.spec.js` |
+| Sending posts one photo, about 240px wide at most in the thread, keeping its shape. A caption shows under the photo when there is one. Tapping the photo opens it full screen (✕, Esc or a tap outside closes it), with **Reply** and **Options** at the bottom. A long press on the photo, or a tap on its caption, shows the message's options like any message, which include **View**. | `[browser]` `chat-photos.spec.js` |
 | With no caption the message says "Photo"; with a caption that text shows in the room list, reply quotes, search and notifications. | `[unit]` |
 | A photo can be replied to, reacted to and deleted like any message, but not edited or copied, and the file can't be swapped after it's sent. Deleting also removes the Storage object when it can. | `[browser]` `[db]` `[unit]` |
-| Only one photo per message, path under the poster's own folder (`chat-media/<user_id>/…`), WebP or JPEG: the database refuses anything else (`chat_attachments_ok()` and the path check). `public/_headers` lets pages show images from the Supabase project (signed URLs). | `[db]` `[unit]` |
+| Only one photo per message, path under the poster's own folder (`chat-media/<user_id>/…`), JPEG (or WebP path for older files): the database refuses anything else (`chat_attachments_ok()` and the path check). Reads are gated by a message the reader can see. `public/_headers` lets pages show images from the Supabase project (signed URLs) and `blob:` for the composer preview. | `[db]` `[unit]` |
 
 ## What automation can't check (try these by hand before relying on a big chat change)
 

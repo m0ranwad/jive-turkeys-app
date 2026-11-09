@@ -6,9 +6,9 @@ beforeEach(() => localStorage.clear());
 
 // Acts out another tab saving: the data, and a new revision so open tabs notice.
 function saveAsAnotherTab(change) {
-  const saved = JSON.parse(localStorage.getItem('jt_demo_db_v36'));
+  const saved = JSON.parse(localStorage.getItem('jt_demo_db_v37'));
   change(saved);
-  localStorage.setItem('jt_demo_db_v36', JSON.stringify(saved));
+  localStorage.setItem('jt_demo_db_v37', JSON.stringify(saved));
   localStorage.setItem('jt_demo_rev', crypto.randomUUID());
 }
 
@@ -69,10 +69,10 @@ describe('email-free accounts in previews', () => {
   it('does not make a reset code without signal, and can retry after reconnecting', async () => {
     const api = createDemoBackend({ autoSignIn: true });
     const [jordan] = Object.keys(await api.users.usernames());
-    const before = localStorage.getItem('jt_demo_db_v36');
+    const before = localStorage.getItem('jt_demo_db_v37');
     localStorage.setItem('jt_demo_offline', '1');
     await expect(api.users.issueResetCode(jordan)).rejects.toThrow('Failed to fetch');
-    expect(localStorage.getItem('jt_demo_db_v36')).toBe(before);
+    expect(localStorage.getItem('jt_demo_db_v37')).toBe(before);
     localStorage.removeItem('jt_demo_offline');
     expect((await api.users.issueResetCode(jordan)).username).toBe('jordan');
   });
@@ -144,11 +144,11 @@ describe('email-free accounts in previews', () => {
     const reads = vi.spyOn(localStorage, 'getItem');
     await api.entities.Game.list();
     await api.auth.me();
-    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v36')).toHaveLength(0);
+    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v37')).toHaveLength(0);
     saveAsAnotherTab(() => {});
     reads.mockClear();
     await api.auth.me();
-    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v36')).toHaveLength(1);
+    expect(reads.mock.calls.filter(([key]) => key === 'jt_demo_db_v37')).toHaveLength(1);
     reads.mockRestore();
   });
 

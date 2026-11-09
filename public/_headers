@@ -13,7 +13,7 @@
 # here first. vite.config.js stops the live build if the Supabase project
 # below isn't the one the site is set up with.
 /*
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.klipy.com https://alsskultsdgcbxlukznv.supabase.co; connect-src 'self' https://alsskultsdgcbxlukznv.supabase.co wss://alsskultsdgcbxlukznv.supabase.co; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.klipy.com https://alsskultsdgcbxlukznv.supabase.co; connect-src 'self' https://alsskultsdgcbxlukznv.supabase.co wss://alsskultsdgcbxlukznv.supabase.co; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

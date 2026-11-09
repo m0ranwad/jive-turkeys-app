@@ -359,7 +359,7 @@ export const Composer = forwardRef(function Composer(
                   aria-label="Upload progress"
                 >
                   <div
-                    className="h-full rounded-full bg-lime-500 transition-[width] duration-200"
+                    className="h-full rounded-full bg-lime-500 motion-safe:transition-[width] motion-safe:duration-200 motion-reduce:transition-none"
                     style={{ width: `${Math.max(8, Math.round((uploadProgress || 0) * 100))}%` }}
                   />
                 </div>
