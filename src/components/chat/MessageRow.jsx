@@ -316,7 +316,7 @@ export function MessageRow({
             aria-hidden="true"
             data-message-gutter
             onClick={() => onSelect(m.id)}
-            className="min-h-11 min-w-8 flex-1 cursor-pointer self-stretch"
+            className="flex-1 cursor-pointer self-stretch"
           />
         )}
       </div>
@@ -390,6 +390,9 @@ export function MessageRow({
             aria-describedby={undefined}
             className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 text-white outline-none"
             onCloseAutoFocus={(e) => e.preventDefault()}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setFullscreen(false);
+            }}
           >
             <DialogPrimitive.Title className="sr-only">Photo</DialogPrimitive.Title>
             <DialogPrimitive.Close

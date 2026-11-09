@@ -58,6 +58,13 @@ test('sends a photo with no caption as "Photo", and opens full screen', async ({
   await page.getByRole('button', { name: 'Close photo' }).click();
   await expect(viewer).toHaveCount(0);
 
+  // Tap the dark area around the photo closes it (Content is full-screen, so
+  // a click on the dialog itself — not the image or buttons — counts as outside).
+  await row.getByRole('button', { name: 'View photo' }).click();
+  await expect(viewer).toBeVisible();
+  await viewer.click({ position: { x: 8, y: 8 } });
+  await expect(viewer).toHaveCount(0);
+
   // Options in the viewer shows the message's actions.
   await row.getByRole('button', { name: 'View photo' }).click();
   await viewer.getByRole('button', { name: 'Options' }).click();
