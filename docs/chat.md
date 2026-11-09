@@ -57,7 +57,7 @@ The one room everyone is in. In the database it's the messages with no thread (`
 
 ## 3. Message options: react, reply, copy, edit, delete
 
-Tapping (or clicking) a message shows its options. Tap it again, or press Escape, to close them.
+Tapping (or clicking) a message, or the empty space beside it, shows its options. Tap it again, or press Escape, to close them.
 
 | Expected behavior | Checked by |
 |---|---|
@@ -244,7 +244,7 @@ is in their own folder. Signed links last about a day and are reused while a cha
 | Expected behavior | Checked by |
 |---|---|
 | The Photo button opens the phone's image picker. Pasting a copied photo into the message box (an iPhone's Paste, or Ctrl/Cmd+V) attaches it the same way. A chosen photo shows as a preview with a progress bar while it uploads. The message box is an optional caption. The Photo button is hidden while editing, and pasting a photo then does nothing. | `[browser]` `chat-photos.spec.js` |
-| Sending posts one photo, about 240px wide at most in the thread, keeping its shape. A caption shows under the photo when there is one. Tapping the photo opens it full screen (✕, Esc or a tap outside closes it), with **Reply** and **Options** at the bottom. A long press on the photo, or a tap on its caption, shows the message's options like any message, which include **View**. | `[browser]` `chat-photos.spec.js` |
+| Sending posts one photo, about 240px wide at most in the thread, keeping its shape. A caption shows under the photo when there is one. Tapping the photo opens it full screen (✕, Esc or a tap outside closes it), with **Reply** and **Options** at the bottom. A long press on the photo, a tap on its caption, or a tap in the empty space beside it, shows the message's options like any message, which include **View**. | `[browser]` `chat-photos.spec.js` |
 | With no caption the message says "Photo"; with a caption that text shows in the room list, reply quotes, search and notifications. | `[unit]` |
 | A photo can be replied to, reacted to and deleted like any message, but not edited or copied, and the file can't be swapped after it's sent. Deleting also removes the Storage object when it can. | `[browser]` `[db]` `[unit]` |
 | Only one photo per message, path under the poster's own folder (`chat-media/<user_id>/…`), JPEG (or WebP path for older files): the database refuses anything else (`chat_attachments_ok()` and the path check). Reads are gated by a message the reader can see. `public/_headers` lets pages show images from the Supabase project (signed URLs) and `blob:` for the composer preview. | `[db]` `[unit]` |

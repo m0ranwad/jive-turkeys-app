@@ -310,6 +310,15 @@ export function MessageRow({
             </div>
           )}
         </div>
+        {/* Empty space beside the bubble: same as tapping the message (iMessage-style). */}
+        {!m.pending && (
+          <div
+            aria-hidden="true"
+            data-message-gutter
+            onClick={() => onSelect(m.id)}
+            className="min-h-11 min-w-8 flex-1 cursor-pointer self-stretch"
+          />
+        )}
       </div>
 
       {selected && (

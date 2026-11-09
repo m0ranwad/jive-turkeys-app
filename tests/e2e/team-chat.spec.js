@@ -283,12 +283,12 @@ test('the chat fills the screen with the message box above the tab bar', async (
 test('the tip shows once, at the top of the room list, not over the messages', async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('jt_chat_tip_seen'));
   await page.reload();
-  await expect(page.getByRole('log', { name: 'Messages' }).getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText(/tap a message/)).toHaveCount(0);
   await showRooms(page);
-  await expect(page.getByText(/tap any message to react, reply or copy it/)).toBeVisible();
+  await expect(page.getByText(/tap a message \(or beside it\) to react, reply or copy it/)).toBeVisible();
   await page.getByRole('button', { name: 'Got it' }).click();
-  await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByText(/tap a message \(or beside it\)/)).toHaveCount(0);
   await page.reload();
   await expect(page.locator('[data-room="team"]')).toBeVisible();
-  await expect(page.getByText(/tap any message to react/)).toHaveCount(0);
+  await expect(page.getByText(/tap a message \(or beside it\)/)).toHaveCount(0);
 });

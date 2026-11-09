@@ -70,6 +70,14 @@ test('sends a photo with no caption as "Photo", and opens full screen', async ({
   await expect(viewer).toBeVisible();
 });
 
+test('tapping beside a photo shows its options', async ({ page }) => {
+  await expect(photos(page).first()).toBeVisible();
+  const row = page.locator('[data-message-id]').filter({ has: page.locator('img[data-photo]') }).first();
+  await row.locator('[data-message-gutter]').click();
+  await expect(page.getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Photo' })).toHaveCount(0);
+});
+
 test('a long press on a photo shows its options', async ({ page }) => {
   await expect(photos(page).first()).toBeVisible();
   const row = page.locator('[data-message-id]').filter({ has: page.locator('img[data-photo]') }).first();

@@ -85,7 +85,7 @@ function ChatTip() {
   return (
     <div className="flex items-start gap-2 rounded-2xl bg-lime-50 py-2.5 pl-3 pr-2 text-xs font-medium leading-relaxed text-lime-900 ring-1 ring-lime-200">
       <span className="flex-1">
-        <b>Tip:</b> in a chat, tap any message to react, reply or copy it. Tap <b>New</b> to start a thread or a
+        <b>Tip:</b> in a chat, tap a message (or beside it) to react, reply or copy it. Tap <b>New</b> to start a thread or a
         private chat.
       </span>
       <button
