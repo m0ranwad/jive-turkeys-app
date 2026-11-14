@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEMO_LOGIN, DEMO_PLAYER_LOGIN, DEMO_TEAM_CODE, createDemoBackend } from '@/api/demo';
 
-const DB_KEY = 'jt_demo_db_v37';
+const DB_KEY = 'jt_demo_db_v38';
 
 async function signedIn() {
   const api = createDemoBackend();

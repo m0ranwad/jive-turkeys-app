@@ -14,7 +14,7 @@ import {
 import { newId } from '@/lib/utils';
 import { TABLES, parseSort } from './tables';
 
-const DB_KEY = 'jt_demo_db_v37';
+const DB_KEY = 'jt_demo_db_v38';
 // Uploaded photo bytes stay in memory (not localStorage): a few data URLs
 // would blow the ~5 MB quota and make every later save fail silently.
 // Sample /demo-photos/ URLs are tiny, so those paths are indexed here across reloads.
@@ -369,6 +369,24 @@ function seed() {
   const fillIns = [
     { id: uid(), game_id: lastWeek.id, display_name: null, gender: 'M', goals: 0, assists: 1, created_date: now(), updated_date: now() },
   ];
+  // Who kept goal each half, and the other team's 1st-half goals (docs/games.md section 2). Taylor
+  // usually does; Sam shared two games, the fill-in kept goal last week, and nobody was sure how
+  // the goals split two weeks ago.
+  const results = games.filter((g) => g.has_result);
+  const keep = (game, name, halves) =>
+    Object.assign(stats.find((st) => st.game_id === game.id && st.user_id === profiles.find((p) => p.display_name === name).user_id), halves);
+  const both = { gk_first_half: true, gk_second_half: true };
+  keep(results[0], 'Taylor Brooks', { gk_first_half: true });
+  keep(results[0], 'Sam Okafor', { gk_second_half: true });
+  results[0].score_them_first_half = 0;
+  keep(results[1], 'Taylor Brooks', both);
+  results[1].score_them_first_half = 1;
+  keep(results[2], 'Taylor Brooks', both);
+  keep(lastWeek, 'Sam Okafor', { gk_first_half: true });
+  fillIns[0].gk_second_half = true;
+  lastWeek.score_them_first_half = 1;
+  keep(results[4], 'Taylor Brooks', both);
+  results[4].score_them_first_half = 2;
   const at = (date, hour) => dayjs(date).hour(hour).toISOString();
   const duesHistory = duesPayments.map((p) => ({
     id: uid(), season_year: p.season_year, session: p.session, user_id: p.user_id, guest_id: p.guest_id ?? null, paid: true,
@@ -487,6 +505,7 @@ function seed() {
         potm_announce: true,
         game_reminders: true,
         game_reminder_hours: 6,
+        show_goals_against: false,
         email_reminders: false,
         rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
         quick_hits: [
@@ -1923,7 +1942,7 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
   // Same as the database's save_game_result(): everything is checked first, so
   // a save goes through whole or not at all.
   const games = {
-    async saveResult(gameId, { scoreUs, scoreThem, lines, fillIns }) {
+    async saveResult(gameId, { scoreUs, scoreThem, scoreThemFirstHalf = null, lines, fillIns }) {
       requireUser();
       failIfOffline();
       if (currentUser().role !== 'admin') throw new Error('Only captains can enter results');
@@ -1931,21 +1950,31 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
       if (!game) throw new Error('That game is gone');
       const counts = (row) => ['goals', 'assists', 'blue_cards', 'red_cards'].map((k) => Number(row[k]) || 0);
       if ([...lines, ...(fillIns || [])].some((row) => counts(row).some((n) => n < 0))) throw new Error("Numbers can't go below zero");
+      // Same as save_game_result(): the 1st half's goals against fit inside the final score.
+      if (scoreThemFirstHalf !== null && (scoreThemFirstHalf < 0 || scoreThemFirstHalf > (Number(scoreThem) || 0))) {
+        throw new Error("The first half can't have more goals against than the final score");
+      }
+      const halves = (row) => ({ gk_first_half: !!row.gk_first_half, gk_second_half: !!row.gk_second_half });
 
       const opensVoting = !game.has_result && !game.potm_opened_at;
-      Object.assign(game, { score_us: scoreUs, score_them: scoreThem, has_result: true, updated_date: now() });
+      Object.assign(game, {
+        score_us: scoreUs, score_them: scoreThem, has_result: true, updated_date: now(),
+        score_them_first_half: (Number(scoreThem) || 0) === 0 ? 0 : scoreThemFirstHalf,
+      });
       if (opensVoting) openVoting(game);
       for (const line of lines) {
         const who = { user_id: line.user_id ?? null, guest_id: line.guest_id ?? null };
         const mine = (s) => s.game_id === gameId && (s.user_id ?? null) === who.user_id && (s.guest_id ?? null) === who.guest_id;
         const [goals, assists, blue_cards, red_cards] = counts(line);
-        const keep = !!line.played || goals + assists + blue_cards + red_cards > 0;
+        // Being in goal is playing.
+        const played = !!line.played || !!line.gk_first_half || !!line.gk_second_half;
+        const keep = played || goals + assists + blue_cards + red_cards > 0;
         const row = db.game_stats.find(mine);
         if (!keep) db.game_stats = db.game_stats.filter((s) => !mine(s));
-        else if (row) Object.assign(row, { played: !!line.played, goals, assists, blue_cards, red_cards, updated_date: now() });
+        else if (row) Object.assign(row, { played, goals, assists, blue_cards, red_cards, ...halves(line), updated_date: now() });
         else {
           db.game_stats.push({
-            id: uid(), game_id: gameId, ...who, played: !!line.played, goals, assists, blue_cards, red_cards, created_date: now(), updated_date: now(),
+            id: uid(), game_id: gameId, ...who, played, goals, assists, blue_cards, red_cards, ...halves(line), created_date: now(), updated_date: now(),
           });
         }
       }
@@ -1953,7 +1982,9 @@ export function createDemoBackend({ autoSignIn = false } = {}) {
         const keepIds = fillIns.filter((f) => f.id).map((f) => f.id);
         db.game_fill_ins = db.game_fill_ins.filter((f) => f.game_id !== gameId || keepIds.includes(f.id));
         for (const f of fillIns) {
-          const fields = { display_name: f.display_name?.trim() || null, gender: f.gender, goals: Number(f.goals) || 0, assists: Number(f.assists) || 0 };
+          const fields = {
+            display_name: f.display_name?.trim() || null, gender: f.gender, goals: Number(f.goals) || 0, assists: Number(f.assists) || 0, ...halves(f),
+          };
           const row = f.id && db.game_fill_ins.find((r) => r.id === f.id);
           if (row) Object.assign(row, fields, { updated_date: now() });
           else db.game_fill_ins.push({ id: uid(), game_id: gameId, ...fields, created_date: now(), updated_date: now() });

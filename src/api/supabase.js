@@ -468,11 +468,13 @@ export function createSupabaseBackend(url, key) {
 
   const games = {
     /** Captains: a game's score, stat lines and fill-ins, all saved together or not at all. */
-    async saveResult(gameId, { scoreUs, scoreThem, lines, fillIns }) {
+    async saveResult(gameId, { scoreUs, scoreThem, scoreThemFirstHalf = null, lines, fillIns }) {
       const { error } = await supabase.rpc('save_game_result', {
         p_game_id: gameId,
         p_score_us: scoreUs,
         p_score_them: scoreThem,
+        // The other team's goals in the 1st half (null: not sure); lines and fill-ins carry gk_first_half / gk_second_half.
+        p_score_them_first_half: scoreThemFirstHalf,
         p_lines: lines,
         p_fill_ins: fillIns,
       });

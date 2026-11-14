@@ -15,6 +15,7 @@ import {
 } from '@/lib/results';
 import { EYEBROW } from '@/lib/constants';
 import { saveFailedToast } from '@/lib/errors';
+import { HALVES, suggestedKeepers } from '@/lib/keepers';
 import { cn } from '@/lib/utils';
 
 const TEAM = 'Jive Turkeys';
@@ -22,15 +23,19 @@ let nextFillInKey = 0;
 const SMALL_BUTTON =
   'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-black uppercase tracking-[0.08em] transition';
 
-/** − number + with fingertip-sized buttons, so nobody needs the keyboard. */
-function Stepper({ label, value, onChange, addLabel, removeLabel, valueLabel, canAdd = true, strong = false, tone }) {
+/**
+ * − number + with fingertip-sized buttons, so nobody needs the keyboard. `onStep(±1)` replaces
+ * onChange for a number that isn't a plain count (goals against: "?" until someone sets it).
+ */
+function Stepper({ label, value, onChange, onStep, addLabel, removeLabel, valueLabel, canAdd = true, canRemove = value > 0, strong = false, tone }) {
+  const step = (delta) => (onStep ? onStep(delta) : onChange(value + delta));
   return (
     <div className="flex min-w-0 items-center overflow-hidden rounded-2xl border border-zinc-200 bg-white">
       <button
         type="button"
         aria-label={removeLabel}
-        disabled={value <= 0}
-        onClick={() => onChange(value - 1)}
+        disabled={!canRemove}
+        onClick={() => step(-1)}
         className="grid h-11 w-10 shrink-0 place-items-center text-zinc-500 transition active:bg-zinc-100 disabled:text-zinc-200"
       >
         <Minus className="h-4 w-4" />
@@ -47,7 +52,7 @@ function Stepper({ label, value, onChange, addLabel, removeLabel, valueLabel, ca
         type="button"
         aria-label={addLabel}
         disabled={!canAdd}
-        onClick={() => onChange(value + 1)}
+        onClick={() => step(1)}
         className={cn(
           'grid h-11 w-10 shrink-0 place-items-center transition disabled:bg-zinc-50 disabled:text-zinc-200',
           strong ? 'bg-lime-400 text-black active:bg-lime-300' : 'text-zinc-900 active:bg-zinc-100',
@@ -219,6 +224,88 @@ function PlayerRow({ row, cardsOpen, onToggleCards, onChange }) {
   );
 }
 
+const NOBODY = '';
+
+/**
+ * Who was in goal each half, and the other team's goals in each half (they add up to their
+ * score, so setting one fills in the other). A half at 0 is a clean sheet. Captains always
+ * enter goals against; Team Settings decides whether the site shows them (docs/games.md section 2).
+ */
+function KeepersBox({ options, keepers, onPick, suggested, opponent, total, split, onStepAgainst, onNotSure }) {
+  return (
+    <section aria-label="Keepers" className="mb-4 rounded-2xl bg-zinc-50 p-2.5">
+      <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5">
+        <span className={cn(EYEBROW, 'text-zinc-900')}>Keepers</span>
+        {suggested && <span className="text-[11px] font-semibold text-zinc-500">From &ldquo;I&apos;ll play GK&rdquo;</span>}
+      </div>
+      <div className="space-y-2">
+        {HALVES.map((half, h) => {
+          const value = split ? split[h] : null;
+          return (
+            <div key={half} data-half={half} className="rounded-2xl border border-zinc-200 bg-white p-2.5">
+              <div className="flex items-center gap-2">
+                <span className={cn(EYEBROW, 'w-[68px] shrink-0 text-zinc-500')}>{half}</span>
+                <select
+                  aria-label={`Keeper, ${half}`}
+                  value={keepers[h] ?? NOBODY}
+                  onChange={(e) => onPick(h, e.target.value || null)}
+                  className={cn(
+                    'h-10 min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-2.5 text-base font-semibold outline-none focus:border-zinc-900 md:text-sm',
+                    !keepers[h] && 'text-zinc-500',
+                  )}
+                >
+                  <option value={NOBODY}>Nobody recorded</option>
+                  {options.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 grid grid-cols-2 items-center gap-2">
+                <Stepper
+                  label="Against"
+                  value={value ?? '?'}
+                  onStep={(delta) => onStepAgainst(h, delta)}
+                  canAdd={total > 0 && (value === null || value < total)}
+                  canRemove={total > 0 && (value === null || value > 0)}
+                  addLabel={`Add a goal against in the ${half}`}
+                  removeLabel={`Take away a goal against in the ${half}`}
+                  valueLabel={`Goals against, ${half}`}
+                />
+                {value === 0 ? (
+                  <span className="inline-flex h-9 items-center justify-self-start rounded-full border border-lime-500 bg-lime-50 px-3 text-[11px] font-black uppercase tracking-[0.08em] text-lime-800">
+                    Clean sheet
+                  </span>
+                ) : value === null ? (
+                  <span className="pl-1 text-[11px] font-semibold leading-snug text-zinc-500">Not sure yet</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {total > 0 && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 px-0.5 text-[11px] font-semibold text-zinc-500">
+          <span>
+            The halves add up to {opponent}
+            {/s$/i.test(opponent || '') ? "'" : "'s"} {total}.
+          </span>
+          {split && (
+            <button
+              type="button"
+              onClick={onNotSure}
+              className="inline-flex min-h-9 items-center font-bold uppercase tracking-[0.08em] text-zinc-900 underline underline-offset-2"
+            >
+              Not sure
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Someone from outside the team who played for us: name if anyone caught it, goals and assists. */
 function FillInRow({ fillIn, label, number, onChange, onRemove }) {
   return (
@@ -269,6 +356,11 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
   const [cardsOpen, setCardsOpen] = useState([]);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Who was in goal each half: a player's user_id, `fill:<key>` for a fill-in, or null.
+  const [keepers, setKeepers] = useState([null, null]);
+  const [suggested, setSuggested] = useState(false);
+  // The other team's goals in the 1st half; null until someone's sure.
+  const [againstFirst, setAgainstFirst] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -281,7 +373,20 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
       gender: f.gender,
       goals: f.goals || 0,
       assists: f.assists || 0,
+      gk_first_half: !!f.gk_first_half,
+      gk_second_half: !!f.gk_second_half,
     }));
+    const saved = ['gk_first_half', 'gk_second_half'].map((flag) => {
+      const row = initial.find((r) => r[flag]);
+      if (row) return row.profile.user_id;
+      const fill = initialFillIns.find((f) => f[flag]);
+      return fill ? `fill:${fill.key}` : null;
+    });
+    // A game with no keeper yet suggests whoever said "I'll play GK" (saved only when Save is tapped).
+    const suggestion = saved.some(Boolean) ? null : suggestedKeepers(initial, rsvps, game);
+    setKeepers(suggestion || saved);
+    setSuggested(!!suggestion?.some(Boolean));
+    setAgainstFirst(game.has_result ? (game.score_them_first_half ?? null) : null);
     setRows(initial);
     setFillIns(initialFillIns);
     setOurScore(scoreFollowsGoals(game, initial, initialFillIns) ? null : (game.score_us ?? 0));
@@ -299,22 +404,56 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
   const others = rows.filter((row) => !listed.includes(row));
   const playedCount = rows.filter((row) => row.played).length + fillIns.length;
 
-  const updateRow = (userId, patch) =>
+  // Taking a keeper off the list takes them out of goal too.
+  const dropKeeper = (key) => setKeepers((list) => list.map((k) => (k === key ? null : k)));
+  const updateRow = (userId, patch) => {
+    if (patch.played === false) dropKeeper(userId);
     setRows((list) => list.map((r) => (r.profile.user_id === userId ? { ...r, ...patch } : r)));
+  };
+  const keeperOptions = [
+    ...listed.filter((row) => row.played).map((row) => ({ key: row.profile.user_id, label: row.profile.display_name })),
+    ...fillIns.map((f, i) => ({ key: `fill:${f.key}`, label: `${fillInLabel(f, i, fillIns.length)} (fill-in)` })),
+  ];
+  const keeperShown = (k) => (keeperOptions.some((o) => o.key === k) ? k : null);
+  const shownKeepers = keepers.map(keeperShown);
+  const pickKeeper = (half, key) => {
+    setSuggested(false);
+    setKeepers((list) => list.map((k, h) => (h === half ? key : k)));
+  };
+  // Goals against: the two halves add up to the other team's score.
+  const totalAgainst = Number(scoreThem) || 0;
+  const firstAgainst = againstFirst === null ? null : Math.min(againstFirst, totalAgainst);
+  const split = totalAgainst === 0 ? [0, 0] : firstAgainst === null ? null : [firstAgainst, totalAgainst - firstAgainst];
+  const stepAgainst = (half, delta) => {
+    // The first tap on a "?" sets that half to 1 (or 0), and the other half to the rest.
+    const current = split ? split[half] : delta > 0 ? 0 : 1;
+    const next = Math.max(0, Math.min(totalAgainst, current + delta));
+    setAgainstFirst(half === 0 ? next : totalAgainst - next);
+  };
   const addFillIn = (gender) => {
     nextFillInKey += 1;
     const key = `new-${nextFillInKey}`;
     setFillIns((list) => [...list, { key, display_name: '', gender, goals: 0, assists: 0 }]);
   };
   const updateFillIn = (key, patch) => setFillIns((list) => list.map((f) => (f.key === key ? { ...f, ...patch } : f)));
-  const removeFillIn = (key) => setFillIns((list) => list.filter((f) => f.key !== key));
+  const removeFillIn = (key) => {
+    dropKeeper(`fill:${key}`);
+    setFillIns((list) => list.filter((f) => f.key !== key));
+  };
   const toggleCards = (userId) =>
     setCardsOpen((open) => (open.includes(userId) ? open.filter((id) => id !== userId) : [...open, userId]));
 
   const save = async () => {
     setBusy(true);
     try {
-      await onSave({ score_us: Number(scoreUs) || 0, score_them: Number(scoreThem) || 0, rows, fillIns });
+      const inGoal = (key) => ({ gk_first_half: shownKeepers[0] === key, gk_second_half: shownKeepers[1] === key });
+      await onSave({
+        score_us: Number(scoreUs) || 0,
+        score_them: totalAgainst,
+        score_them_first_half: split ? split[0] : null,
+        rows: rows.map((row) => ({ ...row, ...inGoal(row.profile.user_id) })),
+        fillIns: fillIns.map((f) => ({ ...f, ...inGoal(`fill:${f.key}`) })),
+      });
       onOpenChange(false);
     } catch (err) {
       // The screen stays open with everything entered, to try again.
@@ -356,6 +495,17 @@ export function ResultDialog({ open, onOpenChange, game, profiles, rsvps, stats,
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6">
+          <KeepersBox
+            options={keeperOptions}
+            keepers={shownKeepers}
+            onPick={pickKeeper}
+            suggested={suggested && shownKeepers.some(Boolean)}
+            opponent={game.opponent}
+            total={totalAgainst}
+            split={split}
+            onStepAgainst={stepAgainst}
+            onNotSure={() => setAgainstFirst(null)}
+          />
           <div className={cn(EYEBROW, 'mb-2 text-zinc-500')}>Who played · {playedCount}</div>
           {rows.length > 0 && listed.length === 0 && (
             <p className="rounded-2xl bg-zinc-50 px-4 py-3 text-sm text-zinc-500">Nobody&apos;s marked as playing yet. Add who played.</p>

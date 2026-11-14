@@ -42,6 +42,9 @@ export const DEFAULT_SETTINGS = {
   // when we're short, a call for subs.
   game_reminders: true,
   game_reminder_hours: 6,
+  // Goals against are always saved with a result (clean sheets come from them);
+  // this decides whether results, the Goalkeepers card and Legacy show them.
+  show_goals_against: false,
   email_reminders: false,
   rules_intro: 'SAFE & FAIR PLAY ARE OUR TOP PRIORITY',
   quick_hits: [],

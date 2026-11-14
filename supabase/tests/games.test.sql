@@ -188,6 +188,9 @@ select games_test.touches($$update public.game_fill_ins set goals = 5$$, 0, 'or 
 select games_test.touches($$delete from public.game_fill_ins$$, 0, 'or remove them');
 reset role;
 
+-- Mike kept goal in the 1st half last week.
+update public.game_stats set gk_first_half = true where game_id = games_test.id('g1') and guest_id = games_test.id('mike');
+
 -- ---------------------------------------------------------------------------
 -- Mo joins: he already said OUT for Thursday himself, then picks Mike's name.
 -- ---------------------------------------------------------------------------
@@ -209,6 +212,9 @@ select games_test.ok(
 select games_test.ok(
   (select goals = 1 and guest_id is null from public.game_stats where game_id = games_test.id('g1') and user_id = games_test.id('mo')),
   'the roster name''s stat lines move to your account');
+select games_test.ok(
+  (select gk_first_half and not gk_second_half from public.game_stats where game_id = games_test.id('g1') and user_id = games_test.id('mo')),
+  'with the halves they kept goal');
 select games_test.ok(
   (select voted_for_id = games_test.id('mo') and voted_for_guest_id is null from public.potm_votes where voter_id = games_test.id('pat')),
   'and so do votes for it');
@@ -278,6 +284,92 @@ select games_test.ok(
   (select score_us = 3 and score_them = 1 from public.games where id = games_test.id('g2'))
   and (select goals = 2 from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim')),
   'changes nothing at all');
+
+-- ---------------------------------------------------------------------------
+-- Keepers (section 2): who was in goal each half and the other team's 1st-half
+-- goals save with the rest of the result. The 2nd half is the rest of the score.
+-- ---------------------------------------------------------------------------
+
+select games_test.sign_in('pat');
+select games_test.refused(
+  $$select public.save_game_result(games_test.id('g2'), 3, 1, 0, '[]'::jsonb, '[]'::jsonb)$$,
+  'players cannot save keepers');
+reset role;
+
+select games_test.sign_in('kim');
+select public.save_game_result(
+  games_test.id('g2'), 3, 2, 0,
+  jsonb_build_array(
+    jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 2, 'gk_first_half', true),
+    -- Marked as keeper without being marked as played: being in goal is playing.
+    jsonb_build_object('guest_id', games_test.id('dana'), 'played', false, 'gk_second_half', true)
+  ),
+  jsonb_build_array(jsonb_build_object('display_name', 'Gus', 'gender', 'M', 'goals', 1, 'gk_second_half', true))
+);
+reset role;
+select games_test.ok(
+  (select score_us = 3 and score_them = 2 and score_them_first_half = 0 from public.games where id = games_test.id('g2')),
+  'a captain saves the score with the 1st half''s goals against');
+select games_test.ok(
+  (select gk_first_half and not gk_second_half and goals = 2 from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim')),
+  'and who was in goal each half');
+select games_test.ok(
+  (select played and gk_second_half from public.game_stats where game_id = games_test.id('g2') and guest_id = games_test.id('dana')),
+  'a keeper always counts as played, roster names included');
+select games_test.ok(
+  (select gk_second_half and goals = 1 from public.game_fill_ins where game_id = games_test.id('g2') and display_name = 'Gus'),
+  'a new fill-in can be the keeper');
+
+-- Kim kept goal both halves after all, Gus didn't, and nobody's sure how the goals split.
+select games_test.sign_in('kim');
+select public.save_game_result(
+  games_test.id('g2'), 3, 2, null,
+  jsonb_build_array(
+    jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 2, 'gk_first_half', true, 'gk_second_half', true),
+    jsonb_build_object('guest_id', games_test.id('dana'), 'played', true)
+  ),
+  (select jsonb_agg(jsonb_build_object('id', id, 'display_name', 'Gus', 'gender', 'M', 'goals', 1)) from public.game_fill_ins where game_id = games_test.id('g2'))
+);
+reset role;
+select games_test.ok(
+  (select score_them_first_half is null from public.games where id = games_test.id('g2')),
+  'the split can be left as not sure');
+select games_test.ok(
+  (select gk_first_half and gk_second_half from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim'))
+  and (select played and not gk_second_half from public.game_stats where game_id = games_test.id('g2') and guest_id = games_test.id('dana'))
+  and (select not gk_second_half from public.game_fill_ins where game_id = games_test.id('g2') and display_name = 'Gus'),
+  'and keepers change like the rest of the result');
+
+select games_test.sign_in('kim');
+select games_test.refused(
+  $$select public.save_game_result(games_test.id('g2'), 3, 2, 3, '[]'::jsonb, null)$$,
+  'the 1st half can''t let in more than the final score');
+select games_test.refused(
+  $$select public.save_game_result(games_test.id('g2'), 3, 2, -1, '[]'::jsonb, null)$$,
+  'or fewer than none');
+select public.save_game_result(games_test.id('g2'), 3, 0, null, '[]'::jsonb, null);
+reset role;
+select games_test.ok(
+  (select score_them_first_half = 0 from public.games where id = games_test.id('g2')),
+  'when they didn''t score, both halves are 0');
+select games_test.ok(
+  (select count(*) = 1 from public.game_fill_ins where game_id = games_test.id('g2')),
+  'and leaving out the fill-ins keeps them');
+
+-- The earlier version (no keepers) still saves, and leaves the keepers alone. Gus comes off too.
+select games_test.sign_in('kim');
+select public.save_game_result(games_test.id('g2'), 3, 0, jsonb_build_array(jsonb_build_object('user_id', games_test.id('kim'), 'played', true, 'goals', 2)), '[]'::jsonb);
+reset role;
+select games_test.ok(
+  (select gk_first_half and gk_second_half from public.game_stats where game_id = games_test.id('g2') and user_id = games_test.id('kim'))
+  and not exists (select 1 from public.game_fill_ins where game_id = games_test.id('g2')),
+  'saving without keepers leaves them as they were');
+
+select games_test.ok(
+  not exists (select 1 from public.team_settings where show_goals_against)
+  and (select column_default = 'false' from information_schema.columns
+       where table_schema = 'public' and table_name = 'team_settings' and column_name = 'show_goals_against'),
+  'goals against are hidden to start');
 
 -- ---------------------------------------------------------------------------
 -- Who can change games, sign-ups, stat lines and votes (docs/games.md).

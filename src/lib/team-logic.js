@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from './constants';
+import { keptHalves, keeperTotals } from './keepers';
 
 export const resultOf = (game) => {
   const us = game?.score_us ?? 0;
@@ -183,6 +184,8 @@ export function leaderboard({ games = [], stats = [], profiles = [], votes = [],
     filtered,
     votes.filter((v) => gameIds.has(v.game_id)),
   );
+  const gamesById = {};
+  filtered.forEach((g) => (gamesById[g.id] = g));
   return profiles.map((profile) => {
     const mine = statsInRange.filter((s) => s.user_id === profile.user_id);
     return {
@@ -193,6 +196,8 @@ export function leaderboard({ games = [], stats = [], profiles = [], votes = [],
       blue: sumField(mine, 'blue_cards'),
       red: sumField(mine, 'red_cards'),
       awards: awards[profile.user_id]?.total || 0,
+      // Halves in goal, clean halves, goals against and the record in goal (keeperTotals()).
+      keeper: keeperTotals(mine, gamesById),
     };
   });
 }
@@ -220,6 +225,7 @@ export function careerStats({ games = [], stats = [], profiles = [], votes = [] 
             assists: 0,
             blue: 0,
             red: 0,
+            gkHalves: 0,
           };
           const row = sessions[key];
           row.games += 1;
@@ -227,6 +233,7 @@ export function careerStats({ games = [], stats = [], profiles = [], votes = [] 
           row.assists += s.assists || 0;
           row.blue += s.blue_cards || 0;
           row.red += s.red_cards || 0;
+          if (game.has_result) row.gkHalves += keptHalves(s).length;
         });
       return {
         profile,
@@ -238,6 +245,7 @@ export function careerStats({ games = [], stats = [], profiles = [], votes = [] 
           red: sumField(mine, 'red_cards'),
           awards: awards[profile.user_id]?.total || 0,
         },
+        keeper: keeperTotals(mine, gamesById),
         sessions: Object.values(sessions).sort((a, b) => b.year - a.year || b.session - a.session),
       };
     })

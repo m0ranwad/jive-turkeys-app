@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { ResultBadge } from '@/components/schedule/GameCard';
 import { CARD } from '@/lib/constants';
 import { seasonLabel, seasonName } from '@/lib/format';
+import { recordText } from '@/lib/keepers';
 import { careerStats, filterGames, leaderboard, record, recordVsOpponents, resultOf } from '@/lib/team-logic';
 import { cn } from '@/lib/utils';
 
@@ -112,9 +113,57 @@ const LEADER_SORTS = [
   { key: 'awards', label: 'Awards' },
 ];
 
-export function PlayersTab({ games, stats, profiles, votes, year, session }) {
+/**
+ * Everyone who kept goal in the season or session picked: halves in goal, clean halves, the record
+ * in games they kept goal and, when captains show them, goals against (docs/games.md section 2).
+ */
+function GoalkeepersCard({ rows, showAgainst }) {
+  const keepers = rows
+    .filter((r) => r.keeper.halves > 0)
+    .sort((a, b) => b.keeper.halves - a.keeper.halves || b.keeper.clean - a.keeper.clean || a.profile.display_name.localeCompare(b.profile.display_name));
+  if (keepers.length === 0) return null;
+  const cols = showAgainst ? 'grid-cols-[1fr_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto]';
+  return (
+    <section className={CARD} aria-label="Goalkeepers">
+      <h3 className={sectionTitle}>Goalkeepers</h3>
+      <div className={cn('mt-3 grid gap-2 px-1 pb-2 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500', cols)}>
+        <span>Keeper</span>
+        <span className="w-12 text-center">Halves</span>
+        <span className="w-11 text-center">Clean</span>
+        {showAgainst && <span className="w-8 text-center">GA</span>}
+        <span className="w-12 text-center">W-L-D</span>
+      </div>
+      <div className="divide-y divide-zinc-100">
+        {keepers.map(({ profile, keeper }) => (
+          <div key={profile.user_id} className={cn('grid items-center gap-2 py-2.5', cols)}>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
+              <span className="min-w-0 break-words text-sm font-semibold leading-tight">{profile.display_name}</span>
+            </span>
+            <span className="w-12 text-center text-sm font-bold">{keeper.halves}</span>
+            <span className="w-11 text-center text-sm font-bold">
+              {keeper.clean > 0 ? (
+                <span className="rounded-full bg-lime-400 px-2 py-0.5 text-black">{keeper.clean}</span>
+              ) : (
+                <span className="text-zinc-500">0</span>
+              )}
+            </span>
+            {showAgainst && <span className="w-8 text-center text-sm font-bold">{keeper.against}</span>}
+            <span className="w-12 text-center text-xs font-bold">{recordText(keeper)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] font-medium leading-snug text-zinc-500">
+        Halves in goal. Clean: halves with no goals let in.{showAgainst && ' GA: goals against.'} W-L-D: our record in games they kept goal.
+      </p>
+    </section>
+  );
+}
+
+export function PlayersTab({ games, stats, profiles, votes, year, session, showAgainst = false }) {
   const [sortKey, setSortKey] = useState('goals');
-  const rows = leaderboard({ games, stats, profiles, votes, year, session })
+  const all = leaderboard({ games, stats, profiles, votes, year, session });
+  const rows = all
     .filter((r) => r.games > 0 || r.goals > 0 || r.assists > 0)
     .sort(
       (a, b) =>
@@ -122,59 +171,62 @@ export function PlayersTab({ games, stats, profiles, votes, year, session }) {
     );
 
   return (
-    <section className={CARD}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className={sectionTitle}>Player leaderboard</h3>
-        <div className="flex gap-1">
-          {LEADER_SORTS.map((s) => (
-            <button
-              key={s.key}
-              aria-pressed={sortKey === s.key}
-              onClick={() => setSortKey(s.key)}
-              className={cn(
-                'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] transition',
-                sortKey === s.key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
-              )}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 px-1 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">
-        <span>Player</span>
-        <span className="w-8 text-center">GP</span>
-        <span className="w-8 text-center">G</span>
-        <span className="w-8 text-center">A</span>
-        <span className="w-10 text-center">POTM</span>
-      </div>
-      <div className="divide-y divide-zinc-100">
-        {rows.map((r) => (
-          <div key={r.profile.user_id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 py-2.5">
-            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', r.profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
-              <span className="min-w-0 break-words text-sm font-semibold leading-tight">{r.profile.display_name}</span>
-              {r.profile.guest && (
-                <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500">
-                  Not joined
-                </span>
-              )}
-            </span>
-            <span className="w-8 text-center text-sm font-bold">{r.games}</span>
-            <span className="w-8 text-center text-sm font-bold">{r.goals}</span>
-            <span className="w-8 text-center text-sm font-bold">{r.assists}</span>
-            <span className="w-10 text-center text-sm font-bold">
-              {r.awards > 0 ? (
-                <span className="rounded-full bg-lime-400 px-2 py-0.5 text-black">{r.awards}</span>
-              ) : (
-                <span className="text-zinc-300">0</span>
-              )}
-            </span>
+    <div className="space-y-5">
+      <section className={CARD}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className={sectionTitle}>Player leaderboard</h3>
+          <div className="flex gap-1">
+            {LEADER_SORTS.map((s) => (
+              <button
+                key={s.key}
+                aria-pressed={sortKey === s.key}
+                onClick={() => setSortKey(s.key)}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] transition',
+                  sortKey === s.key ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
-        ))}
-        {rows.length === 0 && <p className="py-3 text-sm text-zinc-500">No stats recorded for this filter yet.</p>}
-      </div>
-    </section>
+        </div>
+        <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 px-1 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-zinc-500">
+          <span>Player</span>
+          <span className="w-8 text-center">GP</span>
+          <span className="w-8 text-center">G</span>
+          <span className="w-8 text-center">A</span>
+          <span className="w-10 text-center">POTM</span>
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {rows.map((r) => (
+            <div key={r.profile.user_id} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2 py-2.5">
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', r.profile.gender === 'F' ? 'bg-lime-400' : 'bg-zinc-900')} />
+                <span className="min-w-0 break-words text-sm font-semibold leading-tight">{r.profile.display_name}</span>
+                {r.profile.guest && (
+                  <span className="shrink-0 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-500">
+                    Not joined
+                  </span>
+                )}
+              </span>
+              <span className="w-8 text-center text-sm font-bold">{r.games}</span>
+              <span className="w-8 text-center text-sm font-bold">{r.goals}</span>
+              <span className="w-8 text-center text-sm font-bold">{r.assists}</span>
+              <span className="w-10 text-center text-sm font-bold">
+                {r.awards > 0 ? (
+                  <span className="rounded-full bg-lime-400 px-2 py-0.5 text-black">{r.awards}</span>
+                ) : (
+                  <span className="text-zinc-300">0</span>
+                )}
+              </span>
+            </div>
+          ))}
+          {rows.length === 0 && <p className="py-3 text-sm text-zinc-500">No stats recorded for this filter yet.</p>}
+        </div>
+      </section>
+      <GoalkeepersCard rows={all} showAgainst={showAgainst} />
+    </div>
   );
 }
 
@@ -231,9 +283,23 @@ const LEGACY_CATEGORIES = [
   { key: 'goals', label: 'Goals' },
   { key: 'assists', label: 'Assists' },
   { key: 'awards', label: 'Player of the Match' },
+  // Keepers. No goals-against box: fewest would put someone with one half in goal on top.
+  { key: 'halves', label: 'Halves in goal', keeper: true },
+  { key: 'clean', label: 'Clean sheets (halves)', keeper: true },
 ];
 
-export function LegacyTab({ games, stats, profiles, votes }) {
+/** "In goal: 13 halves · 5 clean sheets · record 5-2-1", plus goals against when captains show them. */
+function inGoalLine(keeper, showAgainst) {
+  const parts = [
+    `${keeper.halves} ${keeper.halves === 1 ? 'half' : 'halves'}`,
+    `${keeper.clean} clean ${keeper.clean === 1 ? 'sheet' : 'sheets'}`,
+    showAgainst && `${keeper.against} against`,
+    `record ${recordText(keeper)}`,
+  ];
+  return `In goal: ${parts.filter(Boolean).join(' · ')}`;
+}
+
+export function LegacyTab({ games, stats, profiles, votes, showAgainst = false }) {
   const [open, setOpen] = useState(null);
   const careers = careerStats({ games, stats, profiles, votes }).filter((c) => c.totals.games > 0);
 
@@ -245,7 +311,7 @@ export function LegacyTab({ games, stats, profiles, votes }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {LEGACY_CATEGORIES.map((cat) => {
             const top = careers
-              .map((c) => ({ name: c.profile.display_name, value: c.totals[cat.key] }))
+              .map((c) => ({ name: c.profile.display_name, value: cat.keeper ? c.keeper[cat.key] : c.totals[cat.key] }))
               .filter((x) => x.value > 0)
               .sort((a, b) => b.value - a.value)
               .slice(0, 3);
@@ -303,6 +369,9 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                   <span className="mt-0.5 block text-[11px] font-semibold text-zinc-500">
                     {c.totals.games} GP · {c.totals.goals} G · {c.totals.assists} A · {c.totals.awards} POTM
                   </span>
+                  {c.keeper.halves > 0 && (
+                    <span className="mt-0.5 block text-[11px] font-semibold text-zinc-600">{inGoalLine(c.keeper, showAgainst)}</span>
+                  )}
                 </span>
                 <ChevronDown className={cn('h-4 w-4 shrink-0 text-zinc-500 transition', expanded && 'rotate-180')} />
               </button>
@@ -313,9 +382,9 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                     <span className="w-7 text-center">GP</span>
                     <span className="w-7 text-center">G</span>
                     <span className="w-7 text-center">A</span>
+                    <span className="w-7 text-center" title="Halves in goal">GK</span>
                     <span className="w-7 text-center">Bl</span>
                     <span className="w-7 text-center">Rd</span>
-                    <span className="w-7" />
                   </div>
                   {c.sessions.map((s) => (
                     <div
@@ -328,9 +397,9 @@ export function LegacyTab({ games, stats, profiles, votes }) {
                       <span className="w-7 text-center font-semibold">{s.games}</span>
                       <span className="w-7 text-center font-semibold">{s.goals}</span>
                       <span className="w-7 text-center font-semibold">{s.assists}</span>
+                      <span className="w-7 text-center font-semibold">{s.gkHalves || 0}</span>
                       <span className="w-7 text-center font-semibold text-sky-700">{s.blue || 0}</span>
                       <span className="w-7 text-center font-semibold text-red-600">{s.red || 0}</span>
-                      <span className="w-7" />
                     </div>
                   ))}
                   {c.sessions.length === 0 && <p className="py-2 text-xs text-zinc-500">No sessions recorded.</p>}

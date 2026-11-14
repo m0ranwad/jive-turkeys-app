@@ -43,6 +43,8 @@ export function resultRows({ game, profiles = [], rsvps = [], stats = [] }) {
         assists: s?.assists || 0,
         blue_cards: s?.blue_cards || 0,
         red_cards: s?.red_cards || 0,
+        gk_first_half: !!s?.gk_first_half,
+        gk_second_half: !!s?.gk_second_half,
       };
     });
 }
