@@ -565,7 +565,7 @@ describe('"Playing session N?" asked ahead', () => {
       const sam = await profileOf(api, 'Sam Okafor');
       const priya = await profileOf(api, 'Priya Shah');
       await api.roster.ask({ year, session: 3, startsOn: null });
-      const savedKey = 'jt_demo_db_v37';
+      const savedKey = 'jt_demo_db_v38';
       const saved = JSON.parse(localStorage.getItem(savedKey));
       // Act out the old version: today's profile changed, but the stopped list didn't.
       saved.player_profiles.find((p) => p.user_id === sam.user_id).status = 'on_break';

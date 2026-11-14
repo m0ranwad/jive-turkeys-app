@@ -25,6 +25,8 @@ export function StatsPage() {
   const session = sessionFilter === 'all' ? 'all' : Number(sessionFilter);
   // Roster names who haven't joined the site count too (data.players).
   const shared = { games: data.games || [], stats: data.stats || [], profiles: data.players || [], votes: data.votes || [] };
+  // Goals against are always saved; captains choose whether Stats shows them (Team Settings).
+  const showAgainst = !!data.settings?.show_goals_against;
 
   return (
     <div className="space-y-5">
@@ -79,13 +81,13 @@ export function StatsPage() {
           <StandingsTab games={shared.games} year={year} session={session} />
         </TabsContent>
         <TabsContent value="players" className="mt-4">
-          <PlayersTab {...shared} year={year} session={session} />
+          <PlayersTab {...shared} year={year} session={session} showAgainst={showAgainst} />
         </TabsContent>
         <TabsContent value="opponents" className="mt-4">
           <OpponentsTab games={shared.games} year={year} session={session} />
         </TabsContent>
         <TabsContent value="legacy" className="mt-4">
-          <LegacyTab {...shared} />
+          <LegacyTab {...shared} showAgainst={showAgainst} />
         </TabsContent>
       </Tabs>
     </div>
