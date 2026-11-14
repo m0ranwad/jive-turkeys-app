@@ -222,6 +222,22 @@ export function SettingsPage() {
             />
           )}
         </section>
+        <section className="space-y-4 rounded-2xl bg-zinc-50 p-3.5" aria-label="Goalkeeper stats">
+          <div>
+            <span className="block text-sm font-bold">Goalkeeper stats</span>
+            <span className="mt-0.5 block text-[11px] font-medium text-zinc-500">
+              Captains enter goals against for each half on a game&apos;s result. That&apos;s how clean sheets are worked out, and
+              it&apos;s always saved.
+            </span>
+          </div>
+          <Choice
+            label="Show goals against"
+            hint="On: everyone sees them on game results, the Goalkeepers card and Legacy. Off: only clean sheets show. Turning it on shows every game already entered."
+            options={ON_OFF}
+            value={!!form.show_goals_against}
+            onPick={(v) => pick({ show_goals_against: v })}
+          />
+        </section>
       </section>
     </div>
   );

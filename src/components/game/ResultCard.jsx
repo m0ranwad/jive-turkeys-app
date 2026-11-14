@@ -1,9 +1,29 @@
 import { CARD } from '@/lib/constants';
+import { cleanLabel, isKeeper, keeperGame, keeperLabel } from '@/lib/keepers';
 import { fillInLabel, gameFillIns } from '@/lib/results';
 import { cn } from '@/lib/utils';
 
-/** Who played, scored, assisted and got carded, and any fill-ins from outside the team. The score is in the game's header. */
-export function ResultCard({ game, stats, fillIns = [] }) {
+/** The keeper's tags: which halves, a clean sheet, and (when captains show them) goals against. */
+function KeeperTags({ row, game, showAgainst }) {
+  if (!isKeeper(row)) return null;
+  const kept = keeperGame(row, game);
+  const clean = cleanLabel(kept);
+  return (
+    <>
+      <span className="rounded-full bg-zinc-950 px-2 py-0.5 text-white">{keeperLabel(kept.halves)}</span>
+      {clean && <span className="rounded-full border border-lime-500 bg-white px-2 py-0.5 text-lime-800">{clean}</span>}
+      {showAgainst && kept.against > 0 && (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600">{kept.against} against</span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Who played, scored, assisted, kept goal and got carded, and any fill-ins from outside the team.
+ * The score is in the game's header. Goals against show only when captains turn them on.
+ */
+export function ResultCard({ game, stats, fillIns = [], showAgainst = false }) {
   const byGoals = (a, b) => (b.goals || 0) - (a.goals || 0) || (b.assists || 0) - (a.assists || 0);
   const rows = stats.filter((s) => s.game_id === game.id && s.played).sort(byGoals);
   const ours = gameFillIns(game, fillIns);
@@ -23,7 +43,8 @@ export function ResultCard({ game, stats, fillIns = [] }) {
                 <span className="ml-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-zinc-500">fill-in</span>
               )}
             </span>
-            <div className="flex items-center gap-2 text-[11px] font-bold">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 text-[11px] font-bold">
+              <KeeperTags row={row} game={game} showAgainst={showAgainst} />
               {(row.goals || 0) > 0 && <span className="rounded-full bg-lime-100 px-2 py-0.5 text-lime-800">{row.goals}G</span>}
               {(row.assists || 0) > 0 && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-600">{row.assists}A</span>}
               {(row.blue_cards || 0) > 0 && (

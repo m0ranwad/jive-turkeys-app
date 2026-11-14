@@ -134,10 +134,11 @@ export function GameDetailPage() {
   };
 
   // All in one step (save_game_result in the database), so a dropped connection can't leave half a result.
-  const saveResult = async ({ score_us, score_them, rows, fillIns }) => {
+  const saveResult = async ({ score_us, score_them, score_them_first_half, rows, fillIns }) => {
     await api.games.saveResult(game.id, {
       scoreUs: score_us,
       scoreThem: score_them,
+      scoreThemFirstHalf: score_them_first_half,
       lines: rows.map((row) => ({
         ...playerKey(row.profile),
         played: !!row.played,
@@ -145,6 +146,8 @@ export function GameDetailPage() {
         assists: row.assists || 0,
         blue_cards: row.blue_cards || 0,
         red_cards: row.red_cards || 0,
+        gk_first_half: !!row.gk_first_half,
+        gk_second_half: !!row.gk_second_half,
       })),
       // People from outside the team who played this game for us: the whole list, saved ones keep their id.
       fillIns: fillIns.map((f) => ({
@@ -153,6 +156,8 @@ export function GameDetailPage() {
         gender: f.gender,
         goals: f.goals || 0,
         assists: f.assists || 0,
+        gk_first_half: !!f.gk_first_half,
+        gk_second_half: !!f.gk_second_half,
       })),
     });
     await data.reload();
@@ -323,7 +328,7 @@ export function GameDetailPage() {
       {/* A played game leads with what happened: the score, then the vote, then who said they were in, folded. */}
       {game.has_result && (
         <>
-          <ResultCard game={game} stats={statsWithNames} fillIns={data.fillIns} />
+          <ResultCard game={game} stats={statsWithNames} fillIns={data.fillIns} showAgainst={!!data.settings?.show_goals_against} />
           <PotmVoting
             game={game}
             profiles={data.players}
